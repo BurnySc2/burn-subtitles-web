@@ -4,7 +4,13 @@
 	import type { LogEvent } from '@ffmpeg/ffmpeg/dist/esm/types'
 	import { fetchFile, toBlobURL } from '@ffmpeg/util'
 
-	let videoEl: HTMLVideoElement
+	// Subtitle burner imports
+	import SubtitleUpload from './SubtitleUpload.svelte'
+	import SubtitleConfig from './SubtitleConfig.svelte'
+	import SubtitleProcessor from './SubtitleProcessor.svelte'
+	import '../stores/subtitle-store.svelte'
+
+	let video_el: HTMLVideoElement
 
 	const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm'
 	// Multithreading:
@@ -30,14 +36,25 @@
 		message = 'Complete transcoding'
 		const data = await ffmpeg.readFile('test.mp4')
 		console.log('done')
-		videoEl.src = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: 'video/mp4' }))
+		video_el.src = URL.createObjectURL(new Blob([(data as Uint8Array).buffer], { type: 'video/mp4' }))
 	}
 </script>
 
-<div>
-	<!-- svelte-ignore a11y-media-has-caption -->
-	<video bind:this={videoEl} controls />
-	<br />
-	<button on:click={transcode}>Start</button>
-	<p>{message}</p>
+<div class="container mx-auto max-w-7xl p-6">
+	<!-- Subtitle Burner -->
+	<section class="mb-12">
+		<h2 class="mb-6 text-center text-2xl font-bold">Subtitle Burner</h2>
+		<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+			<!-- Upload and Config side by side on large screens -->
+			<div class="space-y-6 lg:col-span-1">
+				<SubtitleUpload />
+				<SubtitleConfig />
+			</div>
+
+			<!-- Processor full width on mobile, 2/3 on large screens -->
+			<div class="lg:col-span-2">
+				<SubtitleProcessor />
+			</div>
+		</div>
+	</section>
 </div>
