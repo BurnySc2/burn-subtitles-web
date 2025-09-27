@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { app_state, update_state } from '../stores/subtitle-store.svelte'
+	import FontPreview from './FontPreview.svelte'
 
 	import { FFmpeg } from '@ffmpeg/ffmpeg'
 	// @ts-ignore
@@ -70,6 +71,16 @@
 					coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, 'text/javascript'),
 					wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, 'application/wasm')
 				})
+
+				// Load a default font for subtitles to ensure visibility in WASM environment
+				try {
+					const fontResponse = await fetch('https://fonts.gstatic.com/s/notosans/v36/o-0IIpQlx3QUlC5A4PNr5TRG.woff2')
+					const fontArrayBuffer = await fontResponse.arrayBuffer()
+					await ffmpeg.writeFile('noto.ttf', new Uint8Array(fontArrayBuffer))
+					console.log('Font file loaded successfully')
+				} catch (fontErr) {
+					console.warn('Failed to load font file:', fontErr)
+				}
 				console.log('FFmpeg loaded successfully')
 			} catch (err) {
 				console.error('Failed to load FFmpeg:', err)
@@ -111,6 +122,7 @@
 
 		// Generate ASS header with settings first
 		const bold_flag = settings.bold ? '-1' : '0'
+		const font_name = settings.font_family // Use selected font
 		const outline_width = Math.max(1, Math.floor(settings.font_size / 4))
 		const shadow_depth = Math.max(1, Math.floor(settings.font_size / 8))
 		const margin_v = settings.position === 'top' ? 50 : settings.position === 'bottom' ? 50 : 20
@@ -156,7 +168,7 @@ PlayResY: 720
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${settings.font_family},${settings.font_size},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,${bold_flag},0,0,0,100,100,0,0,1,${outline_width},${shadow_depth},${alignment},10,10,${margin_v},1
+Style: Default,${font_name},${settings.font_size},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,${bold_flag},0,0,0,100,100,0,0,1,${outline_width},${shadow_depth},${alignment},10,10,${margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -190,7 +202,8 @@ ${dialogues.join('\n')}`
 			// Execute FFmpeg command: burn subtitles into video
 			console.log('Starting FFmpeg processing...')
 			const config = get_config(local_quality_mode)
-			const vf_filter = `subtitles=${ass_name}:force_style='FontName=${app_state.subtitle_settings.font_family},FontSize=${app_state.subtitle_settings.font_size},PrimaryColour=&H00FFFFFF,Bold=${app_state.subtitle_settings.bold ? 1 : 0},Alignment=${app_state.subtitle_settings.position === 'top' ? 8 : app_state.subtitle_settings.position === 'bottom' ? 2 : 5}'`
+			const font_name = app_state.subtitle_settings.font_family // Use selected font
+			const vf_filter = `subtitles=${ass_name}:force_style='FontName=${font_name},FontSize=${app_state.subtitle_settings.font_size},PrimaryColour=&H00FFFFFF,Bold=${app_state.subtitle_settings.bold ? -1 : 0},Alignment=${app_state.subtitle_settings.position === 'top' ? 8 : app_state.subtitle_settings.position === 'bottom' ? 2 : 5}'`
 			await ffmpeg.exec([
 				'-i',
 				video_name,
@@ -287,7 +300,7 @@ ${dialogues.join('\n')}`
 		if (app_state.output_blob && output_url) {
 			const a = document.createElement('a')
 			a.href = output_url
-			a.download = `subtitled-${app_state.video_file?.name || 'video'}.mp4`
+			a.download = `subtitled-${app_state.video_file?.name || 'video.mp4'}`
 			document.body.appendChild(a)
 			a.click()
 			document.body.removeChild(a)
@@ -303,6 +316,7 @@ ${dialogues.join('\n')}`
 </script>
 
 <div class="processor-container rounded-lg bg-green-50 p-6">
+	<FontPreview />
 	<h2 class="mb-4 text-xl font-bold">Process Subtitles</h2>
 
 	{#if app_state.error}
@@ -312,11 +326,11 @@ ${dialogues.join('\n')}`
 	{/if}
 
 	<div class="mb-4">
-		<label for="quality-mode" class="block text-sm font-medium text-gray-700 mb-2">Quality Mode</label>
+		<label for="quality-mode" class="mb-2 block text-sm font-medium text-gray-700">Quality Mode</label>
 		<select
 			id="quality-mode"
 			bind:value={local_quality_mode}
-			class="rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+			class="rounded border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none"
 			disabled={app_state.is_processing}
 		>
 			<option value="preview">Preview (Fast)</option>
@@ -342,10 +356,9 @@ ${dialogues.join('\n')}`
 		</div>
 
 		{#if estimated_remaining}
-			<p class="text-sm text-gray-600 mt-2">Estimated time remaining: {estimated_remaining}</p>
+			<p class="mt-2 text-sm text-gray-600">Estimated time remaining: {estimated_remaining}</p>
 		{/if}
 	{/if}
-
 
 	{#if app_state.output_blob}
 		<div class="space-y-4">
