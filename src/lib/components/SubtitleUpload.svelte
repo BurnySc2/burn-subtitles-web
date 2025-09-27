@@ -74,7 +74,6 @@
 		srt_drag_over = false
 	}
 
-
 	function handle_srt_upload(event: Event) {
 		const target = event.target as HTMLInputElement
 		const file = target.files?.[0]
@@ -109,7 +108,9 @@
 				ondragover={handle_drag_over}
 				ondragleave={handle_drag_leave}
 				bind:this={video_input}
-				class="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 {drag_over ? 'border-2 border-blue-500 bg-blue-50' : ''}"
+				class="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 {drag_over
+					? 'border-2 border-blue-500 bg-blue-50'
+					: ''}"
 			/>
 			{#if video_input?.value && video_input.value.trim()}
 				<p class="mt-2 text-sm text-gray-600">
@@ -131,7 +132,9 @@
 				ondragover={handle_srt_drag_over}
 				ondragleave={handle_srt_drag_leave}
 				bind:this={srt_input}
-				class="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-green-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-green-700 hover:file:bg-green-100 {srt_drag_over ? 'border-2 border-green-500 bg-green-50' : ''}"
+				class="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-green-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-green-700 hover:file:bg-green-100 {srt_drag_over
+					? 'border-2 border-green-500 bg-green-50'
+					: ''}"
 			/>
 			{#if srt_input?.value && srt_input.value.trim()}
 				<p class="mt-2 text-sm text-gray-600">
