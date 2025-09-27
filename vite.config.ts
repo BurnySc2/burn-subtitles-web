@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+	server: { allowedHosts: ['preview1.burnysc2.xyz'] },
 	optimizeDeps: {
 		exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
 	},
