@@ -524,7 +524,7 @@ YCbCr Matrix: None
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${state.selected_font.name},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,1
+Style: Default,${state.selected_font.name},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,${state.subtitle_position_y},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
