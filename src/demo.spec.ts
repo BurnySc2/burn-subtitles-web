@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import type { TodoItem } from './components/types'
+import { beforeEach, describe, expect, it } from "vitest"
+import type { TodoItem } from "./components/types"
 
-describe('sum test', () => {
-	it('adds 1 + 2 to equal 3', () => {
+describe("sum test", () => {
+	it("adds 1 + 2 to equal 3", () => {
 		expect(1 + 2).toBe(3)
 	})
 })
 
-describe('todo functionality', () => {
+describe("todo functionality", () => {
 	let todos: TodoItem[] = []
 	let removed_id: number | null = null
 
@@ -22,13 +22,13 @@ describe('todo functionality', () => {
 
 	beforeEach(() => {
 		todos = [
-			{ id: 1, text: 'Buy milk', done: false },
-			{ id: 2, text: 'Walk dog', done: true }
+			{ id: 1, text: "Buy milk", done: false },
+			{ id: 2, text: "Walk dog", done: true },
 		]
 		removed_id = null
 	})
 
-	it('toggles todo completion status', () => {
+	it("toggles todo completion status", () => {
 		toggle_todo(1)
 		expect(todos.find((t) => t.id === 1)?.done).toBe(true)
 
@@ -36,7 +36,7 @@ describe('todo functionality', () => {
 		expect(todos.find((t) => t.id === 1)?.done).toBe(false)
 	})
 
-	it('removes todo item', () => {
+	it("removes todo item", () => {
 		remove_todo(2)
 		expect(todos.length).toBe(1)
 		expect(removed_id).toBe(2)
