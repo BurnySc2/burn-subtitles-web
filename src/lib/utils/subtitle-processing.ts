@@ -447,20 +447,30 @@ export async function process_subtitles(
 			ffmpeg,
 		})
 	}
-} // End of process_subtitles function
+}
 
 // Helper function to convert hex color to ASS format
 function hex_to_ass(hex_color: string): string {
 	// Remove # if present
 	const hex = hex_color.replace(/^#/, "")
 
+	// Validate hex format
+	if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+		throw new Error(`Invalid hex color format: ${hex_color}. Expected RRGGBB format.`)
+	}
+
 	// Parse RGB components
 	const r = parseInt(hex.substring(0, 2), 16)
 	const g = parseInt(hex.substring(2, 4), 16)
 	const b = parseInt(hex.substring(4, 6), 16)
 
+	// Validate RGB values are within valid range
+	if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+		throw new Error(`Invalid RGB values in hex color: ${hex_color}`)
+	}
+
 	// Convert to ASS format (BBGGRR)
-	return `${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}${r.toString(16).padStart(2, "0")}`
+	return `${b.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${r.toString(16).padStart(2, "0")}`
 }
 
 // Helper function to parse SRT file and convert to ASS dialogues
@@ -536,27 +546,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 	return ass_header + (dialogue_lines ? "\n" + dialogue_lines : "")
 }
 
-// Create ASS-specific FFmpeg filter
-function create_ass_filter(state: ASSProcessingState): string {
-	return `ass='subtitles.ass':fontsdir=/tmp`
-}
-
-// Create initial ASS state
-function create_initial_ass_state(): ASSProcessingState {
-	const base_state = create_initial_state()
-	return {
-		...base_state,
-		text_color: "#ffff7f",
-		font_size: 70,
-		stroke_size: 2,
-		stroke_color: "#000000",
-		shadow_blur: 0,
-		shadow_opacity: 50,
-		subtitle_position_y: 140,
-		subtitle_center_x: 960,
-	}
-}
-
 // Render ASS frame preview
 export async function render_ass_frame_preview(
 	state: ASSProcessingState,
@@ -607,7 +596,7 @@ export async function render_ass_frame_preview(
 		await ffmpeg.writeFile("subtitles.ass", ass_bytes)
 
 		// Build ASS filter
-		const ass_filter = create_ass_filter(state)
+		const ass_filter = `ass='subtitles.ass':fontsdir=/tmp`
 
 		// Execute FFmpeg command for frame extraction with ASS subtitles
 		await ffmpeg.exec([
@@ -717,7 +706,7 @@ export async function process_ass_subtitles(
 		console.log("Wrote ASS subtitles file")
 
 		// Build ASS filter
-		const ass_filter = create_ass_filter(state)
+		const ass_filter = `ass='subtitles.ass':fontsdir=/tmp`
 
 		// Execute FFmpeg command
 		set_message("Burning ASS subtitles to video")
