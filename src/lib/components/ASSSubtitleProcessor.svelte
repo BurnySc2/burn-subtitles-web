@@ -72,6 +72,7 @@ async function render_ass_frame_preview_wrapper() {
 }
 
 async function process_ass_subtitles_wrapper() {
+	state.processing_start_time = Date.now()
 	await process_ass_subtitles(
 		state,
 		(new_state: Partial<ASSProcessingState>) => {
@@ -92,7 +93,10 @@ function download_video_wrapper() {
 
 async function download_ass_file_wrapper() {
 	if (!state.srt_file) {
-		state = { ...state, error_message: "Please upload an SRT file first" }
+		state = {
+			...state,
+			error_message: "Please upload an SRT file first",
+		}
 		return
 	}
 
@@ -112,7 +116,10 @@ async function download_ass_file_wrapper() {
 
 		state = { ...state, message: "ASS file downloaded successfully" }
 	} catch (error) {
-		state = { ...state, error_message: `Failed to download ASS file: ${error}` }
+		state = {
+			...state,
+			error_message: `Failed to download ASS file: ${error}`,
+		}
 	}
 }
 
@@ -191,9 +198,7 @@ function reset_output_wrapper() {
 		<div
 			class="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6"
 		>
-			<h2 class="mb-4 text-xl font-bold text-gray-800">
-				Font Settings
-			</h2>
+			<h2 class="mb-4 text-xl font-bold text-gray-800">Font Settings</h2>
 
 			<!-- Font Selection -->
 			<div class="mb-4">
@@ -240,9 +245,7 @@ function reset_output_wrapper() {
 		<div
 			class="rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-6"
 		>
-			<h2 class="mb-4 text-xl font-bold text-gray-800">
-				Text Colors
-			</h2>
+			<h2 class="mb-4 text-xl font-bold text-gray-800">Text Colors</h2>
 
 			<!-- Text Color -->
 			<div class="mb-4">
@@ -259,7 +262,8 @@ function reset_output_wrapper() {
 						class="h-12 w-20 rounded-lg border border-gray-300 cursor-pointer"
 						disabled={state.is_processing}
 					/>
-					<span class="text-sm text-gray-600">{state.text_color}</span>
+					<span class="text-sm text-gray-600">{state.text_color}</span
+					>
 				</div>
 			</div>
 
@@ -278,7 +282,9 @@ function reset_output_wrapper() {
 						class="h-12 w-20 rounded-lg border border-gray-300 cursor-pointer"
 						disabled={state.is_processing}
 					/>
-					<span class="text-sm text-gray-600">{state.stroke_color}</span>
+					<span class="text-sm text-gray-600"
+						>{state.stroke_color}</span
+					>
 				</div>
 			</div>
 
@@ -403,11 +409,13 @@ function reset_output_wrapper() {
 						bind:value={state.preview_timestamp}
 						placeholder="00:00:00"
 						class="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-						disabled={state.is_processing || state.is_rendering_preview}
+						disabled={state.is_processing ||
+							state.is_rendering_preview}
 					/>
 					<button
 						onclick={render_ass_frame_preview_wrapper}
-						disabled={state.is_processing || state.is_rendering_preview}
+						disabled={state.is_processing ||
+							state.is_rendering_preview}
 						class="transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
 					>
 						{#if state.is_rendering_preview}
@@ -443,8 +451,8 @@ function reset_output_wrapper() {
 				<div class="rounded-lg bg-gray-50 py-8 text-center">
 					<p class="mb-2 text-lg text-gray-500">No preview yet</p>
 					<p class="text-sm text-gray-400">
-						Click "Render ASS Preview" to see how your styled subtitles
-						will look on the video frame.
+						Click "Render ASS Preview" to see how your styled
+						subtitles will look on the video frame.
 					</p>
 				</div>
 			{/if}
@@ -524,8 +532,7 @@ function reset_output_wrapper() {
 							<p class="text-xs text-gray-600">
 								{format_time_remaining(
 									state.processing_start_time,
-									state.estimated_total_duration,
-									state.progress
+									state.progress,
 								)}
 							</p>
 						</div>
@@ -537,7 +544,9 @@ function reset_output_wrapper() {
 		<!-- Process Button -->
 		<button
 			onclick={process_ass_subtitles_wrapper}
-			disabled={state.is_processing || !state.video_file || !state.srt_file}
+			disabled={state.is_processing ||
+				!state.video_file ||
+				!state.srt_file}
 			class="flex w-full transform items-center justify-center rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-8 py-4 text-xl font-bold text-white shadow-lg transition-all duration-200 hover:-translate-y-1 hover:from-green-700 hover:to-green-800 hover:shadow-xl disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
 		>
 			{#if state.is_processing}
@@ -599,7 +608,8 @@ function reset_output_wrapper() {
 				Ready to Process!
 			</h3>
 			<p class="text-gray-500">
-				Configure your ASS subtitle styling above and click "Burn ASS Subtitles to Video" to create your styled subtitled video.
+				Configure your ASS subtitle styling above and click "Burn ASS
+				Subtitles to Video" to create your styled subtitled video.
 			</p>
 		</div>
 	{:else}
@@ -610,7 +620,8 @@ function reset_output_wrapper() {
 				Get Started
 			</h3>
 			<p class="mb-4 text-gray-500">
-				Upload your video file and SRT subtitle file to begin creating styled ASS subtitled videos.
+				Upload your video file and SRT subtitle file to begin creating
+				styled ASS subtitled videos.
 			</p>
 			<div class="flex justify-center space-x-4 text-sm text-gray-400">
 				<span>Video</span>

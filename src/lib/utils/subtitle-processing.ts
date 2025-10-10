@@ -124,22 +124,21 @@ export function parse_timestamp(timestamp: string): number {
 	return hours * 3600 + minutes * 60 + seconds
 }
 
-export function format_time_remaining(
-	processing_start_time: number | null,
-	estimated_total_duration: number,
-	progress: number,
-): string {
-	if (!processing_start_time || !estimated_total_duration || progress >= 100) {
+export function format_time_remaining(processing_start_time: number | null, progress: number): string {
+	if (!processing_start_time || progress <= 0 || progress >= 100) {
 		return ""
 	}
 
-	const elapsed = (Date.now() - processing_start_time) / 1000
-	const remaining = estimated_total_duration - elapsed
+	const estimated_total_duration_ms = (100 * (Date.now() - processing_start_time)) / progress
+	const elapsed_ms = Date.now() - processing_start_time
+	const remaining_s = (estimated_total_duration_ms - elapsed_ms) / 1000
 
-	if (remaining < 0) return "Finishing up..."
+	// console.log([estimated_total_duration_ms, elapsed_ms, remaining_s])
 
-	const minutes = Math.floor(remaining / 60)
-	const seconds = Math.floor(remaining % 60)
+	if (remaining_s < 0) return "Finishing up..."
+
+	const minutes = Math.floor(remaining_s / 60)
+	const seconds = Math.floor(remaining_s % 60)
 	return `${minutes}:${seconds.toString().padStart(2, "0")} remaining`
 }
 
