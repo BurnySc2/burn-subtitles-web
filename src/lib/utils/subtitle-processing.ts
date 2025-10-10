@@ -485,7 +485,7 @@ function parse_srt_to_dialogues(srt_content: string): Array<{
 	for (const block of blocks) {
 		const lines = block.trim().split("\n")
 		if (lines.length >= 3) {
-			const index = lines[0]
+			const _index = lines[0]
 			const time_line = lines[1]
 			const text = lines.slice(2).join("\n")
 
@@ -543,7 +543,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 		})
 		.join("\n")
 
-	return ass_header + (dialogue_lines ? "\n" + dialogue_lines : "")
+	return ass_header + (dialogue_lines ? `\n${dialogue_lines}` : "")
 }
 
 // Render ASS frame preview
@@ -586,7 +586,7 @@ export async function render_ass_frame_preview(
 	const video_name = `input.${video_ext}`
 	const srt_content = await state.srt_file.text()
 	const ass_content = generate_ass_file(state, srt_content)
-	const ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
+	const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
 	const output_name = "preview.png"
 
 	try {
@@ -691,7 +691,7 @@ export async function process_ass_subtitles(
 	const video_name = `input.${video_ext}`
 	const srt_content = await state.srt_file.text()
 	const ass_content = generate_ass_file(state, srt_content)
-	const ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
+	const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
 	const output_name = "output.mp4"
 
 	try {
