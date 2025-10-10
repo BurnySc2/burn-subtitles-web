@@ -448,26 +448,6 @@ function reset_output_wrapper() {
 					disabled={state.is_processing}
 				/>
 			</div>
-
-			<!-- Position -->
-			<div class="mb-4">
-				<label
-					for="position"
-					class="mb-2 block text-sm font-semibold text-gray-700"
-					>Horizontal Position</label
-				>
-				<select
-					id="position"
-					value={state.position}
-					onchange={handle_position_change}
-					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-					disabled={state.is_processing}
-				>
-					<option value="bottom">Bottom</option>
-					<option value="center">Center</option>
-					<option value="top">Top</option>
-				</select>
-			</div>
 		</div>
 	</div>
 
