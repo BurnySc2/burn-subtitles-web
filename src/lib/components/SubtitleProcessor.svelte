@@ -85,7 +85,7 @@ let srt_file = $state<File | null>(null)
 
 function handle_video_upload(event: Event) {
 	const target = event.target as HTMLInputElement
-	if (target.files && target.files[0]) {
+	if (target.files?.[0]) {
 		video_file = target.files[0]
 		if (preview_url) {
 			URL.revokeObjectURL(preview_url)
@@ -110,7 +110,7 @@ function handle_video_drop(event: DragEvent) {
 
 function handle_srt_upload(event: Event) {
 	const target = event.target as HTMLInputElement
-	if (target.files && target.files[0]) {
+	if (target.files?.[0]) {
 		srt_file = target.files[0]
 		if (preview_url) {
 			URL.revokeObjectURL(preview_url)
@@ -135,7 +135,7 @@ function handle_srt_drop(event: DragEvent) {
 
 function handle_font_change(event: Event) {
 	const target = event.target as HTMLSelectElement
-	const selected_index = parseInt(target.value)
+	const selected_index = parseInt(target.value, 10)
 	selected_font = available_fonts[selected_index]
 	if (preview_url) {
 		URL.revokeObjectURL(preview_url)
@@ -145,7 +145,7 @@ function handle_font_change(event: Event) {
 
 function handle_font_size_change(event: Event) {
 	const target = event.target as HTMLInputElement
-	font_size = parseInt(target.value) || 24
+	font_size = parseInt(target.value, 10) || 24
 	if (preview_url) {
 		URL.revokeObjectURL(preview_url)
 		preview_url = null
@@ -345,7 +345,9 @@ async function render_frame_preview() {
 		// Read output
 		const frame_data = await ffmpeg.readFile(output_name)
 		// @ts-expect-error
-		const frame_blob = new Blob([(frame_data as Uint8Array).buffer], { type: "image/png" })
+		const frame_blob = new Blob([(frame_data as Uint8Array).buffer], {
+			type: "image/png",
+		})
 		preview_url = URL.createObjectURL(frame_blob)
 
 		// Cleanup
@@ -453,7 +455,9 @@ async function process_subtitles() {
 		message = "Generating output"
 		const output_data = await ffmpeg.readFile(output_name)
 		// @ts-expect-error
-		output_blob = new Blob([(output_data as Uint8Array).buffer], { type: "video/mp4" })
+		output_blob = new Blob([(output_data as Uint8Array).buffer], {
+			type: "video/mp4",
+		})
 		output_url = URL.createObjectURL(output_blob)
 
 		// Cleanup
@@ -512,14 +516,22 @@ function reset_output() {
 }
 </script>
 
-<div class="processor-container mx-auto max-w-4xl min-w-0 space-y-6 rounded-xl bg-white p-4 shadow-lg">
+<div
+	class="processor-container mx-auto max-w-4xl min-w-0 space-y-6 rounded-xl bg-white p-4 shadow-lg"
+>
 	<!-- Upload Section -->
-	<div class="rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-4">
+	<div
+		class="rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-4"
+	>
 		<h2 class="mb-4 text-lg font-bold text-gray-800">Upload Files</h2>
 
 		<!-- Video Upload -->
 		<div class="mb-4">
-			<label for="video-upload" class="mb-2 block text-sm font-semibold text-gray-700">Video</label>
+			<label
+				for="video-upload"
+				class="mb-2 block text-sm font-semibold text-gray-700"
+				>Video</label
+			>
 			<div class="relative">
 				<input
 					id="video-upload"
@@ -531,7 +543,9 @@ function reset_output() {
 				/>
 			</div>
 			{#if video_file}
-				<p class="mt-1 inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+				<p
+					class="mt-1 inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700"
+				>
 					{video_file.name}
 				</p>
 			{/if}
@@ -539,7 +553,11 @@ function reset_output() {
 
 		<!-- SRT Upload -->
 		<div class="mb-4">
-			<label for="srt-upload" class="mb-2 block text-sm font-semibold text-gray-700">SRT</label>
+			<label
+				for="srt-upload"
+				class="mb-2 block text-sm font-semibold text-gray-700"
+				>SRT</label
+			>
 			<div class="relative">
 				<input
 					id="srt-upload"
@@ -551,7 +569,9 @@ function reset_output() {
 				/>
 			</div>
 			{#if srt_file}
-				<p class="mt-1 inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+				<p
+					class="mt-1 inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700"
+				>
 					{srt_file.name}
 				</p>
 			{/if}
@@ -560,15 +580,25 @@ function reset_output() {
 
 	<!-- Settings Section -->
 	<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-		<div class="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6">
-			<h2 class="mb-4 text-xl font-bold text-gray-800">Subtitle Styling</h2>
+		<div
+			class="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-6"
+		>
+			<h2 class="mb-4 text-xl font-bold text-gray-800">
+				Subtitle Styling
+			</h2>
 
 			<!-- Font Selection -->
 			<div class="mb-4">
-				<label for="font-select" class="mb-2 block text-sm font-semibold text-gray-700">Font Family</label>
+				<label
+					for="font-select"
+					class="mb-2 block text-sm font-semibold text-gray-700"
+					>Font Family</label
+				>
 				<select
 					id="font-select"
-					value={available_fonts.findIndex((f) => f === selected_font)}
+					value={available_fonts.findIndex(
+						(f) => f === selected_font,
+					)}
 					onchange={handle_font_change}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={is_processing}
@@ -581,7 +611,11 @@ function reset_output() {
 
 			<!-- Font Size -->
 			<div class="mb-4">
-				<label for="font-size" class="mb-2 block text-sm font-semibold text-gray-700">Font Size</label>
+				<label
+					for="font-size"
+					class="mb-2 block text-sm font-semibold text-gray-700"
+					>Font Size</label
+				>
 				<input
 					id="font-size"
 					type="number"
@@ -596,12 +630,20 @@ function reset_output() {
 			</div>
 		</div>
 
-		<div class="rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
-			<h2 class="mb-4 text-xl font-bold text-gray-800">Position & Timing</h2>
+		<div
+			class="rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6"
+		>
+			<h2 class="mb-4 text-xl font-bold text-gray-800">
+				Position & Timing
+			</h2>
 
 			<!-- Position -->
 			<div class="mb-6">
-				<label for="position" class="mb-2 block text-sm font-semibold text-gray-700">Subtitle Position</label>
+				<label
+					for="position"
+					class="mb-2 block text-sm font-semibold text-gray-700"
+					>Subtitle Position</label
+				>
 				<select
 					id="position"
 					value={position}
@@ -618,7 +660,11 @@ function reset_output() {
 			<!-- Preview Timestamp (moved here for better grouping) -->
 			{#if video_file && srt_file}
 				<div>
-					<label for="timestamp" class="mb-2 block text-sm font-semibold text-gray-700">Preview Timestamp</label>
+					<label
+						for="timestamp"
+						class="mb-2 block text-sm font-semibold text-gray-700"
+						>Preview Timestamp</label
+					>
 					<input
 						type="text"
 						id="timestamp"
@@ -634,10 +680,14 @@ function reset_output() {
 	</div>
 
 	<!-- Font Preview -->
-	<div class="rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-6">
+	<div
+		class="rounded-lg border border-purple-200 bg-gradient-to-r from-purple-50 to-pink-50 p-6"
+	>
 		<h3 class="mb-4 text-lg font-bold text-gray-800">Font Preview</h3>
 		<div class="overflow-hidden rounded-lg bg-white p-4 shadow-inner">
-			<div class="mx-auto flex h-24 w-full max-w-md items-center justify-center">
+			<div
+				class="mx-auto flex h-24 w-full max-w-md items-center justify-center"
+			>
 				<FontPreview
 					font_name={selected_font.name}
 					{font_size}
@@ -649,7 +699,9 @@ function reset_output() {
 
 	<!-- Frame Preview Section -->
 	{#if video_file && srt_file}
-		<div class="rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-6">
+		<div
+			class="rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-6"
+		>
 			<h2 class="mb-4 text-xl font-bold text-gray-800">Frame Preview</h2>
 			<div class="mb-6 flex flex-col items-center gap-4 sm:flex-row">
 				<button
@@ -660,7 +712,9 @@ function reset_output() {
 					{#if is_rendering_preview}
 						<span class="flex items-center justify-center">
 							Rendering...
-							<div class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+							<div
+								class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+							></div>
 						</span>
 					{:else}
 						Render Frame Preview
@@ -677,7 +731,9 @@ function reset_output() {
 							style="max-height: 500px;"
 						/>
 					</div>
-					<p class="mt-3 inline-block rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700">
+					<p
+						class="mt-3 inline-block rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
+					>
 						Preview at {preview_timestamp}
 					</p>
 				</div>
@@ -685,7 +741,8 @@ function reset_output() {
 				<div class="rounded-lg bg-gray-50 py-8 text-center">
 					<p class="mb-2 text-lg text-gray-500">No preview yet</p>
 					<p class="text-sm text-gray-400">
-						Click "Render Frame Preview" to see how your subtitles will look on the video frame.
+						Click "Render Frame Preview" to see how your subtitles
+						will look on the video frame.
 					</p>
 				</div>
 			{/if}
@@ -693,16 +750,24 @@ function reset_output() {
 	{/if}
 
 	<!-- Processing Section -->
-	<div class="rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-6">
+	<div
+		class="rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-6"
+	>
 		<h2 class="mb-6 text-xl font-bold text-gray-800">Processing</h2>
 
 		<!-- Quality Mode -->
 		<div class="mb-6">
-			<label for="quality-mode" class="mb-3 block text-sm font-semibold text-gray-700">Quality Mode</label>
+			<label
+				for="quality-mode"
+				class="mb-3 block text-sm font-semibold text-gray-700"
+				>Quality Mode</label
+			>
 			<select
 				id="quality-mode"
 				value={selected_quality_mode}
-				onchange={(e) => (selected_quality_mode = e.currentTarget.value as QualityMode)}
+				onchange={(e) =>
+					(selected_quality_mode = e.currentTarget
+						.value as QualityMode)}
 				class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:outline-none"
 				disabled={is_processing}
 			>
@@ -713,7 +778,9 @@ function reset_output() {
 
 		<!-- Status Messages -->
 		{#if error_message}
-			<div class="mb-6 rounded-lg border-2 border-red-300 bg-red-50 px-5 py-4 text-red-800">
+			<div
+				class="mb-6 rounded-lg border-2 border-red-300 bg-red-50 px-5 py-4 text-red-800"
+			>
 				<div class="flex items-center">
 					<span class="mr-3">!</span>
 					<span>{error_message}</span>
@@ -739,10 +806,15 @@ function reset_output() {
 							</span>
 						</div>
 						<div class="text-right">
-							<span class="inline-block text-xs font-semibold text-teal-600">{progress}%</span>
+							<span
+								class="inline-block text-xs font-semibold text-teal-600"
+								>{progress}%</span
+							>
 						</div>
 					</div>
-					<div class="mb-4 flex h-2 overflow-hidden rounded-full bg-gray-200 text-xs">
+					<div
+						class="mb-4 flex h-2 overflow-hidden rounded-full bg-gray-200 text-xs"
+					>
 						<div
 							style="width: {progress}%"
 							class="flex flex-col justify-center bg-green-500 text-center whitespace-nowrap text-white shadow-none"
@@ -767,7 +839,9 @@ function reset_output() {
 		>
 			{#if is_processing}
 				<span class="flex items-center">
-					<div class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+					<div
+						class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+					></div>
 					Processing Video...
 				</span>
 			{:else}
@@ -778,14 +852,22 @@ function reset_output() {
 
 	<!-- Output Section -->
 	{#if output_url}
-		<div class="space-y-6 rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 p-6">
+		<div
+			class="space-y-6 rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 p-6"
+		>
 			<h2 class="text-2xl font-bold text-gray-800">Output Ready!</h2>
 			<div class="overflow-hidden rounded-xl bg-black shadow-2xl">
-				<video src={output_url} controls class="mx-auto w-full max-w-4xl">
+				<video
+					src={output_url}
+					controls
+					class="mx-auto w-full max-w-4xl"
+				>
 					Your browser does not support the video tag.
 				</video>
 			</div>
-			<div class="flex flex-col gap-4 border-t border-emerald-200 pt-4 sm:flex-row">
+			<div
+				class="flex flex-col gap-4 border-t border-emerald-200 pt-4 sm:flex-row"
+			>
 				<button
 					onclick={download_video}
 					class="flex flex-1 transform items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-4 text-lg font-bold text-white shadow-lg transition-all duration-200 hover:-translate-y-1 hover:from-blue-700 hover:to-blue-800 hover:shadow-xl"
@@ -801,16 +883,28 @@ function reset_output() {
 			</div>
 		</div>
 	{:else if video_file && srt_file && !is_processing}
-		<div class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-12 text-center">
-			<h3 class="mb-2 text-lg font-semibold text-gray-700">Ready to Process!</h3>
+		<div
+			class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-12 text-center"
+		>
+			<h3 class="mb-2 text-lg font-semibold text-gray-700">
+				Ready to Process!
+			</h3>
 			<p class="text-gray-500">
-				Select your subtitle settings above and click "Burn Subtitles to Video" to create your subtitled video.
+				Select your subtitle settings above and click "Burn Subtitles to
+				Video" to create your subtitled video.
 			</p>
 		</div>
 	{:else}
-		<div class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-12 text-center">
-			<h3 class="mb-2 text-lg font-semibold text-gray-700">Get Started</h3>
-			<p class="mb-4 text-gray-500">Upload your video file and SRT subtitle file to begin creating subtitled videos.</p>
+		<div
+			class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-12 text-center"
+		>
+			<h3 class="mb-2 text-lg font-semibold text-gray-700">
+				Get Started
+			</h3>
+			<p class="mb-4 text-gray-500">
+				Upload your video file and SRT subtitle file to begin creating
+				subtitled videos.
+			</p>
 			<div class="flex justify-center space-x-4 text-sm text-gray-400">
 				<span>Video</span>
 				<span class="text-gray-300">→</span>
