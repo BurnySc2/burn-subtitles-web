@@ -39,6 +39,17 @@ export type ProcessingState = {
 	srt_file: File | null
 }
 
+export type ASSProcessingState = ProcessingState & {
+	text_color: string // #ffff7f
+	font_size: number // 70
+	stroke_size: number // 2 (fixed)
+	stroke_color: string // #000000
+	shadow_blur: number // 0-20
+	shadow_opacity: number // 0-100
+	subtitle_position_y: number // 140
+	subtitle_center_x: number // 960
+}
+
 export const high_quality_config: FfmpegConfig = {
 	preset: "veryslow",
 	crf: "18",
@@ -425,6 +436,344 @@ export async function process_subtitles(
 		// Cleanup on error
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile(srt_name).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			is_processing: false,
+			processing_start_time: null,
+			estimated_total_duration: 0,
+			progress: 0,
+			ffmpeg,
+		})
+	}
+} // End of process_subtitles function
+
+// Helper function to convert hex color to ASS format
+function hex_to_ass(hex_color: string): string {
+	// Remove # if present
+	const hex = hex_color.replace(/^#/, "")
+
+	// Parse RGB components
+	const r = parseInt(hex.substring(0, 2), 16)
+	const g = parseInt(hex.substring(2, 4), 16)
+	const b = parseInt(hex.substring(4, 6), 16)
+
+	// Convert to ASS format (BBGGRR)
+	return `${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}${r.toString(16).padStart(2, "0")}`
+}
+
+// Helper function to parse SRT file and convert to ASS dialogues
+function parse_srt_to_dialogues(srt_content: string): Array<{
+	start: string
+	end: string
+	text: string
+}> {
+	const dialogues: Array<{ start: string; end: string; text: string }> = []
+	const blocks = srt_content.trim().split(/\n\s*\n/)
+
+	for (const block of blocks) {
+		const lines = block.trim().split("\n")
+		if (lines.length >= 3) {
+			const index = lines[0]
+			const time_line = lines[1]
+			const text = lines.slice(2).join("\n")
+
+			// Parse time line: 00:00:000 --> 00:00:000
+			const time_match = time_line.match(/(\d{2}:\d{2}:\d{2}),\d{3} --> (\d{2}:\d{2}:\d{2}),\d{3}/)
+			if (time_match) {
+				dialogues.push({
+					start: time_match[1],
+					end: time_match[2],
+					text: text.trim(),
+				})
+			}
+		}
+	}
+
+	return dialogues
+}
+
+// Helper function to escape special characters in ASS text
+function escape_ass_text(text: string): string {
+	// Escape ASS special characters: {, }, \\n
+	return text.replace(/[{}\\]/g, "\\$&")
+}
+
+// Generate ASS file from SRT content and styling parameters
+export function generate_ass_file(state: ASSProcessingState, srt_content?: string): string {
+	const dialogues = srt_content ? parse_srt_to_dialogues(srt_content) : []
+
+	const ass_header = `[Script Info]
+Title: Generated Subtitles
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+YCbCr Matrix: None
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+
+Style: Default,${state.selected_font.name},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`
+
+	const dialogue_lines = dialogues
+		.map((d) => {
+			// Convert SRT time format (HH:MM:SS) to ASS time format (H:MM:SS.CC)
+			const format_time = (time_str: string) => {
+				const [hours, minutes, seconds] = time_str.split(":").map(Number)
+				// Use format: H:MM:SS.CC (e.g., 0:00:10.00, 1:05:30.00)
+				return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.00`
+			}
+
+			return `Dialogue: 0,${format_time(d.start)},${format_time(d.end)},Default,,0,0,0,,${escape_ass_text(d.text)}`
+		})
+		.join("\n")
+
+	return ass_header + (dialogue_lines ? "\n" + dialogue_lines : "")
+}
+
+// Create ASS-specific FFmpeg filter
+function create_ass_filter(state: ASSProcessingState): string {
+	return `ass='subtitles.ass':fontsdir=/tmp`
+}
+
+// Create initial ASS state
+function create_initial_ass_state(): ASSProcessingState {
+	const base_state = create_initial_state()
+	return {
+		...base_state,
+		text_color: "#ffff7f",
+		font_size: 70,
+		stroke_size: 2,
+		stroke_color: "#000000",
+		shadow_blur: 0,
+		shadow_opacity: 50,
+		subtitle_position_y: 140,
+		subtitle_center_x: 960,
+	}
+}
+
+// Render ASS frame preview
+export async function render_ass_frame_preview(
+	state: ASSProcessingState,
+	set_state: (new_state: Partial<ASSProcessingState>) => void,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+): Promise<void> {
+	if (!state.video_file || !state.srt_file) {
+		set_error_message("Please upload both video and SRT files")
+		return
+	}
+
+	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	if (!ffmpeg) return
+
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	if (!font_loaded) return
+
+	set_state({
+		is_rendering_preview: true,
+		progress: 0,
+		error_message: null,
+		message: "Rendering ASS frame preview...",
+	})
+
+	if (state.preview_url) {
+		URL.revokeObjectURL(state.preview_url)
+	}
+
+	const timestamp_seconds = parse_timestamp(state.preview_timestamp)
+	if (timestamp_seconds < 0) {
+		set_error_message("Timestamp must be positive")
+		set_state({ is_rendering_preview: false })
+		return
+	}
+
+	const video_ext = state.video_file.name.split(".").pop() || "mp4"
+	const video_name = `input.${video_ext}`
+	const srt_content = await state.srt_file.text()
+	const ass_content = generate_ass_file(state, srt_content)
+	const ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
+	const output_name = "preview.png"
+
+	try {
+		// Write input files
+		await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+		const ass_bytes = new TextEncoder().encode(ass_content)
+		await ffmpeg.writeFile("subtitles.ass", ass_bytes)
+
+		// Build ASS filter
+		const ass_filter = create_ass_filter(state)
+
+		// Execute FFmpeg command for frame extraction with ASS subtitles
+		await ffmpeg.exec([
+			"-i",
+			video_name,
+			"-ss",
+			timestamp_seconds.toString(),
+			"-avoid_negative_ts",
+			"make_zero",
+			"-vf",
+			ass_filter,
+			"-frames:v",
+			"1",
+			"-update",
+			"1",
+			"-y",
+			output_name,
+		])
+
+		// Read output
+		const frame_data = await ffmpeg.readFile(output_name)
+		// @ts-expect-error
+		const frame_blob = new Blob([(frame_data as Uint8Array).buffer], {
+			type: "image/png",
+		})
+		const preview_url = URL.createObjectURL(frame_blob)
+
+		// Cleanup
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			message: `ASS frame preview rendered at ${state.preview_timestamp}`,
+			is_rendering_preview: false,
+			progress: 100,
+			preview_url,
+			ffmpeg,
+		})
+	} catch (err) {
+		console.error("ASS frame preview failed:", err)
+		set_error_message(`ASS frame preview failed: ${err}`)
+		set_message("ASS frame preview failed")
+
+		// Cleanup on error
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			is_rendering_preview: false,
+			progress: 0,
+			ffmpeg,
+		})
+	}
+}
+
+// Process video with ASS subtitles
+export async function process_ass_subtitles(
+	state: ASSProcessingState,
+	set_state: (new_state: Partial<ASSProcessingState>) => void,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+): Promise<void> {
+	if (!state.video_file || !state.srt_file) {
+		set_error_message("Please upload both video and SRT files")
+		return
+	}
+
+	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	if (!ffmpeg) return
+
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	if (!font_loaded) return
+
+	set_state({
+		is_processing: true,
+		processing_start_time: Date.now(),
+		progress: 0,
+		error_message: null,
+		message: "Processing video with ASS subtitles...",
+		output_blob: null,
+	})
+
+	if (state.output_url) {
+		URL.revokeObjectURL(state.output_url)
+	}
+
+	const video_ext = state.video_file.name.split(".").pop() || "mp4"
+	const video_name = `input.${video_ext}`
+	const srt_content = await state.srt_file.text()
+	const ass_content = generate_ass_file(state, srt_content)
+	const ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
+	const output_name = "output.mp4"
+
+	try {
+		// Write input files
+		set_message("Loading video file")
+		await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+		console.log(`Wrote video file: ${video_name}`)
+
+		set_message("Generating ASS subtitle file")
+		const ass_bytes = new TextEncoder().encode(ass_content)
+		await ffmpeg.writeFile("subtitles.ass", ass_bytes)
+		console.log("Wrote ASS subtitles file")
+
+		// Build ASS filter
+		const ass_filter = create_ass_filter(state)
+
+		// Execute FFmpeg command
+		set_message("Burning ASS subtitles to video")
+		const config = get_config(state.selected_quality_mode)
+		await ffmpeg.exec([
+			"-i",
+			video_name,
+			"-vf",
+			ass_filter,
+			"-c:v",
+			"libx264",
+			"-preset",
+			config.preset,
+			"-crf",
+			config.crf,
+			"-pix_fmt",
+			"yuv420p",
+			"-c:a",
+			"aac",
+			"-b:a",
+			config.audio_bitrate,
+			"-y",
+			output_name,
+		])
+
+		// Read output
+		set_message("Generating output")
+		const output_data = await ffmpeg.readFile(output_name)
+		// @ts-expect-error
+		const output_blob = new Blob([(output_data as Uint8Array).buffer], {
+			type: "video/mp4",
+		})
+		const output_url = URL.createObjectURL(output_blob)
+
+		// Cleanup
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			message: "ASS subtitle processing complete!",
+			is_processing: false,
+			progress: 100,
+			output_blob,
+			output_url,
+			ffmpeg,
+		})
+	} catch (err) {
+		console.error("ASS processing failed:", err)
+		set_error_message(`ASS processing failed: ${err}`)
+		set_message("ASS processing failed")
+
+		// Cleanup on error
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
 		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
