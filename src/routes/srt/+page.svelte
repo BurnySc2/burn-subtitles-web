@@ -1,7 +1,7 @@
 <script lang="ts">
-import FfmpegDemo from "$lib/components/FfmpegSRTDemo.svelte"
+import SubtitleProcessor from "$lib/components/SubtitleProcessor.svelte"
 </script>
 
-<div class="flex h-screen flex-col items-center justify-center">
-	<FfmpegDemo />
+<div class="flex flex-col items-center justify-center py-8">
+	<SubtitleProcessor />
 </div>
