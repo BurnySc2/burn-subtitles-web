@@ -9,7 +9,7 @@ let srt_drag_over = $state(false)
 function handle_video_upload(event: Event) {
 	const target = event.target as HTMLInputElement
 	const file = target.files?.[0]
-	if (file && file.type.startsWith("video/")) {
+	if (file?.type.startsWith("video/")) {
 		update_state({ video_file: file })
 		target.value = ""
 	} else if (file) {
@@ -42,7 +42,7 @@ function handle_drag_over(event: DragEvent) {
 	drag_over = true
 }
 
-function handle_drag_leave(event: DragEvent) {
+function handle_drag_leave(_event: DragEvent) {
 	drag_over = false
 }
 
@@ -70,14 +70,14 @@ function handle_srt_drag_over(event: DragEvent) {
 	srt_drag_over = true
 }
 
-function handle_srt_drag_leave(event: DragEvent) {
+function handle_srt_drag_leave(_event: DragEvent) {
 	srt_drag_over = false
 }
 
 function handle_srt_upload(event: Event) {
 	const target = event.target as HTMLInputElement
 	const file = target.files?.[0]
-	if (file && file.name.endsWith(".srt")) {
+	if (file?.name.endsWith(".srt")) {
 		update_state({ srt_file: file })
 		target.value = ""
 	} else if (file) {

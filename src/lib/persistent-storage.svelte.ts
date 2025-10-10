@@ -1,4 +1,4 @@
-import { get, writable } from "svelte/store"
+import { writable } from "svelte/store"
 import { browser } from "$app/environment"
 
 // A simple class that keeps a state in sync with localStorage

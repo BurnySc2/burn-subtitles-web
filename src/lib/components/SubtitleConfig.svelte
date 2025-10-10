@@ -132,7 +132,7 @@ function handle_font_change(event: Event) {
 function handle_size_change(event: Event) {
 	const target = event.target as HTMLInputElement
 	const new_size = parseInt(target.value, 10)
-	if (!isNaN(new_size) && new_size > 0) {
+	if (!Number.isNaN(new_size) && new_size > 0) {
 		update_state({
 			subtitle_settings: {
 				...app_state.subtitle_settings,
