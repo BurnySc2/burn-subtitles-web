@@ -1,14 +1,13 @@
 <script lang="ts">
+// See http://www.tcax.org/docs/ass-specs.htm
 import {
 	type ASSProcessingState,
 	available_fonts,
 	create_initial_state,
 	download_video,
-	type FontOption,
 	format_time_remaining,
 	generate_ass_file,
 	process_ass_subtitles,
-	type QualityMode,
 	render_ass_frame_preview,
 	reset_output,
 } from "$lib/utils/subtitle-processing"
@@ -37,20 +36,6 @@ function handle_video_upload(event: Event) {
 	}
 }
 
-function handle_video_drop(event: DragEvent) {
-	const files = event.dataTransfer?.files
-	if (files && files.length > 0) {
-		const video = Array.from(files).find((f) => f.type.startsWith("video/"))
-		if (video) {
-			state = { ...state, video_file: video }
-			if (state.preview_url) {
-				URL.revokeObjectURL(state.preview_url)
-				state = { ...state, preview_url: null }
-			}
-		}
-	}
-}
-
 function handle_srt_upload(event: Event) {
 	const target = event.target as HTMLInputElement
 	if (target.files?.[0]) {
@@ -62,25 +47,6 @@ function handle_srt_upload(event: Event) {
 	}
 }
 
-function handle_srt_drop(event: DragEvent) {
-	const files = event.dataTransfer?.files
-	if (files && files.length > 0) {
-		const srt = Array.from(files).find((f) => f.name.toLowerCase().endsWith(".srt"))
-		if (srt) {
-			state = { ...state, srt_file: srt }
-			if (state.preview_url) {
-				URL.revokeObjectURL(state.preview_url)
-				state = { ...state, preview_url: null }
-			}
-		}
-	}
-}
-
-function handle_quality_change(event: Event) {
-	const target = event.target as HTMLSelectElement
-	state = { ...state, selected_quality_mode: target.value as QualityMode }
-}
-
 function handle_font_change(event: Event) {
 	const target = event.target as HTMLSelectElement
 	const font_name = target.value
@@ -88,51 +54,6 @@ function handle_font_change(event: Event) {
 	if (selected) {
 		state = { ...state, selected_font: selected }
 	}
-}
-
-function handle_font_size_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, font_size: parseInt(target.value, 10) }
-}
-
-function handle_text_color_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, text_color: target.value }
-}
-
-function handle_stroke_size_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, stroke_size: parseInt(target.value, 10) }
-}
-
-function handle_stroke_color_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, stroke_color: target.value }
-}
-
-function handle_shadow_blur_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, shadow_blur: parseInt(target.value, 10) }
-}
-
-function handle_shadow_opacity_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, shadow_opacity: parseInt(target.value, 10) }
-}
-
-function handle_position_y_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, subtitle_position_y: parseInt(target.value, 10) }
-}
-
-function handle_position_change(event: Event) {
-	const target = event.target as HTMLSelectElement
-	state = { ...state, position: target.value as "top" | "bottom" | "center" }
-}
-
-function handle_timestamp_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, preview_timestamp: target.value }
 }
 
 async function render_ass_frame_preview_wrapper() {
@@ -308,8 +229,7 @@ function reset_output_wrapper() {
 					type="range"
 					min="12"
 					max="120"
-					value={state.font_size}
-					oninput={handle_font_size_change}
+					bind:value={state.font_size}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={state.is_processing}
 				/>
@@ -335,8 +255,7 @@ function reset_output_wrapper() {
 					<input
 						id="text-color"
 						type="color"
-						value={state.text_color}
-						onchange={handle_text_color_change}
+						bind:value={state.text_color}
 						class="h-12 w-20 rounded-lg border border-gray-300 cursor-pointer"
 						disabled={state.is_processing}
 					/>
@@ -355,8 +274,7 @@ function reset_output_wrapper() {
 					<input
 						id="stroke-color"
 						type="color"
-						value={state.stroke_color}
-						onchange={handle_stroke_color_change}
+						bind:value={state.stroke_color}
 						class="h-12 w-20 rounded-lg border border-gray-300 cursor-pointer"
 						disabled={state.is_processing}
 					/>
@@ -376,8 +294,7 @@ function reset_output_wrapper() {
 					type="range"
 					min="0"
 					max="10"
-					value={state.stroke_size}
-					oninput={handle_stroke_size_change}
+					bind:value={state.stroke_size}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:outline-none"
 					disabled={state.is_processing}
 				/>
@@ -404,8 +321,7 @@ function reset_output_wrapper() {
 					type="range"
 					min="0"
 					max="20"
-					value={state.shadow_blur}
-					oninput={handle_shadow_blur_change}
+					bind:value={state.shadow_blur}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
 					disabled={state.is_processing}
 				/>
@@ -423,8 +339,7 @@ function reset_output_wrapper() {
 					type="range"
 					min="0"
 					max="100"
-					value={state.shadow_opacity}
-					oninput={handle_shadow_opacity_change}
+					bind:value={state.shadow_opacity}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
 					disabled={state.is_processing}
 				/>
@@ -442,8 +357,7 @@ function reset_output_wrapper() {
 					type="range"
 					min="0"
 					max="1080"
-					value={state.subtitle_position_y}
-					oninput={handle_position_y_change}
+					bind:value={state.subtitle_position_y}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
 					disabled={state.is_processing}
 				/>
@@ -475,23 +389,39 @@ function reset_output_wrapper() {
 			class="rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-6"
 		>
 			<h2 class="mb-4 text-xl font-bold text-gray-800">Frame Preview</h2>
-			<div class="mb-6 flex flex-col items-center gap-4 sm:flex-row">
-				<button
-					onclick={render_ass_frame_preview_wrapper}
-					disabled={state.is_processing || state.is_rendering_preview}
-					class="max-w-xs flex-1 transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
+			<!-- Preview Timestamp Input -->
+			<div class="mb-6">
+				<label
+					for="preview-timestamp"
+					class="mb-2 block text-sm font-semibold text-gray-700"
+					>Preview Timestamp</label
 				>
-					{#if state.is_rendering_preview}
-						<span class="flex items-center justify-center">
-							Rendering...
-							<div
-								class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
-							></div>
-						</span>
-					{:else}
-						Render ASS Preview
-					{/if}
-				</button>
+				<div class="flex items-center space-x-3">
+					<input
+						id="preview-timestamp"
+						type="text"
+						bind:value={state.preview_timestamp}
+						placeholder="00:00:00"
+						class="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+						disabled={state.is_processing || state.is_rendering_preview}
+					/>
+					<button
+						onclick={render_ass_frame_preview_wrapper}
+						disabled={state.is_processing || state.is_rendering_preview}
+						class="transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
+					>
+						{#if state.is_rendering_preview}
+							<span class="flex items-center justify-center">
+								Rendering...
+								<div
+									class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+								></div>
+							</span>
+						{:else}
+							Render Preview
+						{/if}
+					</button>
+				</div>
 			</div>
 			{#if state.preview_url}
 				<div class="text-center">
@@ -536,8 +466,7 @@ function reset_output_wrapper() {
 			>
 			<select
 				id="quality-mode"
-				value={state.selected_quality_mode}
-				onchange={handle_quality_change}
+				bind:value={state.selected_quality_mode}
 				class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:outline-none"
 				disabled={state.is_processing}
 			>

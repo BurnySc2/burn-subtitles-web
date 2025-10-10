@@ -3,7 +3,6 @@ import {
 	available_fonts,
 	create_initial_state,
 	download_video,
-	type FontOption,
 	format_time_remaining,
 	type ProcessingState,
 	process_subtitles,
@@ -25,21 +24,6 @@ function handle_video_upload(event: Event) {
 		}
 	}
 }
-
-function handle_video_drop(event: DragEvent) {
-	const files = event.dataTransfer?.files
-	if (files && files.length > 0) {
-		const video = Array.from(files).find((f) => f.type.startsWith("video/"))
-		if (video) {
-			state = { ...state, video_file: video }
-			if (state.preview_url) {
-				URL.revokeObjectURL(state.preview_url)
-				state = { ...state, preview_url: null }
-			}
-		}
-	}
-}
-
 function handle_srt_upload(event: Event) {
 	const target = event.target as HTMLInputElement
 	if (target.files?.[0]) {
@@ -47,20 +31,6 @@ function handle_srt_upload(event: Event) {
 		if (state.preview_url) {
 			URL.revokeObjectURL(state.preview_url)
 			state = { ...state, preview_url: null }
-		}
-	}
-}
-
-function handle_srt_drop(event: DragEvent) {
-	const files = event.dataTransfer?.files
-	if (files && files.length > 0) {
-		const srt = Array.from(files).find((f) => f.name.toLowerCase().endsWith(".srt"))
-		if (srt) {
-			state = { ...state, srt_file: srt }
-			if (state.preview_url) {
-				URL.revokeObjectURL(state.preview_url)
-				state = { ...state, preview_url: null }
-			}
 		}
 	}
 }
@@ -281,25 +251,6 @@ function reset_output_wrapper() {
 				</select>
 			</div>
 
-			<!-- Preview Timestamp (moved here for better grouping) -->
-			{#if state.video_file && state.srt_file}
-				<div>
-					<label
-						for="timestamp"
-						class="mb-2 block text-sm font-semibold text-gray-700"
-						>Preview Timestamp</label
-					>
-					<input
-						type="text"
-						id="timestamp"
-						value={state.preview_timestamp}
-						oninput={handle_timestamp_change}
-						placeholder="00:00:05"
-						class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-						disabled={state.is_processing}
-					/>
-				</div>
-			{/if}
 		</div>
 	</div>
 
@@ -327,23 +278,40 @@ function reset_output_wrapper() {
 			class="rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-6"
 		>
 			<h2 class="mb-4 text-xl font-bold text-gray-800">Frame Preview</h2>
-			<div class="mb-6 flex flex-col items-center gap-4 sm:flex-row">
-				<button
-					onclick={render_frame_preview_wrapper}
-					disabled={state.is_processing || state.is_rendering_preview}
-					class="max-w-xs flex-1 transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
+			
+			<!-- Preview Timestamp Input -->
+			<div class="mb-6">
+				<label
+					for="preview-timestamp"
+					class="mb-2 block text-sm font-semibold text-gray-700"
+					>Preview Timestamp</label
 				>
-					{#if state.is_rendering_preview}
-						<span class="flex items-center justify-center">
-							Rendering...
-							<div
-								class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
-							></div>
-						</span>
-					{:else}
-						Render Frame Preview
-					{/if}
-				</button>
+				<div class="flex items-center space-x-3">
+					<input
+						id="preview-timestamp"
+						type="text"
+						bind:value={state.preview_timestamp}
+						placeholder="00:00:00"
+						class="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+						disabled={state.is_processing || state.is_rendering_preview}
+					/>
+					<button
+						onclick={render_frame_preview_wrapper}
+						disabled={state.is_processing || state.is_rendering_preview}
+						class="transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
+					>
+						{#if state.is_rendering_preview}
+							<span class="flex items-center justify-center">
+								Rendering...
+								<div
+									class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+								></div>
+							</span>
+						{:else}
+							Render Preview
+						{/if}
+					</button>
+				</div>
 			</div>
 			{#if state.preview_url}
 				<div class="text-center">
