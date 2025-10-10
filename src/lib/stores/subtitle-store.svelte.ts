@@ -1,4 +1,4 @@
-type Position = 'top' | 'bottom' | 'center'
+type Position = "top" | "bottom" | "center"
 
 type SubtitleSettings = {
 	font_family: string
@@ -19,20 +19,20 @@ type AppState = {
 
 const initial_state: AppState = {
 	subtitle_settings: {
-		font_family: 'Arial',
+		font_family: "Arial",
 		font_size: 24,
 		bold: false,
-		position: 'bottom'
+		position: "bottom",
 	},
 	video_file: null,
 	srt_file: null,
 	is_processing: false,
 	error: null,
 	output_blob: null,
-	progress: 0
+	progress: 0,
 }
 
-export let app_state = $state(initial_state)
+export const app_state = $state(initial_state)
 
 // Function to update state (reactive)
 export function update_state(updates: Partial<AppState>) {

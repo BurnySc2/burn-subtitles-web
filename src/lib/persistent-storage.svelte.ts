@@ -1,10 +1,10 @@
-import { writable, get } from 'svelte/store'
-import { browser } from '$app/environment'
+import { get, writable } from "svelte/store"
+import { browser } from "$app/environment"
 
 // A simple class that keeps a state in sync with localStorage
 // Should only be used inside one component
 export class LocalStorageState<T> {
-	key = ''
+	key = ""
 	#value = $state<T>() as T
 
 	constructor(key: string, value: T) {
@@ -51,7 +51,7 @@ export const use_local_storage_state = <T>(key: string, value: T) => {
 // while keeping the value in sync with localStorage
 export const use_local_storage_writeable = <T>(key: string, value: T) => {
 	// Initialize the store
-	let my_writable = writable<T>(value)
+	const my_writable = writable<T>(value)
 
 	// Load value from localStorage
 	if (browser) {
@@ -75,4 +75,4 @@ export const use_local_storage_writeable = <T>(key: string, value: T) => {
 
 // Declare global variables in this file to access them globally via `$my_var`
 // Update them via `$my_var += 1` or `$my_var = new_value`
-export const my_counter_writable = use_local_storage_writeable('my_counter_writeable', 0)
+export const my_counter_writable = use_local_storage_writeable("my_counter_writeable", 0)
