@@ -6,7 +6,6 @@ import {
 	format_time_remaining,
 	type ProcessingState,
 	process_subtitles,
-	type QualityMode,
 	render_frame_preview,
 	reset_output,
 } from "$lib/utils/subtitle-processing"
@@ -35,11 +34,6 @@ function handle_srt_upload(event: Event) {
 	}
 }
 
-function handle_quality_change(event: Event) {
-	const target = event.target as HTMLSelectElement
-	state = { ...state, selected_quality_mode: target.value as QualityMode }
-}
-
 function handle_font_change(event: Event) {
 	const target = event.target as HTMLSelectElement
 	const font_name = target.value
@@ -47,26 +41,6 @@ function handle_font_change(event: Event) {
 	if (selected) {
 		state = { ...state, selected_font: selected }
 	}
-}
-
-function handle_font_size_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, font_size: parseInt(target.value, 10) }
-}
-
-function handle_bold_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, is_bold: target.checked }
-}
-
-function handle_position_change(event: Event) {
-	const target = event.target as HTMLSelectElement
-	state = { ...state, position: target.value as "top" | "bottom" | "center" }
-}
-
-function handle_timestamp_change(event: Event) {
-	const target = event.target as HTMLInputElement
-	state = { ...state, preview_timestamp: target.value }
 }
 
 async function render_frame_preview_wrapper() {
@@ -216,8 +190,7 @@ function reset_output_wrapper() {
 					min="12"
 					max="72"
 					step="1"
-					value={state.font_size}
-					oninput={handle_font_size_change}
+					bind:value={state.font_size}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={state.is_processing}
 				/>
@@ -240,8 +213,7 @@ function reset_output_wrapper() {
 				>
 				<select
 					id="position"
-					value={state.position}
-					onchange={handle_position_change}
+					bind:value={state.position}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
 					disabled={state.is_processing}
 				>
@@ -356,8 +328,7 @@ function reset_output_wrapper() {
 			>
 			<select
 				id="quality-mode"
-				value={state.selected_quality_mode}
-				onchange={handle_quality_change}
+				bind:value={state.selected_quality_mode}
 				class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:outline-none"
 				disabled={state.is_processing}
 			>
