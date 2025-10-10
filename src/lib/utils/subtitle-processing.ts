@@ -1,0 +1,463 @@
+import { FFmpeg } from "@ffmpeg/ffmpeg"
+// @ts-expect-error
+import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg/dist/esm/types"
+import { fetchFile, toBlobURL } from "@ffmpeg/util"
+
+export type QualityMode = "high" | "preview"
+
+export type FfmpegConfig = {
+	preset: string
+	crf: string
+	audio_bitrate: string
+}
+
+export type FontOption = {
+	name: string
+	url: string
+	filename: string
+}
+
+export type ProcessingState = {
+	ffmpeg: FFmpeg | null
+	is_processing: boolean
+	is_rendering_preview: boolean
+	progress: number
+	output_blob: Blob | null
+	output_url: string | null
+	preview_url: string | null
+	message: string
+	error_message: string | null
+	processing_start_time: number | null
+	estimated_total_duration: number
+	selected_quality_mode: QualityMode
+	selected_font: FontOption
+	font_size: number
+	is_bold: boolean
+	position: "top" | "bottom" | "center"
+	preview_timestamp: string
+	video_file: File | null
+	srt_file: File | null
+}
+
+export const high_quality_config: FfmpegConfig = {
+	preset: "veryslow",
+	crf: "18",
+	audio_bitrate: "320k",
+}
+
+export const preview_config: FfmpegConfig = {
+	preset: "ultrafast",
+	crf: "28",
+	audio_bitrate: "128k",
+}
+
+export const get_config = (mode: QualityMode = "preview"): FfmpegConfig => {
+	return mode === "high" ? high_quality_config : preview_config
+}
+
+export const available_fonts: FontOption[] = [
+	{
+		name: "Geostar",
+		url: "https://fonts.gstatic.com/s/geostar/v27/sykz-yx4n701VLOftSq9-trEvlQ.ttf",
+		filename: "Geostar.ttf",
+	},
+	{
+		name: "Noto Sans",
+		url: "https://github.com/google/fonts/raw/main/apache/notosans/NotoSans-Regular.ttf",
+		filename: "NotoSans-Regular.ttf",
+	},
+	{
+		name: "Roboto",
+		url: "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
+		filename: "Roboto-Regular.ttf",
+	},
+	{
+		name: "Open Sans",
+		url: "https://github.com/google/fonts/raw/main/apache/opensans/OpenSans-Regular.ttf",
+		filename: "OpenSans-Regular.ttf",
+	},
+]
+
+const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
+
+export function create_initial_state(): ProcessingState {
+	return {
+		ffmpeg: null,
+		is_processing: false,
+		is_rendering_preview: false,
+		progress: 0,
+		output_blob: null,
+		output_url: null,
+		preview_url: null,
+		message: "Ready to process",
+		error_message: null,
+		processing_start_time: null,
+		estimated_total_duration: 0,
+		selected_quality_mode: "preview",
+		selected_font: available_fonts[0],
+		font_size: 24,
+		is_bold: false,
+		position: "bottom",
+		preview_timestamp: "00:00:05",
+		video_file: null,
+		srt_file: null,
+	}
+}
+
+export function parse_timestamp(timestamp: string): number {
+	const parts = timestamp.split(":").map(Number)
+	if (parts.length !== 3) {
+		throw new Error("Invalid timestamp format. Use hh:mm:ss")
+	}
+	const [hours, minutes, seconds] = parts
+	return hours * 3600 + minutes * 60 + seconds
+}
+
+export function format_time_remaining(
+	processing_start_time: number | null,
+	estimated_total_duration: number,
+	progress: number,
+): string {
+	if (!processing_start_time || !estimated_total_duration || progress >= 100) {
+		return ""
+	}
+
+	const elapsed = (Date.now() - processing_start_time) / 1000
+	const remaining = estimated_total_duration - elapsed
+
+	if (remaining < 0) return "Finishing up..."
+
+	const minutes = Math.floor(remaining / 60)
+	const seconds = Math.floor(remaining % 60)
+	return `${minutes}:${seconds.toString().padStart(2, "0")} remaining`
+}
+
+export async function load_ffmpeg(
+	ffmpeg: FFmpeg | null,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+	set_progress: (progress: number) => void,
+): Promise<FFmpeg | null> {
+	if (ffmpeg) return ffmpeg
+
+	const new_ffmpeg = new FFmpeg()
+
+	new_ffmpeg.on("log", ({ message: msg }: LogEvent) => {
+		console.log("FFmpeg log:", msg)
+		// Don't update UI message with technical logs
+	})
+
+	new_ffmpeg.on("progress", ({ progress: p }: ProgressEvent) => {
+		set_progress(Math.round(p * 100))
+	})
+
+	try {
+		set_message("Loading FFmpeg core")
+		await new_ffmpeg.load({
+			coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
+			wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
+		})
+
+		set_message("FFmpeg loaded successfully")
+		return new_ffmpeg
+	} catch (err) {
+		console.error("Failed to load FFmpeg:", err)
+		set_error_message("Failed to initialize FFmpeg")
+		set_message("FFmpeg load failed")
+		return null
+	}
+}
+
+export async function load_selected_font(
+	ffmpeg: FFmpeg | null,
+	selected_font: FontOption,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+): Promise<boolean> {
+	if (!ffmpeg) {
+		return false
+	}
+
+	try {
+		set_message(`Loading font: ${selected_font.name}`)
+		const font_response = await fetch(selected_font.url)
+		if (!font_response.ok) {
+			throw new Error(`Failed to fetch font: ${font_response.statusText}`)
+		}
+		const font_buffer = await font_response.arrayBuffer()
+		await ffmpeg.writeFile(`/tmp/${selected_font.filename}`, new Uint8Array(font_buffer))
+		console.log(`Font ${selected_font.name} loaded to /tmp`)
+		return true
+	} catch (err) {
+		console.error("Failed to load font:", err)
+		set_error_message(`Failed to load font ${selected_font.name}: ${err}`)
+		set_message("Font load failed")
+		return false
+	}
+}
+
+export function build_force_style(
+	font_name: string,
+	font_size: number,
+	is_bold: boolean,
+	position: "top" | "bottom" | "center",
+): string {
+	const bold_style = is_bold ? ",Bold=-1" : ""
+	const alignment_map = {
+		top: "8",
+		bottom: "2",
+		center: "5",
+	}
+	const alignment = alignment_map[position]
+	return `Fontname=${font_name},FontSize=${font_size}${bold_style},Alignment=${alignment}`
+}
+
+export async function render_frame_preview(
+	state: ProcessingState,
+	set_state: (new_state: Partial<ProcessingState>) => void,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+): Promise<void> {
+	if (!state.video_file || !state.srt_file) {
+		set_error_message("Please upload both video and SRT files")
+		return
+	}
+
+	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	if (!ffmpeg) return
+
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	if (!font_loaded) return
+
+	set_state({
+		is_rendering_preview: true,
+		progress: 0,
+		error_message: null,
+		message: "Rendering frame preview...",
+	})
+
+	if (state.preview_url) {
+		URL.revokeObjectURL(state.preview_url)
+	}
+
+	const timestamp_seconds = parse_timestamp(state.preview_timestamp)
+	if (timestamp_seconds < 0) {
+		set_error_message("Timestamp must be positive")
+		set_state({ is_rendering_preview: false })
+		return
+	}
+
+	const video_ext = state.video_file.name.split(".").pop() || "mp4"
+	const video_name = `input.${video_ext}`
+	const srt_name = "subtitles.srt"
+	const output_name = "preview.png"
+
+	try {
+		// Write input files
+		await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+		const srt_bytes = new TextEncoder().encode(await state.srt_file.text())
+		await ffmpeg.writeFile(srt_name, srt_bytes)
+
+		// Build force_style for preview
+		const force_style = build_force_style(state.selected_font.name, state.font_size, state.is_bold, state.position)
+
+		// Execute FFmpeg command for frame extraction with subtitles
+		const vf_filter = `subtitles=${srt_name}:fontsdir=/tmp:force_style='${force_style}'`
+		await ffmpeg.exec([
+			"-i",
+			video_name,
+			"-ss",
+			timestamp_seconds.toString(),
+			"-avoid_negative_ts",
+			"make_zero",
+			"-vf",
+			vf_filter,
+			"-frames:v",
+			"1",
+			"-update",
+			"1",
+			"-y",
+			output_name,
+		])
+
+		// Read output
+		const frame_data = await ffmpeg.readFile(output_name)
+		// @ts-expect-error
+		const frame_blob = new Blob([(frame_data as Uint8Array).buffer], {
+			type: "image/png",
+		})
+		const preview_url = URL.createObjectURL(frame_blob)
+
+		// Cleanup
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile(srt_name).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			message: `Frame preview rendered at ${state.preview_timestamp}`,
+			is_rendering_preview: false,
+			progress: 100,
+			preview_url,
+			ffmpeg,
+		})
+	} catch (err) {
+		console.error("Frame preview failed:", err)
+		set_error_message(`Frame preview failed: ${err}`)
+		set_message("Frame preview failed")
+
+		// Cleanup on error
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile(srt_name).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			is_rendering_preview: false,
+			progress: 0,
+			ffmpeg,
+		})
+	}
+}
+
+export async function process_subtitles(
+	state: ProcessingState,
+	set_state: (new_state: Partial<ProcessingState>) => void,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+): Promise<void> {
+	if (!state.video_file || !state.srt_file) {
+		set_error_message("Please upload both video and SRT files")
+		return
+	}
+
+	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	if (!ffmpeg) return
+
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	if (!font_loaded) return
+
+	set_state({
+		is_processing: true,
+		processing_start_time: Date.now(),
+		progress: 0,
+		error_message: null,
+		message: "Processing video...",
+		output_blob: null,
+	})
+
+	if (state.output_url) {
+		URL.revokeObjectURL(state.output_url)
+	}
+
+	const video_ext = state.video_file.name.split(".").pop() || "mp4"
+	const video_name = `input.${video_ext}`
+	const srt_name = "subtitles.srt"
+	const output_name = "output.mp4"
+
+	try {
+		// Write input files
+		set_message("Loading video file")
+		await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+		console.log(`Wrote video file: ${video_name}`)
+
+		set_message("Loading subtitle file")
+		const srt_bytes = new TextEncoder().encode(await state.srt_file.text())
+		await ffmpeg.writeFile(srt_name, srt_bytes)
+		console.log("Wrote SRT subtitles file")
+
+		// Build force_style
+		const force_style = build_force_style(state.selected_font.name, state.font_size, state.is_bold, state.position)
+
+		// Execute FFmpeg command
+		set_message("Burning subtitles to video")
+		const config = get_config(state.selected_quality_mode)
+		const vf_filter = `subtitles=${srt_name}:fontsdir=/tmp:force_style='${force_style}'`
+		await ffmpeg.exec([
+			"-i",
+			video_name,
+			"-vf",
+			vf_filter,
+			"-c:v",
+			"libx264",
+			"-preset",
+			config.preset,
+			"-crf",
+			config.crf,
+			"-pix_fmt",
+			"yuv420p",
+			"-c:a",
+			"aac",
+			"-b:a",
+			config.audio_bitrate,
+			"-y",
+			output_name,
+		])
+
+		// Read output
+		set_message("Generating output")
+		const output_data = await ffmpeg.readFile(output_name)
+		// @ts-expect-error
+		const output_blob = new Blob([(output_data as Uint8Array).buffer], {
+			type: "video/mp4",
+		})
+		const output_url = URL.createObjectURL(output_blob)
+
+		// Cleanup
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile(srt_name).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			message: "Processing complete!",
+			is_processing: false,
+			progress: 100,
+			output_blob,
+			output_url,
+			ffmpeg,
+		})
+	} catch (err) {
+		console.error("Processing failed:", err)
+		set_error_message(`Processing failed: ${err}`)
+		set_message("Processing failed")
+
+		// Cleanup on error
+		await ffmpeg.deleteFile(video_name).catch(() => {})
+		await ffmpeg.deleteFile(srt_name).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(output_name).catch(() => {})
+
+		set_state({
+			is_processing: false,
+			processing_start_time: null,
+			estimated_total_duration: 0,
+			progress: 0,
+			ffmpeg,
+		})
+	}
+}
+
+export function download_video(output_blob: Blob | null, output_url: string | null, video_file: File | null): void {
+	if (output_blob && output_url) {
+		const a = document.createElement("a")
+		a.href = output_url
+		a.download = `subtitled-${video_file?.name.replace(/\.[^/.]+$/, "") || "video"}.mp4`
+		document.body.appendChild(a)
+		a.click()
+		document.body.removeChild(a)
+	}
+}
+
+export function reset_output(set_state: (new_state: Partial<ProcessingState>) => void): void {
+	set_state({
+		output_url: null,
+		preview_url: null,
+		output_blob: null,
+		error_message: null,
+		progress: 0,
+		message: "Ready to process",
+		video_file: null,
+		srt_file: null,
+	})
+}
