@@ -386,7 +386,6 @@ function reset_output_wrapper() {
 							<p class="text-xs text-gray-600">
 								{format_time_remaining(
 									state.processing_start_time,
-									state.estimated_total_duration,
 									state.progress
 								)}
 							</p>
