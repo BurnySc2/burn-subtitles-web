@@ -30,7 +30,7 @@ export type ProcessingState = {
 	processing_start_time: number | null
 	estimated_total_duration: number
 	selected_quality_mode: QualityMode
-	selected_font: FontOption
+	selected_font_index: number
 	font_size: number
 	is_bold: boolean
 	position: "top" | "bottom" | "center"
@@ -105,7 +105,7 @@ export function create_initial_state(): ProcessingState {
 		processing_start_time: null,
 		estimated_total_duration: 0,
 		selected_quality_mode: "preview",
-		selected_font: available_fonts[0],
+		selected_font_index: 0,
 		font_size: 24,
 		is_bold: false,
 		position: "bottom",
@@ -180,7 +180,7 @@ export async function load_ffmpeg(
 
 export async function load_selected_font(
 	ffmpeg: FFmpeg | null,
-	selected_font: FontOption,
+	selected_font_index: number,
 	set_message: (message: string) => void,
 	set_error_message: (error: string) => void,
 ): Promise<boolean> {
@@ -188,9 +188,10 @@ export async function load_selected_font(
 		return false
 	}
 
+	const selected_font = available_fonts[selected_font_index]
 	try {
 		set_message(`Loading font: ${selected_font.name}`)
-		
+
 		// For local fonts in /fonts/ folder, we need to fetch them as resources
 		const font_response = await fetch(selected_font.url)
 		if (!font_response.ok) {
@@ -209,7 +210,7 @@ export async function load_selected_font(
 }
 
 export function build_force_style(
-	font_name: string,
+	font_index: number,
 	font_size: number,
 	is_bold: boolean,
 	position: "top" | "bottom" | "center",
@@ -221,6 +222,7 @@ export function build_force_style(
 		center: "5",
 	}
 	const alignment = alignment_map[position]
+	const font_name = available_fonts[font_index].name
 	return `Fontname=${font_name},FontSize=${font_size}${bold_style},Alignment=${alignment}`
 }
 
@@ -238,7 +240,7 @@ export async function render_frame_preview(
 	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
 	if (!font_loaded) return
 
 	set_state({
@@ -271,7 +273,7 @@ export async function render_frame_preview(
 		await ffmpeg.writeFile(srt_name, srt_bytes)
 
 		// Build force_style for preview
-		const force_style = build_force_style(state.selected_font.name, state.font_size, state.is_bold, state.position)
+		const force_style = build_force_style(state.selected_font_index, state.font_size, state.is_bold, state.position)
 
 		// Execute FFmpeg command for frame extraction with subtitles
 		const vf_filter = `subtitles=${srt_name}:fontsdir=/tmp:force_style='${force_style}'`
@@ -303,7 +305,7 @@ export async function render_frame_preview(
 		// Cleanup
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -321,7 +323,7 @@ export async function render_frame_preview(
 		// Cleanup on error
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -346,7 +348,7 @@ export async function process_subtitles(
 	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
 	if (!font_loaded) return
 
 	set_state({
@@ -379,7 +381,7 @@ export async function process_subtitles(
 		console.log("Wrote SRT subtitles file")
 
 		// Build force_style
-		const force_style = build_force_style(state.selected_font.name, state.font_size, state.is_bold, state.position)
+		const force_style = build_force_style(state.selected_font_index, state.font_size, state.is_bold, state.position)
 
 		// Execute FFmpeg command
 		set_message("Burning subtitles to video")
@@ -418,7 +420,7 @@ export async function process_subtitles(
 		// Cleanup
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -437,7 +439,7 @@ export async function process_subtitles(
 		// Cleanup on error
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -525,7 +527,7 @@ YCbCr Matrix: None
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${state.selected_font.name},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,${state.subtitle_position_y},1
+Style: Default,${available_fonts[state.selected_font_index].name},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,${state.subtitle_position_y},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -562,9 +564,7 @@ export async function render_ass_frame_preview(
 	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
 	if (!ffmpeg) return
 
-	console.log(state);
-	
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
 	if (!font_loaded) return
 
 	set_state({
@@ -630,7 +630,7 @@ export async function render_ass_frame_preview(
 		// Cleanup
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -648,7 +648,7 @@ export async function render_ass_frame_preview(
 		// Cleanup on error
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -674,7 +674,7 @@ export async function process_ass_subtitles(
 	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
+	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
 	if (!font_loaded) return
 
 	set_state({
@@ -747,7 +747,7 @@ export async function process_ass_subtitles(
 		// Cleanup
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
@@ -766,7 +766,7 @@ export async function process_ass_subtitles(
 		// Cleanup on error
 		await ffmpeg.deleteFile(video_name).catch(() => {})
 		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${state.selected_font.filename}`).catch(() => {})
+		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
 		await ffmpeg.deleteFile(output_name).catch(() => {})
 
 		set_state({
