@@ -37,12 +37,6 @@ function handle_srt_upload(event: Event) {
 	}
 }
 
-function handle_font_change(event: Event) {
-	const target = event.target as HTMLSelectElement
-	const font_index = parseInt(target.value, 10)
-	state = { ...state, selected_font_index: font_index }
-}
-
 async function render_frame_preview_wrapper() {
 	await render_frame_preview(
 		state,

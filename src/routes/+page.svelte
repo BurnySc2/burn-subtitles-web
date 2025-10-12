@@ -4,4 +4,4 @@ import ASSSubtitleProcessor from "$lib/components/ASSSubtitleProcessor.svelte"
 
 <div class="flex flex-col items-center justify-center py-8">
 	<ASSSubtitleProcessor />
-	</div>
+</div>
