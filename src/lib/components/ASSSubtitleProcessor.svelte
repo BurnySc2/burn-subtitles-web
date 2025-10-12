@@ -47,15 +47,6 @@ function handle_srt_upload(event: Event) {
 	}
 }
 
-function handle_font_change(event: Event) {
-	const target = event.target as HTMLSelectElement
-	const font_name = target.value
-	const selected = available_fonts.find((font) => font.name === font_name)
-	if (selected) {
-		state = { ...state, selected_font: selected }
-	}
-}
-
 async function render_ass_frame_preview_wrapper() {
 	await render_ass_frame_preview(
 		state,
@@ -209,10 +200,7 @@ function reset_output_wrapper() {
 				>
 				<select
 					id="font-select"
-					value={available_fonts.findIndex(
-						(f) => f.name === state.selected_font.name,
-					)}
-					onchange={handle_font_change}
+					bind:value={state.selected_font_index}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={state.is_processing}
 				>
@@ -381,7 +369,7 @@ function reset_output_wrapper() {
 				class="mx-auto flex h-24 w-full max-w-md items-center justify-center"
 			>
 				<FontPreview
-					font_name={state.selected_font.name}
+					font_name={available_fonts[state.selected_font_index].name}
 					font_size={state.font_size}
 					sample_text="The quick brown fox jumps over the lazy dog"
 				/>
