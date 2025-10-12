@@ -11,7 +11,10 @@ import {
 } from "$lib/utils/subtitle-processing"
 import FontPreview from "./FontPreview.svelte"
 
-let state = $state<ProcessingState>(create_initial_state())
+let state = $state<ProcessingState>({
+	...create_initial_state(),
+	selected_font_index: 0,
+})
 
 function handle_video_upload(event: Event) {
 	const target = event.target as HTMLInputElement
@@ -36,11 +39,8 @@ function handle_srt_upload(event: Event) {
 
 function handle_font_change(event: Event) {
 	const target = event.target as HTMLSelectElement
-	const font_name = target.value
-	const selected = available_fonts.find((font) => font.name === font_name)
-	if (selected) {
-		state = { ...state, selected_font: selected }
-	}
+	const font_index = parseInt(target.value)
+	state = { ...state, selected_font_index: font_index }
 }
 
 async function render_frame_preview_wrapper() {
@@ -164,10 +164,7 @@ function reset_output_wrapper() {
 				>
 				<select
 					id="font-select"
-					value={available_fonts.findIndex(
-						(f) => f.name === state.selected_font.name,
-					)}
-					onchange={handle_font_change}
+					bind:value={state.selected_font_index}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={state.is_processing}
 				>
@@ -236,7 +233,7 @@ function reset_output_wrapper() {
 				class="mx-auto flex h-24 w-full max-w-md items-center justify-center"
 			>
 				<FontPreview
-					font_name={state.selected_font.name}
+					font_name={available_fonts[state.selected_font_index].name}
 					font_size={state.font_size}
 					sample_text="The quick brown fox jumps over the lazy dog"
 				/>
