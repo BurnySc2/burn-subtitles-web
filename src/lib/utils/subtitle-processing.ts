@@ -209,6 +209,77 @@ export async function load_selected_font(
 	}
 }
 
+// Helper function to clean up FFmpeg files
+async function cleanup_ffmpeg_files(
+	ffmpeg: FFmpeg,
+	video_name: string,
+	srt_name: string,
+	font_filename: string,
+	output_name: string,
+): Promise<void> {
+	await ffmpeg.deleteFile(video_name).catch(() => {})
+	await ffmpeg.deleteFile(srt_name).catch(() => {})
+	await ffmpeg.deleteFile(`/tmp/${font_filename}`).catch(() => {})
+	await ffmpeg.deleteFile(output_name).catch(() => {})
+}
+
+// Helper function to write video and subtitle files to FFmpeg
+async function write_input_files(
+	ffmpeg: FFmpeg,
+	video_file: File,
+	srt_file: File,
+	srt_name: string = "subtitles.srt",
+): Promise<void> {
+	await ffmpeg.writeFile(`input.${video_file.name.split(".").pop() || "mp4"}`, await fetchFile(video_file))
+	const srt_bytes = new TextEncoder().encode(await srt_file.text())
+	await ffmpeg.writeFile(srt_name, srt_bytes)
+}
+
+// Helper function to set up preview state
+function setup_preview_state(
+	set_state: (new_state: Partial<ProcessingState>) => void,
+	message: string = "Rendering frame preview...",
+): void {
+	set_state({
+		is_rendering_preview: true,
+		progress: 0,
+		error_message: null,
+		message,
+	})
+}
+
+// Helper function to set up processing state
+function setup_processing_state(
+	set_state: (new_state: Partial<ProcessingState>) => void,
+	message: string = "Processing video...",
+): void {
+	set_state({
+		is_processing: true,
+		processing_start_time: Date.now(),
+		progress: 0,
+		error_message: null,
+		message,
+		output_blob: null,
+	})
+}
+
+// Helper function to initialize FFmpeg and load font
+async function initialize_ffmpeg_and_load_font(
+	ffmpeg: FFmpeg | null,
+	selected_font_index: number,
+	set_message: (message: string) => void,
+	set_error_message: (error: string) => void,
+	set_progress: (progress: number) => void,
+): Promise<FFmpeg | null> {
+	const ffmpeg_instance = await load_ffmpeg(ffmpeg, set_message, set_error_message, set_progress)
+	if (!ffmpeg_instance) return null
+
+	const font_loaded = await load_selected_font(ffmpeg_instance, selected_font_index, set_message, set_error_message)
+	if (!font_loaded) return null
+
+	return ffmpeg_instance
+}
+
 export function build_force_style(
 	font_index: number,
 	font_size: number,
@@ -237,18 +308,16 @@ export async function render_frame_preview(
 		return
 	}
 
-	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	const ffmpeg = await initialize_ffmpeg_and_load_font(
+		state.ffmpeg,
+		state.selected_font_index,
+		set_message,
+		set_error_message,
+		(progress) => set_state({ progress }),
+	)
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
-	if (!font_loaded) return
-
-	set_state({
-		is_rendering_preview: true,
-		progress: 0,
-		error_message: null,
-		message: "Rendering frame preview...",
-	})
+	setup_preview_state(set_state, "Rendering frame preview...")
 
 	if (state.preview_url) {
 		URL.revokeObjectURL(state.preview_url)
@@ -268,9 +337,7 @@ export async function render_frame_preview(
 
 	try {
 		// Write input files
-		await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
-		const srt_bytes = new TextEncoder().encode(await state.srt_file.text())
-		await ffmpeg.writeFile(srt_name, srt_bytes)
+		await write_input_files(ffmpeg, state.video_file, state.srt_file, srt_name)
 
 		// Build force_style for preview
 		const force_style = build_force_style(state.selected_font_index, state.font_size, state.is_bold, state.position)
@@ -303,10 +370,13 @@ export async function render_frame_preview(
 		const preview_url = URL.createObjectURL(frame_blob)
 
 		// Cleanup
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			srt_name,
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			message: `Frame preview rendered at ${state.preview_timestamp}`,
@@ -321,10 +391,13 @@ export async function render_frame_preview(
 		set_message("Frame preview failed")
 
 		// Cleanup on error
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			srt_name,
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			is_rendering_preview: false,
@@ -345,20 +418,16 @@ export async function process_subtitles(
 		return
 	}
 
-	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	const ffmpeg = await initialize_ffmpeg_and_load_font(
+		state.ffmpeg,
+		state.selected_font_index,
+		set_message,
+		set_error_message,
+		(progress) => set_state({ progress }),
+	)
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
-	if (!font_loaded) return
-
-	set_state({
-		is_processing: true,
-		processing_start_time: Date.now(),
-		progress: 0,
-		error_message: null,
-		message: "Processing video...",
-		output_blob: null,
-	})
+	setup_processing_state(set_state, "Processing video...")
 
 	if (state.output_url) {
 		URL.revokeObjectURL(state.output_url)
@@ -372,12 +441,8 @@ export async function process_subtitles(
 	try {
 		// Write input files
 		set_message("Loading video file")
-		await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+		await write_input_files(ffmpeg, state.video_file, state.srt_file, srt_name)
 		console.log(`Wrote video file: ${video_name}`)
-
-		set_message("Loading subtitle file")
-		const srt_bytes = new TextEncoder().encode(await state.srt_file.text())
-		await ffmpeg.writeFile(srt_name, srt_bytes)
 		console.log("Wrote SRT subtitles file")
 
 		// Build force_style
@@ -418,10 +483,13 @@ export async function process_subtitles(
 		const output_url = URL.createObjectURL(output_blob)
 
 		// Cleanup
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			srt_name,
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			message: "Processing complete!",
@@ -437,10 +505,13 @@ export async function process_subtitles(
 		set_message("Processing failed")
 
 		// Cleanup on error
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile(srt_name).catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			srt_name,
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			is_processing: false,
@@ -561,18 +632,16 @@ export async function render_ass_frame_preview(
 		return
 	}
 
-	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	const ffmpeg = await initialize_ffmpeg_and_load_font(
+		state.ffmpeg,
+		state.selected_font_index,
+		set_message,
+		set_error_message,
+		(progress) => set_state({ progress }),
+	)
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
-	if (!font_loaded) return
-
-	set_state({
-		is_rendering_preview: true,
-		progress: 0,
-		error_message: null,
-		message: "Rendering ASS frame preview...",
-	})
+	setup_preview_state(set_state, "Rendering ASS frame preview...")
 
 	if (state.preview_url) {
 		URL.revokeObjectURL(state.preview_url)
@@ -628,10 +697,13 @@ export async function render_ass_frame_preview(
 		const preview_url = URL.createObjectURL(frame_blob)
 
 		// Cleanup
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			"subtitles.ass",
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			message: `ASS frame preview rendered at ${state.preview_timestamp}`,
@@ -646,10 +718,13 @@ export async function render_ass_frame_preview(
 		set_message("ASS frame preview failed")
 
 		// Cleanup on error
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			"subtitles.ass",
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			is_rendering_preview: false,
@@ -671,20 +746,16 @@ export async function process_ass_subtitles(
 		return
 	}
 
-	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
+	const ffmpeg = await initialize_ffmpeg_and_load_font(
+		state.ffmpeg,
+		state.selected_font_index,
+		set_message,
+		set_error_message,
+		(progress) => set_state({ progress }),
+	)
 	if (!ffmpeg) return
 
-	const font_loaded = await load_selected_font(ffmpeg, state.selected_font_index, set_message, set_error_message)
-	if (!font_loaded) return
-
-	set_state({
-		is_processing: true,
-		processing_start_time: Date.now(),
-		progress: 0,
-		error_message: null,
-		message: "Processing video with ASS subtitles...",
-		output_blob: null,
-	})
+	setup_processing_state(set_state, "Processing video with ASS subtitles...")
 
 	if (state.output_url) {
 		URL.revokeObjectURL(state.output_url)
@@ -745,10 +816,13 @@ export async function process_ass_subtitles(
 		const output_url = URL.createObjectURL(output_blob)
 
 		// Cleanup
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			"subtitles.ass",
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			message: "ASS subtitle processing complete!",
@@ -764,10 +838,13 @@ export async function process_ass_subtitles(
 		set_message("ASS processing failed")
 
 		// Cleanup on error
-		await ffmpeg.deleteFile(video_name).catch(() => {})
-		await ffmpeg.deleteFile("subtitles.ass").catch(() => {})
-		await ffmpeg.deleteFile(`/tmp/${available_fonts[state.selected_font_index].filename}`).catch(() => {})
-		await ffmpeg.deleteFile(output_name).catch(() => {})
+		await cleanup_ffmpeg_files(
+			ffmpeg,
+			video_name,
+			"subtitles.ass",
+			available_fonts[state.selected_font_index].filename,
+			output_name,
+		)
 
 		set_state({
 			is_processing: false,
