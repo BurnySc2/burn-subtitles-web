@@ -69,22 +69,22 @@ export const get_config = (mode: QualityMode = "preview"): FfmpegConfig => {
 export const available_fonts: FontOption[] = [
 	{
 		name: "Geostar",
-		url: "https://fonts.gstatic.com/s/geostar/v27/sykz-yx4n701VLOftSq9-trEvlQ.ttf",
-		filename: "Geostar.ttf",
+		url: "/fonts/Geostar.tff",
+		filename: "Geostar.tff",
 	},
 	{
 		name: "Noto Sans",
-		url: "https://github.com/google/fonts/raw/main/apache/notosans/NotoSans-Regular.ttf",
+		url: "/fonts/NotoSans-Regular.ttf",
 		filename: "NotoSans-Regular.ttf",
 	},
 	{
 		name: "Roboto",
-		url: "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
-		filename: "Roboto-Regular.ttf",
+		url: "/fonts/Roboto.ttf",
+		filename: "Roboto.ttf",
 	},
 	{
 		name: "Open Sans",
-		url: "https://github.com/google/fonts/raw/main/apache/opensans/OpenSans-Regular.ttf",
+		url: "/fonts/OpenSans-Regular.ttf",
 		filename: "OpenSans-Regular.ttf",
 	},
 ]
@@ -190,6 +190,8 @@ export async function load_selected_font(
 
 	try {
 		set_message(`Loading font: ${selected_font.name}`)
+		
+		// For local fonts in /fonts/ folder, we need to fetch them as resources
 		const font_response = await fetch(selected_font.url)
 		if (!font_response.ok) {
 			throw new Error(`Failed to fetch font: ${font_response.statusText}`)
@@ -560,6 +562,8 @@ export async function render_ass_frame_preview(
 	const ffmpeg = await load_ffmpeg(state.ffmpeg, set_message, set_error_message, (progress) => set_state({ progress }))
 	if (!ffmpeg) return
 
+	console.log(state);
+	
 	const font_loaded = await load_selected_font(ffmpeg, state.selected_font, set_message, set_error_message)
 	if (!font_loaded) return
 
