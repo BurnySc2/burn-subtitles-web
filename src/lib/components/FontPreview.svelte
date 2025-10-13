@@ -9,7 +9,7 @@ let { font_name = "Arial", font_size = 16, sample_text = "Sample text" }: FontPr
 </script>
 
 <div class="font-preview rounded border p-4">
-	<p style="font-family: {font_name}, sans-serif; font-size: {font_size}px;" class="text-gray-800">
+	<p style="font-family: {font_name}; font-size: {font_size}px;" class="text-gray-800">
 		{sample_text}
 	</p>
 	<div class="mt-2 text-xs text-gray-500">

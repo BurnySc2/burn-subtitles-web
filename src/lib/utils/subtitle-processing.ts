@@ -67,25 +67,68 @@ export const get_config = (mode: QualityMode = "preview"): FfmpegConfig => {
 }
 
 export const available_fonts: FontOption[] = [
-	{
-		name: "Geostar",
-		url: "/fonts/Geostar.tff",
-		filename: "Geostar.tff",
-	},
-	{
-		name: "Noto Sans",
-		url: "/fonts/NotoSans-Regular.ttf",
-		filename: "NotoSans-Regular.ttf",
-	},
+	// Needs to be in sync with +layout.svelte font-face
+	// Always download the Font-Regular version
+	// https://fonts.google.com
 	{
 		name: "Roboto",
 		url: "/fonts/Roboto.ttf",
 		filename: "Roboto.ttf",
 	},
 	{
-		name: "Open Sans",
-		url: "/fonts/OpenSans-Regular.ttf",
-		filename: "OpenSans-Regular.ttf",
+		name: "OpenSans",
+		url: "/fonts/OpenSans.ttf",
+		filename: "OpenSans.ttf",
+	},
+	{
+		name: "Tajawal",
+		url: "/fonts/Tajawal.ttf",
+		filename: "Tajawal.ttf",
+	},
+	{
+		name: "Cairo",
+		url: "/fonts/Cairo.ttf",
+		filename: "Cairo.ttf",
+	},
+	{
+		name: "Rubik",
+		url: "/fonts/Rubik.ttf",
+		filename: "Rubik.ttf",
+	},
+	{
+		name: "Noto Kufi Arabic",
+		url: "/fonts/NotoKufiArabic.ttf",
+		filename: "NotoKufiArabic.ttf",
+	},
+	{
+		name: "Noto Sans",
+		url: "/fonts/NotoSans.ttf",
+		filename: "NotoSans.ttf",
+	},
+	{
+		name: "Noto Sans Arabic",
+		url: "/fonts/NotoSansArabic.ttf",
+		filename: "NotoSansArabic.ttf",
+	},
+	{
+		name: "Noto Sans Japanese",
+		url: "/fonts/NotoSansJP.ttf",
+		filename: "NotoSansJP.ttf",
+	},
+	{
+		name: "Noto Sans Korean",
+		url: "/fonts/NotoSansKR.ttf",
+		filename: "NotoSansKR.ttf",
+	},
+	{
+		name: "Noto Sans Thai",
+		url: "/fonts/NotoSansThai.ttf",
+		filename: "NotoSansThai.ttf",
+	},
+	{
+		name: "Noto Sans Traditional Chinese",
+		url: "/fonts/NotoSansTC.ttf",
+		filename: "NotoSansTC.ttf",
 	},
 ]
 
