@@ -11,69 +11,71 @@ import {
 } from "$lib/utils/subtitle-processing"
 import FontPreview from "./FontPreview.svelte"
 
-let state = $state<ProcessingState>({
+let my_state = $state<ProcessingState>({
 	...create_initial_state(),
 	selected_font_index: 0,
 })
 
+let sample_text = $state("The quick brown fox jumps over the lazy dog")
+
 function handle_video_upload(event: Event) {
 	const target = event.target as HTMLInputElement
 	if (target.files?.[0]) {
-		state = { ...state, video_file: target.files[0] }
-		if (state.preview_url) {
-			URL.revokeObjectURL(state.preview_url)
-			state = { ...state, preview_url: null }
+		my_state = { ...my_state, video_file: target.files[0] }
+		if (my_state.preview_url) {
+			URL.revokeObjectURL(my_state.preview_url)
+			my_state = { ...my_state, preview_url: null }
 		}
 	}
 }
 function handle_srt_upload(event: Event) {
 	const target = event.target as HTMLInputElement
 	if (target.files?.[0]) {
-		state = { ...state, srt_file: target.files[0] }
-		if (state.preview_url) {
-			URL.revokeObjectURL(state.preview_url)
-			state = { ...state, preview_url: null }
+		my_state = { ...my_state, srt_file: target.files[0] }
+		if (my_state.preview_url) {
+			URL.revokeObjectURL(my_state.preview_url)
+			my_state = { ...my_state, preview_url: null }
 		}
 	}
 }
 
 async function render_frame_preview_wrapper() {
 	await render_frame_preview(
-		state,
+		my_state,
 		(new_state) => {
-			state = { ...state, ...new_state }
+			my_state = { ...my_state, ...new_state }
 		},
 		(message) => {
-			state = { ...state, message }
+			my_state = { ...my_state, message }
 		},
 		(error) => {
-			state = { ...state, error_message: error }
+			my_state = { ...my_state, error_message: error }
 		},
 	)
 }
 
 async function process_subtitles_wrapper() {
 	await process_subtitles(
-		state,
+		my_state,
 		(new_state) => {
-			state = { ...state, ...new_state }
+			my_state = { ...my_state, ...new_state }
 		},
 		(message) => {
-			state = { ...state, message }
+			my_state = { ...my_state, message }
 		},
 		(error) => {
-			state = { ...state, error_message: error }
+			my_state = { ...my_state, error_message: error }
 		},
 	)
 }
 
 function download_video_wrapper() {
-	download_video(state.output_blob, state.output_url, state.video_file)
+	download_video(my_state.output_blob, my_state.output_url, my_state.video_file)
 }
 
 function reset_output_wrapper() {
 	reset_output((new_state) => {
-		state = { ...state, ...new_state }
+		my_state = { ...my_state, ...new_state }
 	})
 }
 </script>
@@ -101,14 +103,14 @@ function reset_output_wrapper() {
 					accept="video/*"
 					onchange={handle_video_upload}
 					class="w-full rounded-lg border-2 border-dashed border-gray-300 px-3 py-4 transition-all duration-200 file:mr-2 file:rounded file:border-0 file:bg-green-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-green-700 hover:border-green-400 focus:ring-2 focus:ring-green-500 focus:outline-none"
-					disabled={state.is_processing}
+					disabled={my_state.is_processing}
 				/>
 			</div>
-			{#if state.video_file}
+			{#if my_state.video_file}
 				<p
 					class="mt-1 inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700"
 				>
-					{state.video_file.name}
+					{my_state.video_file.name}
 				</p>
 			{/if}
 		</div>
@@ -127,14 +129,14 @@ function reset_output_wrapper() {
 					accept=".srt"
 					onchange={handle_srt_upload}
 					class="w-full rounded-lg border-2 border-dashed border-gray-300 px-3 py-4 transition-all duration-200 file:mr-2 file:rounded file:border-0 file:bg-green-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-green-700 hover:border-green-400 focus:ring-2 focus:ring-green-500 focus:outline-none"
-					disabled={state.is_processing}
+					disabled={my_state.is_processing}
 				/>
 			</div>
-			{#if state.srt_file}
+			{#if my_state.srt_file}
 				<p
 					class="mt-1 inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-700"
 				>
-					{state.srt_file.name}
+					{my_state.srt_file.name}
 				</p>
 			{/if}
 		</div>
@@ -158,9 +160,9 @@ function reset_output_wrapper() {
 				>
 				<select
 					id="font-select"
-					bind:value={state.selected_font_index}
+					bind:value={my_state.selected_font_index}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-					disabled={state.is_processing}
+					disabled={my_state.is_processing}
 				>
 					{#each available_fonts as font, index}
 						<option value={index}>{font.name}</option>
@@ -181,9 +183,9 @@ function reset_output_wrapper() {
 					min="12"
 					max="72"
 					step="1"
-					bind:value={state.font_size}
+					bind:value={my_state.font_size}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-					disabled={state.is_processing}
+					disabled={my_state.is_processing}
 				/>
 			</div>
 		</div>
@@ -204,16 +206,15 @@ function reset_output_wrapper() {
 				>
 				<select
 					id="position"
-					bind:value={state.position}
+					bind:value={my_state.position}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
-					disabled={state.is_processing}
+					disabled={my_state.is_processing}
 				>
 					<option value="bottom">Bottom</option>
 					<option value="center">Center</option>
 					<option value="top">Top</option>
 				</select>
 			</div>
-
 		</div>
 	</div>
 
@@ -227,21 +228,22 @@ function reset_output_wrapper() {
 				class="mx-auto flex h-24 w-full max-w-md items-center justify-center"
 			>
 				<FontPreview
-					font_name={available_fonts[state.selected_font_index].name}
-					font_size={state.font_size}
-					sample_text="The quick brown fox jumps over the lazy dog"
+					font_name={available_fonts[my_state.selected_font_index]
+						.name}
+					font_size={my_state.font_size}
+					{sample_text}
 				/>
 			</div>
 		</div>
 	</div>
 
 	<!-- Frame Preview Section -->
-	{#if state.video_file && state.srt_file}
+	{#if my_state.video_file && my_state.srt_file}
 		<div
 			class="rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-6"
 		>
 			<h2 class="mb-4 text-xl font-bold text-gray-800">Frame Preview</h2>
-			
+
 			<!-- Preview Timestamp Input -->
 			<div class="mb-6">
 				<label
@@ -253,17 +255,19 @@ function reset_output_wrapper() {
 					<input
 						id="preview-timestamp"
 						type="text"
-						bind:value={state.preview_timestamp}
+						bind:value={my_state.preview_timestamp}
 						placeholder="00:00:00"
 						class="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-						disabled={state.is_processing || state.is_rendering_preview}
+						disabled={my_state.is_processing ||
+							my_state.is_rendering_preview}
 					/>
 					<button
 						onclick={render_frame_preview_wrapper}
-						disabled={state.is_processing || state.is_rendering_preview}
+						disabled={my_state.is_processing ||
+							my_state.is_rendering_preview}
 						class="transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
 					>
-						{#if state.is_rendering_preview}
+						{#if my_state.is_rendering_preview}
 							<span class="flex items-center justify-center">
 								Rendering...
 								<div
@@ -276,11 +280,11 @@ function reset_output_wrapper() {
 					</button>
 				</div>
 			</div>
-			{#if state.preview_url}
+			{#if my_state.preview_url}
 				<div class="text-center">
 					<div class="mx-auto max-w-4xl rounded-lg bg-black p-1">
 						<img
-							src={state.preview_url}
+							src={my_state.preview_url}
 							alt="Frame preview with subtitles"
 							class="w-full rounded-lg"
 							style="max-height: 500px;"
@@ -289,7 +293,7 @@ function reset_output_wrapper() {
 					<p
 						class="mt-3 inline-block rounded-full bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700"
 					>
-						Preview at {state.preview_timestamp}
+						Preview at {my_state.preview_timestamp}
 					</p>
 				</div>
 			{:else}
@@ -319,9 +323,9 @@ function reset_output_wrapper() {
 			>
 			<select
 				id="quality-mode"
-				bind:value={state.selected_quality_mode}
+				bind:value={my_state.selected_quality_mode}
 				class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:outline-none"
-				disabled={state.is_processing}
+				disabled={my_state.is_processing}
 			>
 				<option value="preview">Preview</option>
 				<option value="high">High Quality</option>
@@ -329,24 +333,24 @@ function reset_output_wrapper() {
 		</div>
 
 		<!-- Status Messages -->
-		{#if state.error_message}
+		{#if my_state.error_message}
 			<div
 				class="mb-6 rounded-lg border-2 border-red-300 bg-red-50 px-5 py-4 text-red-800"
 			>
 				<div class="flex items-center">
 					<span class="mr-3">!</span>
-					<span>{state.error_message}</span>
+					<span>{my_state.error_message}</span>
 				</div>
 			</div>
 		{/if}
 
 		<!-- Message -->
 		<div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4">
-			<p class="font-medium text-blue-800">{state.message}</p>
+			<p class="font-medium text-blue-800">{my_state.message}</p>
 		</div>
 
 		<!-- Progress Bar -->
-		{#if state.is_processing || state.is_rendering_preview}
+		{#if my_state.is_processing || my_state.is_rendering_preview}
 			<div class="mb-6">
 				<div class="relative pt-1">
 					<div class="mb-2 flex items-center justify-between">
@@ -360,7 +364,7 @@ function reset_output_wrapper() {
 						<div class="text-right">
 							<span
 								class="inline-block text-xs font-semibold text-teal-600"
-								>{state.progress}%</span
+								>{my_state.progress}%</span
 							>
 						</div>
 					</div>
@@ -368,16 +372,16 @@ function reset_output_wrapper() {
 						class="mb-4 flex h-2 overflow-hidden rounded-full bg-gray-200 text-xs"
 					>
 						<div
-							style="width: {state.progress}%"
+							style="width: {my_state.progress}%"
 							class="flex flex-col justify-center bg-green-500 text-center whitespace-nowrap text-white shadow-none"
 						></div>
 					</div>
-					{#if state.is_processing && state.processing_start_time}
+					{#if my_state.is_processing && my_state.processing_start_time}
 						<div class="mt-2 text-center">
 							<p class="text-xs text-gray-600">
 								{format_time_remaining(
-									state.processing_start_time,
-									state.progress
+									my_state.processing_start_time,
+									my_state.progress,
 								)}
 							</p>
 						</div>
@@ -389,10 +393,12 @@ function reset_output_wrapper() {
 		<!-- Process Button -->
 		<button
 			onclick={process_subtitles_wrapper}
-			disabled={state.is_processing || !state.video_file || !state.srt_file}
+			disabled={my_state.is_processing ||
+				!my_state.video_file ||
+				!my_state.srt_file}
 			class="flex w-full transform items-center justify-center rounded-lg bg-gradient-to-r from-green-600 to-green-700 px-8 py-4 text-xl font-bold text-white shadow-lg transition-all duration-200 hover:-translate-y-1 hover:from-green-700 hover:to-green-800 hover:shadow-xl disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
 		>
-			{#if state.is_processing}
+			{#if my_state.is_processing}
 				<span class="flex items-center">
 					<div
 						class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
@@ -406,14 +412,14 @@ function reset_output_wrapper() {
 	</div>
 
 	<!-- Output Section -->
-	{#if state.output_url}
+	{#if my_state.output_url}
 		<div
 			class="space-y-6 rounded-lg border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 p-6"
 		>
 			<h2 class="text-2xl font-bold text-gray-800">Output Ready!</h2>
 			<div class="overflow-hidden rounded-xl bg-black shadow-2xl">
 				<video
-					src={state.output_url}
+					src={my_state.output_url}
 					controls
 					class="mx-auto w-full max-w-4xl"
 				>
@@ -437,7 +443,7 @@ function reset_output_wrapper() {
 				</button>
 			</div>
 		</div>
-	{:else if state.video_file && state.srt_file && !state.is_processing}
+	{:else if my_state.video_file && my_state.srt_file && !my_state.is_processing}
 		<div
 			class="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 py-12 text-center"
 		>
