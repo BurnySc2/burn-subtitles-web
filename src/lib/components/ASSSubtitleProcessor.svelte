@@ -370,9 +370,9 @@ function reset_output_wrapper() {
 		class="rounded-lg border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-6"
 	>
 		<h3 class="mb-4 text-lg font-bold text-gray-800">Font Preview</h3>
-		<div class="overflow-hidden rounded-lg bg-white p-4 shadow-inner">
+		<div class="rounded-lg bg-white p-2 shadow-inner">
 			<div
-				class="mx-auto flex h-24 w-full max-w-md items-center justify-center space-x-4"
+				class="mx-auto flex w-full max-w-md items-center justify-center space-x-4"
 			>
 				<FontPreview
 					font_name={available_fonts[my_state.selected_font_index]
