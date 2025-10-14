@@ -80,6 +80,12 @@ export const available_fonts: FontOption[] = [
 		url: "/fonts/OpenSans.ttf",
 		filename: "OpenSans.ttf",
 	},
+	// Copyright issues? https://font.download/font/tahoma
+	{
+		name: "Tahoma",
+		url: "/fonts/Tahoma.ttf",
+		filename: "Tahoma.ttf",
+	},
 	{
 		name: "Tajawal",
 		url: "/fonts/Tajawal.ttf",
