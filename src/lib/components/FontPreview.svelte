@@ -12,7 +12,7 @@ let { font_name = "Arial", font_size = 16, sample_text = "Sample text" }: FontPr
 	<textarea
 		bind:value={sample_text}
 		placeholder="Enter sample text..."
-		class="w-full rounded border border-gray-300 p-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+		class="w-full rounded border border-gray-300 p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 		style="font-family: {font_name}; font-size: {font_size}px;"
 		rows={3}
 	></textarea>

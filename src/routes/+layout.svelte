@@ -18,6 +18,10 @@ let { children } = $props()
 			src: url("/fonts/OpenSans.ttf") format("truetype");
 		}
 		@font-face {
+			font-family: "Tahoma";
+			src: url("/fonts/Tahoma.ttf") format("truetype");
+		}
+		@font-face {
 			font-family: "Tajawal";
 			src: url("/fonts/Tajawal.ttf") format("truetype");
 		}

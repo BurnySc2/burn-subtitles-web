@@ -372,7 +372,7 @@ function reset_output_wrapper() {
 		<h3 class="mb-4 text-lg font-bold text-gray-800">Font Preview</h3>
 		<div class="rounded-lg bg-white p-2 shadow-inner">
 			<div
-				class="mx-auto flex w-full max-w-md items-center justify-center space-x-4"
+				class="mx-auto flex w-full items-center justify-center space-x-4"
 			>
 				<FontPreview
 					font_name={available_fonts[my_state.selected_font_index]
