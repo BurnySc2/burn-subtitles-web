@@ -8,7 +8,7 @@ type FontPreviewProps = {
 let { font_name = "Arial", font_size = 16, sample_text = "Sample text" }: FontPreviewProps = $props()
 </script>
 
-<div class="flex flex-col">
+<div class="flex flex-col w-full">
 	<textarea
 		bind:value={sample_text}
 		placeholder="Enter sample text..."
