@@ -112,6 +112,16 @@ export const available_fonts: FontOption[] = [
 		filename: "Rubik.ttf",
 	},
 	{
+		name: "Lateef",
+		url: "/fonts/Lateef.ttf",
+		filename: "Lateef.ttf",
+	},
+	{
+		name: "Vazirmatn",
+		url: "/fonts/Vazirmatn.ttf",
+		filename: "Vazirmatn.ttf",
+	},
+	{
 		name: "Noto Kufi Arabic",
 		url: "/fonts/NotoKufiArabic.ttf",
 		filename: "NotoKufiArabic.ttf",
