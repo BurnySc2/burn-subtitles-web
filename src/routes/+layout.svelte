@@ -10,6 +10,14 @@ let { children } = $props()
 	<style>
 		/* Needs to be in sync with `subtitle-processing.ts` */
 		@font-face {
+			font-family: "Candara";
+			src: url("/fonts/Candara.ttf") format("truetype");
+		}
+		@font-face {
+			font-family: "Arial";
+			src: url("/fonts/Arial.ttf") format("truetype");
+		}
+		@font-face {
 			font-family: "Roboto";
 			src: url("/fonts/Roboto.ttf") format("truetype");
 		}
