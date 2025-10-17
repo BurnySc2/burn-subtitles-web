@@ -71,6 +71,16 @@ export const available_fonts: FontOption[] = [
 	// Always download the Font-Regular version
 	// https://fonts.google.com
 	{
+		name: "Candara",
+		url: "/fonts/Candara.ttf",
+		filename: "Candara.ttf",
+	},
+	{
+		name: "Arial",
+		url: "/fonts/Arial.ttf",
+		filename: "Arial.ttf",
+	},
+	{
 		name: "Roboto",
 		url: "/fonts/Roboto.ttf",
 		filename: "Roboto.ttf",
