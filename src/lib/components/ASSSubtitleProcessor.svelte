@@ -19,9 +19,9 @@ let my_state = $state<ASSProcessingState>({
 	font_size: 24,
 	stroke_size: 2,
 	stroke_color: "#000000",
-	shadow_blur: 0,
-	shadow_opacity: 50,
-	subtitle_position_y: 140,
+	shadow_blur: 41,
+	shadow_opacity: 100,
+	subtitle_position_y: 0,
 	subtitle_center_x: 960,
 })
 
@@ -320,7 +320,7 @@ function reset_output_wrapper() {
 					id="shadow-blur"
 					type="range"
 					min="0"
-					max="20"
+					max="50"
 					bind:value={my_state.shadow_blur}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
 					disabled={my_state.is_processing}
@@ -339,6 +339,7 @@ function reset_output_wrapper() {
 					type="range"
 					min="0"
 					max="100"
+					step="1"
 					bind:value={my_state.shadow_opacity}
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
 					disabled={my_state.is_processing}
