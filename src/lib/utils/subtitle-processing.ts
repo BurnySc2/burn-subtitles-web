@@ -117,9 +117,14 @@ export const available_fonts: FontOption[] = [
 		filename: "Lateef.ttf",
 	},
 	{
-		name: "Vazirmatn",
-		url: "/fonts/Vazirmatn.ttf",
-		filename: "Vazirmatn.ttf",
+		name: "VazirmatnRegular",
+		url: "/fonts/VazirmatnRegular.ttf",
+		filename: "VazirmatnRegular.ttf",
+	},
+	{
+		name: "VazirmatnBold",
+		url: "/fonts/VazirmatnBold.ttf",
+		filename: "VazirmatnBold.ttf",
 	},
 	{
 		name: "Noto Kufi Arabic",
