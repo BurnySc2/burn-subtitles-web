@@ -46,12 +46,13 @@ let { children } = $props()
 			src: url("/fonts/Lateef.ttf") format("truetype");
 		}
 		@font-face {
-			font-family: "VazirmatnRegular";
+			font-family: "Vazirmatn";
 			src: url("/fonts/VazirmatnRegular.ttf") format("truetype");
 		}
 		@font-face {
-			font-family: "VazirmatnBold";
+			font-family: "Vazirmatn";
 			src: url("/fonts/VazirmatnBold.ttf") format("truetype");
+  			font-weight: bold;
 		}
 		@font-face {
 			font-family: "Noto Kufi Arabic";

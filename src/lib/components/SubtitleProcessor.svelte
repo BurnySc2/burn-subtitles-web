@@ -165,7 +165,7 @@ function reset_output_wrapper() {
 					disabled={my_state.is_processing}
 				>
 					{#each available_fonts as font, index}
-						<option value={index}>{font.name}</option>
+						<option value={index}>{font.select_name}</option>
 					{/each}
 				</select>
 			</div>
@@ -229,9 +229,11 @@ function reset_output_wrapper() {
 			>
 				<FontPreview
 					font_name={available_fonts[my_state.selected_font_index]
-						.name}
+						.font_family}
 					font_size={my_state.font_size}
 					{sample_text}
+					font_weight={available_fonts[my_state.selected_font_index]
+						.font_weight}
 				/>
 			</div>
 		</div>
