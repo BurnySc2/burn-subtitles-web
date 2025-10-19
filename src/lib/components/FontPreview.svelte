@@ -12,7 +12,6 @@ let {
 	font_weight = "normal",
 	sample_text = "Sample text",
 }: FontPreviewProps = $props()
-$inspect(font_weight)
 </script>
 
 <div class="flex flex-col w-full">
@@ -20,7 +19,7 @@ $inspect(font_weight)
 		bind:value={sample_text}
 		placeholder="Enter sample text..."
 		class="w-full rounded border border-gray-300 p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-		style="font-family: {font_name}; font-face: {font_weight}; font-size: {font_size}px;"
+		style="font-family: {font_name}; font-weight: {font_weight}; font-size: {font_size}px;"
 		rows={3}
 	></textarea>
 	<div class="mt-2 text-xs text-gray-500">
