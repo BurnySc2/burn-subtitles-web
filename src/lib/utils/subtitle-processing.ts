@@ -12,9 +12,11 @@ export type FfmpegConfig = {
 }
 
 export type FontOption = {
-	name: string
+	font_family: string
+	select_name: string
 	url: string
 	filename: string
+	font_weight?: "normal" | "bold"
 }
 
 export type ProcessingState = {
@@ -71,93 +73,112 @@ export const available_fonts: FontOption[] = [
 	// Always download the Font-Regular version
 	// https://fonts.google.com
 	{
-		name: "Candara",
+		font_family: "Candara",
+		select_name: "Candara",
 		url: "/fonts/Candara.ttf",
 		filename: "Candara.ttf",
 	},
 	{
-		name: "Arial",
+		font_family: "Arial",
+		select_name: "Arial",
 		url: "/fonts/Arial.ttf",
 		filename: "Arial.ttf",
 	},
 	{
-		name: "Roboto",
+		font_family: "Roboto",
+		select_name: "Roboto",
 		url: "/fonts/Roboto.ttf",
 		filename: "Roboto.ttf",
 	},
 	{
-		name: "OpenSans",
+		font_family: "OpenSans",
+		select_name: "OpenSans",
 		url: "/fonts/OpenSans.ttf",
 		filename: "OpenSans.ttf",
 	},
 	// Copyright issues? https://font.download/font/tahoma
 	{
-		name: "Tahoma",
+		font_family: "Tahoma",
+		select_name: "Tahoma",
 		url: "/fonts/Tahoma.ttf",
 		filename: "Tahoma.ttf",
 	},
 	{
-		name: "Tajawal",
+		font_family: "Tajawal",
+		select_name: "Tajawal",
 		url: "/fonts/Tajawal.ttf",
 		filename: "Tajawal.ttf",
 	},
 	{
-		name: "Cairo",
+		font_family: "Cairo",
+		select_name: "Cairo",
 		url: "/fonts/Cairo.ttf",
 		filename: "Cairo.ttf",
 	},
 	{
-		name: "Rubik",
+		font_family: "Rubik",
+		select_name: "Rubik",
 		url: "/fonts/Rubik.ttf",
 		filename: "Rubik.ttf",
 	},
 	{
-		name: "Lateef",
+		font_family: "Lateef",
+		select_name: "Lateef",
 		url: "/fonts/Lateef.ttf",
 		filename: "Lateef.ttf",
 	},
 	{
-		name: "VazirmatnRegular",
+		font_family: "Vazirmatn",
+		select_name: "VazirmatnRegular",
 		url: "/fonts/VazirmatnRegular.ttf",
 		filename: "VazirmatnRegular.ttf",
 	},
 	{
-		name: "VazirmatnBold",
+		font_family: "Vazirmatn",
+		select_name: "VazirmatnBold",
 		url: "/fonts/VazirmatnBold.ttf",
 		filename: "VazirmatnBold.ttf",
+		font_weight: "bold",
 	},
 	{
-		name: "Noto Kufi Arabic",
+		font_family: "Noto Kufi Arabic",
+		select_name: "Noto Kufi Arabic",
 		url: "/fonts/NotoKufiArabic.ttf",
 		filename: "NotoKufiArabic.ttf",
 	},
 	{
-		name: "Noto Sans",
+		font_family: "Noto Sans",
+		select_name: "Noto Sans",
 		url: "/fonts/NotoSans.ttf",
 		filename: "NotoSans.ttf",
 	},
 	{
-		name: "Noto Sans Arabic",
+		font_family: "Noto Sans Arabic",
+		select_name: "Noto Sans Arabic",
 		url: "/fonts/NotoSansArabic.ttf",
 		filename: "NotoSansArabic.ttf",
 	},
 	{
-		name: "Noto Sans Japanese",
+		font_family: "Noto Sans Japanese",
+		select_name: "Noto Sans Japanese",
 		url: "/fonts/NotoSansJP.ttf",
 		filename: "NotoSansJP.ttf",
 	},
 	{
-		name: "Noto Sans Korean",
+		font_family: "Noto Sans Korean",
+		select_name: "Noto Sans Korean",
 		url: "/fonts/NotoSansKR.ttf",
 		filename: "NotoSansKR.ttf",
 	},
 	{
-		name: "Noto Sans Thai",
+		font_family: "Noto Sans Thai",
+		select_name: "Noto Sans Thai",
 		url: "/fonts/NotoSansThai.ttf",
 		filename: "NotoSansThai.ttf",
 	},
 	{
-		name: "Noto Sans Traditional Chinese",
+		font_family: "Noto Sans Traditional Chinese",
+		select_name: "Noto Sans Traditional Chinese",
 		url: "/fonts/NotoSansTC.ttf",
 		filename: "NotoSansTC.ttf",
 	},
@@ -264,7 +285,7 @@ export async function load_selected_font(
 
 	const selected_font = available_fonts[selected_font_index]
 	try {
-		set_message(`Loading font: ${selected_font.name}`)
+		set_message(`Loading font: ${selected_font.select_name}`)
 
 		// For local fonts in /fonts/ folder, we need to fetch them as resources
 		const font_response = await fetch(selected_font.url)
@@ -273,11 +294,11 @@ export async function load_selected_font(
 		}
 		const font_buffer = await font_response.arrayBuffer()
 		await ffmpeg.writeFile(`/tmp/${selected_font.filename}`, new Uint8Array(font_buffer))
-		console.log(`Font ${selected_font.name} loaded to /tmp`)
+		console.log(`Font ${selected_font.select_name} loaded to /tmp`)
 		return true
 	} catch (err) {
 		console.error("Failed to load font:", err)
-		set_error_message(`Failed to load font ${selected_font.name}: ${err}`)
+		set_error_message(`Failed to load font ${selected_font.select_name}: ${err}`)
 		set_message("Font load failed")
 		return false
 	}
@@ -367,7 +388,7 @@ export function build_force_style(
 		center: "5",
 	}
 	const alignment = alignment_map[position]
-	const font_name = available_fonts[font_index].name
+	const font_name = available_fonts[font_index].font_family
 	return `Fontname=${font_name},FontSize=${font_size}${bold_style},Alignment=${alignment}`
 }
 
@@ -672,7 +693,7 @@ YCbCr Matrix: None
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${available_fonts[state.selected_font_index].name},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,${state.subtitle_position_y},1
+Style: Default,${available_fonts[state.selected_font_index].font_family},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,${state.subtitle_position_y},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
