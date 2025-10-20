@@ -684,6 +684,11 @@ function escape_ass_text(text: string): string {
 // Generate ASS file from SRT content and styling parameters
 export function generate_ass_file(state: ASSProcessingState, srt_content?: string): string {
 	const dialogues = srt_content ? parse_srt_to_dialogues(srt_content) : []
+	const alignment_map = {
+		top: "8",
+		bottom: "2",
+		center: "5",
+	}
 
 	const ass_header = `[Script Info]
 Title: Generated Subtitles
@@ -694,7 +699,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${available_fonts[state.selected_font_index].font_family},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,${state.subtitle_horizontal_margin},${state.subtitle_horizontal_margin},${state.subtitle_position_y},1
+Style: Default,${available_fonts[state.selected_font_index].font_family},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},${alignment_map[state.position]},${state.subtitle_horizontal_margin},${state.subtitle_horizontal_margin},${state.subtitle_position_y},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
