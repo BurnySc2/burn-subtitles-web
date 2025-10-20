@@ -23,6 +23,7 @@ let my_state = $state<ASSProcessingState>({
 	subtitle_horizontal_margin: 30,
 	subtitle_position_y: 0,
 	subtitle_center_x: 960,
+	RTL: false,
 })
 
 let sample_text = $state("The quick brown fox jumps over the lazy dog")
@@ -231,6 +232,21 @@ function reset_output_wrapper() {
 					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={my_state.is_processing}
 				/>
+			</div>
+
+			<!-- RTL Support -->
+			<div class="mb-4">
+				<label class="flex items-center space-x-3">
+					<input
+						type="checkbox"
+						bind:checked={my_state.RTL}
+						class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+						disabled={my_state.is_processing}
+					/>
+					<span class="text-sm font-semibold text-gray-700"
+						>Enable Right-to-Left (RTL) Text</span
+					>
+				</label>
 			</div>
 		</div>
 

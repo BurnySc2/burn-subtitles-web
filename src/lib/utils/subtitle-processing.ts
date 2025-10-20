@@ -50,6 +50,7 @@ export type ASSProcessingState = ProcessingState & {
 	subtitle_horizontal_margin: number // left and right margin / space
 	subtitle_position_y: number // 140
 	subtitle_center_x: number // 960
+	RTL: boolean // Right-to-left text support
 }
 
 export const high_quality_config: FfmpegConfig = {
@@ -677,18 +678,12 @@ function parse_srt_to_dialogues(srt_content: string): Array<{
 function escape_ass_text(text: string): string {
 	// Escape ASS special characters: {, }, \\n
 	return text.replace(/[{}\\]/g, "\\$&")
+	// TODO Remove empty spaces: Replaces \s+ with " "
 }
 
 // Generate ASS file from SRT content and styling parameters
 export function generate_ass_file(state: ASSProcessingState, srt_content?: string): string {
 	const dialogues = srt_content ? parse_srt_to_dialogues(srt_content) : []
-
-	// 	const ass_header = `[Script Info]
-	// Title: Generated Subtitles
-	// ScriptType: v4.00+
-	// Collisions: Normal
-	// PlayDepth: 0
-	// ScaledBorderAndShadow: yes
 
 	const ass_header = `[Script Info]
 Title: Generated Subtitles
@@ -714,7 +709,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 				return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.00`
 			}
 
-			return `Dialogue: 0,${format_time(d.start)},${format_time(d.end)},Default,,0,0,0,,${escape_ass_text(d.text)}`
+			// Add RTL support using Unicode characters
+			const processed_text = state.RTL ? `\u202B${escape_ass_text(d.text)}\u202C` : escape_ass_text(d.text)
+
+			return `Dialogue: 0,${format_time(d.start)},${format_time(d.end)},Default,,0,0,0,,${processed_text}`
 		})
 		.join("\n")
 
