@@ -46,8 +46,8 @@ export type ASSProcessingState = ProcessingState & {
 	font_size: number // 70
 	stroke_size: number // 2 (fixed)
 	stroke_color: string // #000000
-	shadow_blur: number // 0-20
-	shadow_opacity: number // 0-100
+	shadow_blur: number // 0-4
+	subtitle_horizontal_margin: number // left and right margin / space
 	subtitle_position_y: number // 140
 	subtitle_center_x: number // 960
 }
@@ -683,17 +683,23 @@ function escape_ass_text(text: string): string {
 export function generate_ass_file(state: ASSProcessingState, srt_content?: string): string {
 	const dialogues = srt_content ? parse_srt_to_dialogues(srt_content) : []
 
+	// 	const ass_header = `[Script Info]
+	// Title: Generated Subtitles
+	// ScriptType: v4.00+
+	// Collisions: Normal
+	// PlayDepth: 0
+	// ScaledBorderAndShadow: yes
+
 	const ass_header = `[Script Info]
 Title: Generated Subtitles
 ScriptType: v4.00+
 WrapStyle: 0
 ScaledBorderAndShadow: yes
-YCbCr Matrix: None
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${available_fonts[state.selected_font_index].font_family},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,0,0,${state.subtitle_position_y},1
+Style: Default,${available_fonts[state.selected_font_index].font_family},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},2,${state.subtitle_horizontal_margin},${state.subtitle_horizontal_margin},${state.subtitle_position_y},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
