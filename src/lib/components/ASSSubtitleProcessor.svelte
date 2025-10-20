@@ -361,23 +361,46 @@ function reset_output_wrapper() {
 				/>
 			</div>
 
-			<!-- Position Y -->
+			<!-- Vertical Anchor -->
 			<div class="mb-4">
 				<label
-					for="position-y"
+					for="anchor-y"
 					class="mb-2 block text-sm font-semibold text-gray-700"
-					>Vertical Position: {my_state.subtitle_position_y}px</label
+					>Vertical Anchor</label
 				>
-				<input
-					id="position-y"
-					type="range"
-					min="0"
-					max="1080"
-					bind:value={my_state.subtitle_position_y}
-					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+				<select
+					id="anchor-y"
+					bind:value={my_state.position}
+					class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					disabled={my_state.is_processing}
-				/>
+				>
+					{#each ["Top", "Center", "Bottom"] as anchor_option}
+						<option value={anchor_option.toLowerCase()}
+							>{anchor_option}</option
+						>
+					{/each}
+				</select>
 			</div>
+
+			<!-- Position Y -->
+			{#if my_state.position !== "center"}
+				<div class="mb-4">
+					<label
+						for="position-y"
+						class="mb-2 block text-sm font-semibold text-gray-700"
+						>Vertical Position: {my_state.subtitle_position_y}px</label
+					>
+					<input
+						id="position-y"
+						type="range"
+						min="0"
+						max="1080"
+						bind:value={my_state.subtitle_position_y}
+						class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+						disabled={my_state.is_processing}
+					/>
+				</div>
+			{/if}
 		</div>
 	</div>
 
