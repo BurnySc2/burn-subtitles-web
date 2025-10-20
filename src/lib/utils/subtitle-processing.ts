@@ -660,7 +660,7 @@ function parse_srt_to_dialogues(srt_content: string): Array<{
 			const text = lines.slice(2).join("\n")
 
 			// Parse time line: 00:00:000 --> 00:00:000
-			const time_match = time_line.match(/(\d{2}:\d{2}:\d{2}),\d{3} --> (\d{2}:\d{2}:\d{2}),\d{3}/)
+			const time_match = time_line.match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/)
 			if (time_match) {
 				dialogues.push({
 					start: time_match[1],
@@ -709,9 +709,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 		.map((d) => {
 			// Convert SRT time format (HH:MM:SS) to ASS time format (H:MM:SS.CC)
 			const format_time = (time_str: string) => {
-				const [hours, minutes, seconds] = time_str.split(":").map(Number)
-				// Use format: H:MM:SS.CC (e.g., 0:00:10.00, 1:05:30.00)
-				return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.00`
+				const [hours_str, minutes_str, seconds_milliseconds_str] = time_str.split(":")
+				const [seconds_str, milliseconds_str] = seconds_milliseconds_str.split(",")
+				const [hours, minutes, seconds, milliseconds] = [
+					hours_str,
+					minutes_str,
+					seconds_str,
+					milliseconds_str.slice(0, 2),
+				].map(Number)
+				// Use format: H:MM:SS.mmm (e.g., 0:00:10.000, 1:05:30.000)
+				return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${milliseconds.toString().padStart(2, "0")}`
 			}
 
 			// Add RTL support using Unicode characters
