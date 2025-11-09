@@ -677,13 +677,19 @@ function parse_srt_to_dialogues(srt_content: string): Array<{
 // Helper function to escape special characters in ASS text
 function escape_ass_text(text: string): string {
 	// Escape ASS special characters: {, }, \\n
-	return text.replace(/[{}\\]/g, "\\$&")
-	// TODO Remove empty spaces: Replaces \s+ with " "
+	return (
+		text
+			// Replace all newline (\n) characters with the ASS newline character (\N)
+			.replaceAll("\n", "\\N")
+			// Escape all curly brackets
+			.replaceAll(/[{}]/g, "\\$&")
+			// Remove additional spaces
+			.replaceAll(/\s+/g, " ")
+	)
 }
 
 // Generate ASS file from SRT content and styling parameters
 export function generate_ass_file(state: ASSProcessingState, srt_content?: string): string {
-	const dialogues = srt_content ? parse_srt_to_dialogues(srt_content) : []
 	const alignment_map = {
 		top: "8",
 		bottom: "2",
@@ -705,6 +711,7 @@ Style: Default,${available_fonts[state.selected_font_index].font_family},${state
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `
 
+	const dialogues = srt_content ? parse_srt_to_dialogues(srt_content) : []
 	const dialogue_lines = dialogues
 		.map((d) => {
 			// Convert SRT time format (HH:MM:SS) to ASS time format (H:MM:SS.CC)
