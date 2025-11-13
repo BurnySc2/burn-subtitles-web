@@ -487,7 +487,7 @@ function reset_output_wrapper() {
 				<div class="rounded-lg bg-gray-50 py-8 text-center">
 					<p class="mb-2 text-lg text-gray-500">No preview yet</p>
 					<p class="text-sm text-gray-400">
-						Click "Render ASS Preview" to see how your styled
+						Click "Render Preview" to see how your styled
 						subtitles will look on the video frame.
 					</p>
 				</div>
