@@ -675,17 +675,21 @@ function parse_srt_to_dialogues(srt_content: string): Array<{
 }
 
 // Helper function to escape special characters in ASS text
-function escape_ass_text(text: string): string {
+function escape_ass_text(text: string): string[] {
 	// Escape ASS special characters: {, }, \\n
-	return (
-		text
-			// Replace all newline (\n) characters with the ASS newline character (\N)
-			.replaceAll("\n", "\\N")
-			// Escape all curly brackets
-			.replaceAll(/[{}]/g, "\\$&")
-			// Remove additional spaces
-			.replaceAll(/\s+/g, " ")
-	)
+
+	// Split at newline (\n) characters, needs to be joined with ASS newline character  ("\\N")
+	const lines = text.split("\n")
+
+	return lines.map((line) => {
+		return (
+			line
+				// Escape all curly brackets
+				.replaceAll(/[{}]/g, "\\$&")
+				// Remove additional spaces
+				.replaceAll(/\s+/g, " ")
+		)
+	})
 }
 
 // Generate ASS file from SRT content and styling parameters
@@ -729,9 +733,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 			}
 
 			// Add RTL support using Unicode characters
-			const processed_text = state.RTL ? `\u202B${escape_ass_text(d.text)}\u202C` : escape_ass_text(d.text)
+			const lines = escape_ass_text(d.text)
+			const rtl_corrected_lines = lines.map((line) => (state.RTL ? `\u202B${line}\u202C` : line))
+			const joined = rtl_corrected_lines.join("\\N")
 
-			return `Dialogue: 0,${format_time(d.start)},${format_time(d.end)},Default,,0,0,0,,${processed_text}`
+			return `Dialogue: 0,${format_time(d.start)},${format_time(d.end)},Default,,0,0,0,,${joined}`
 		})
 		.join("\n")
 
