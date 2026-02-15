@@ -10,6 +10,7 @@ onMount(() => {
 				type: "resize-iframe",
 				height: height,
 			},
+			"*",
 		)
 	}
 
