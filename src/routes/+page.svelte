@@ -1,28 +1,28 @@
 <script lang="ts">
-import { onMount } from "svelte"
+import { onMount, onDestroy } from "svelte"
 import ASSSubtitleProcessor from "$lib/components/ASSSubtitleProcessor.svelte"
 
 onMount(() => {
 	function sendHeight() {
-		const height = document.documentElement.scrollHeight
-		window.parent.postMessage(
-			{
-				type: "resize-iframe",
-				height: height,
-			},
-			"*",
-		)
+		const height = document.documentElement.getBoundingClientRect().height
+		window.parent.postMessage({ type: "resize-iframe", height }, "*")
 	}
 
-	// Send once after load
+	// Initial send
 	sendHeight()
 
-	// Observe DOM changes (better than resize listener)
-	const observer = new ResizeObserver(() => {
-		sendHeight()
-	})
+	// Listen for browser resize
+	window.addEventListener("resize", sendHeight)
 
+	// Optional: observe DOM changes too
+	const observer = new ResizeObserver(sendHeight)
 	observer.observe(document.body)
+
+	// Cleanup on destroy
+	onDestroy(() => {
+		window.removeEventListener("resize", sendHeight)
+		observer.disconnect()
+	})
 })
 </script>
 
