@@ -142,6 +142,12 @@ export const available_fonts: FontOption[] = [
 		font_weight: "bold",
 	},
 	{
+		font_family: "MaruBuri",
+		select_name: "MaruBuri",
+		url: "/fonts/MaruBuri.ttf",
+		filename: "MaruBuri.ttf",
+	},
+	{
 		font_family: "Noto Kufi Arabic",
 		select_name: "Noto Kufi Arabic",
 		url: "/fonts/NotoKufiArabic.ttf",
