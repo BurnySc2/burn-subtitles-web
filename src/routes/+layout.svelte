@@ -55,6 +55,10 @@ let { children } = $props()
   			font-weight: bold;
 		}
 		@font-face {
+			font-family: "MaruBuri";
+			src: url("/fonts/MaruBuri.ttf") format("truetype");
+		}
+		@font-face {
 			font-family: "Noto Kufi Arabic";
 			src: url("/fonts/NotoKufiArabic.ttf") format("truetype");
 		}
