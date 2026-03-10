@@ -85,7 +85,7 @@ async function download_srt() {
     }
     const blob = new Blob([data.join("\n") + "\n"], { type: "text/vtt+srt;charset=utf-8" })
     const url = URL.createObjectURL(blob)
-    const link = document.createElement('a');
+    const link = document.createElement("a")
     link.href = url
     link.download = "subtitles.srt"
     link.click()
