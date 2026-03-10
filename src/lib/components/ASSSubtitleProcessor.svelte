@@ -128,7 +128,12 @@ function reset_output_wrapper() {
 </script>
 
 <div
-	class="processor-container mx-auto max-w-6xl min-w-0 space-y-6 rounded-xl bg-white p-4 shadow-lg"
+	class="flex flex-col space-y-2"
+>
+<div class="mx-auto text-2xl font-bold text-gray-800">Subtitle Burner</div>
+
+<div
+	class="processor-container mx-auto max-w-6xl min-w-0 space-y-6 rounded-xl bg-white p-4 shadow-lg flex flex-col"
 >
 	<!-- Upload Section -->
 	<div
@@ -668,6 +673,7 @@ function reset_output_wrapper() {
 			</div>
 		</div>
 	{/if}
+</div>
 </div>
 
 <style>
