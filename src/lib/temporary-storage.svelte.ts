@@ -19,9 +19,9 @@ export const temp_state: TTempState = $state({
     extract_srt: {
         file: null,
         ods_data: null,
-        selected_sheet: 0,
-        selected_column: 0,
-        selected_start_row: 0,
+        selected_sheet: 1,
+        selected_column: 1,
+        selected_start_row: 1,
         selected_end_row: 999,
     },
 })

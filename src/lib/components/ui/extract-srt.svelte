@@ -49,13 +49,13 @@ const srt_data = $derived.by(async () => {
     if (resolved === null) {
         return null
     }
-    return resolved[sheet]
+    return resolved[sheet - 1]
         .filter((_data, index) => {
             return start <= index && index <= end
         })
         .map((row) => {
             // console.log(row)
-            return row[column] ?? ""
+            return row[column - 1] ?? ""
         })
 })
 
@@ -93,7 +93,7 @@ async function download_srt() {
 }
 </script>
 
-<div class="flex flex-col h-full my-6 mx-40 items-center space-y-4">
+<div class="flex flex-col h-full my-6 mx-16 items-center space-y-4">
     <!-- Input .ods file drop -->
     <FileDropZone.Root
         onUpload={on_upload}
@@ -101,63 +101,79 @@ async function download_srt() {
         maxFileSize={100 * FileDropZone.MEGABYTE}
     >
         <FileDropZone.Trigger
-            class="bg-gray-900 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-medium transition text-center"
+            class="bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg transition-all duration-200  text-white px-6 py-3 rounded-lg font-medium  text-center"
         >
             <pre>Click to upload .ods file
-or drag & drop file here</pre>
+or drop file here</pre>
         </FileDropZone.Trigger>
     </FileDropZone.Root>
-    <div class="grid grid-cols-4 space-y-4">
+    <div class="grid grid-cols-4 gap-4 w-full max-w-2xl">
         <label
-            class="select-none col-start-1 col-span-2"
-            for="selected-column"
-            >Sheet to extract</label
+            class="select-none col-start-1 col-span-2 text-sm font-medium text-gray-700 flex items-center"
+            for="selected-sheet"
         >
+            Sheet to extract
+        </label>
         <input
-            id="selected-column"
-            class="col-span-2"
+            id="selected-sheet"
+            class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 transition-all duration-200 hover:border-gray-400"
             type="number"
+            min="1"
             bind:value={temp_state.extract_srt.selected_sheet}
         >
         <label
-            class="select-none col-span-2"
+            class="select-none col-span-2 text-sm font-medium text-gray-700 flex items-center"
             for="selected-column"
-            >Column to extract</label
         >
+            Column to extract
+        </label>
         <input
             id="selected-column"
-            class="col-span-2"
+            class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 transition-all duration-200 hover:border-gray-400"
             type="number"
+            min="1"
             bind:value={temp_state.extract_srt.selected_column}
         >
         <label
-            class="select-none col-span-2"
-            for="selected-column"
-            >Start row</label
+            class="select-none col-span-2 text-sm font-medium text-gray-700 flex items-center"
+            for="selected-start-row"
         >
+            Start row (including)
+        </label>
         <input
-            id="selected-column"
-            class="col-span-2"
+            id="selected-start-row"
+            class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 transition-all duration-200 hover:border-gray-400"
             type="number"
+            min="1"
             bind:value={temp_state.extract_srt.selected_start_row}
         >
         <label
-            class="select-none col-span-2"
-            for="selected-column"
-            >End row</label
+            class="select-none col-span-2 text-sm font-medium text-gray-700 flex items-center"
+            for="selected-end-row"
         >
+            End row (including)
+        </label>
         <input
-            id="selected-column"
-            class="col-span-2"
+            id="selected-end-row"
+            class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400 transition-all duration-200 hover:border-gray-400"
             type="number"
+            min="1"
             bind:value={temp_state.extract_srt.selected_end_row}
         >
     </div>
-    <button onclick={download_srt}>Download SRT</button>
-    {#await srt_data then a}
-        {#if a !== null}
-            <pre class="srt-display overflow-y-auto col-span-4 line-numbers">
-{#each a as line, i}
+    <button
+        onclick={download_srt}
+        class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+    >
+        Download SRT
+    </button>
+    {#await srt_data then srt_content}
+        {#if srt_content !== null}
+            <pre
+                class="srt-display overflow-y-auto col-span-4 line-numbers 10/12"
+                style="--start-line: {temp_state.extract_srt.selected_start_row - 1}"
+            >
+{#each srt_content as line}
 <span>{line}</span>{/each}
 </pre>
         {/if}
@@ -179,7 +195,7 @@ or drag & drop file here</pre>
 }
 
 .line-numbers {
-    counter-reset: line;
+    counter-reset: line var(--start-line, 0);
     position: relative;
     padding-left: 3.5rem;
     white-space: pre-wrap;
