@@ -170,7 +170,7 @@ or drop file here</pre>
     {#await srt_data then srt_content}
         {#if srt_content !== null}
             <pre
-                class="srt-display overflow-y-auto col-span-4 line-numbers 10/12"
+                class="srt-display overflow-y-auto col-span-4 line-numbers w-10/12"
                 style="--start-line: {temp_state.extract_srt.selected_start_row - 1}"
             >
 {#each srt_content as line}
