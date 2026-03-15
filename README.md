@@ -1,5 +1,9 @@
 # Burn Subtitles Website
 
+Master branch deployment: https://subtitles.burnysc2.xyz
+
+Develop branch deployment: https://burn-subtitles-dev.netlify.app
+
 To try out fonts locally, you can save the fonts to `~/.fonts/` and they will be seen by linux and listed in DaVinci Resolve.
 
 
