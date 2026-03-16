@@ -1,15 +1,8 @@
 <script lang="ts">
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { available_fonts } from "$lib/utils/fonts"
 // See http://www.tcax.org/docs/ass-specs.htm
-import {
-    available_fonts,
-    download_video,
-    format_time_remaining,
-    generate_ass_file,
-    render_video_with_subtitles,
-    render_ass_frame_preview,
-} from "$lib/utils/subtitle-processing"
 </script>
 
 <!-- Settings Section -->

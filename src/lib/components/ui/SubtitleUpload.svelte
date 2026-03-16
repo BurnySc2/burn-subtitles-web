@@ -1,15 +1,6 @@
 <script lang="ts">
-import { perma_state } from "$lib/persistent-storage.svelte"
-import { temp_state } from "$lib/temporary-storage.svelte"
 // See http://www.tcax.org/docs/ass-specs.htm
-import {
-    available_fonts,
-    download_video,
-    format_time_remaining,
-    generate_ass_file,
-    render_video_with_subtitles,
-    render_ass_frame_preview,
-} from "$lib/utils/subtitle-processing"
+import { temp_state } from "$lib/temporary-storage.svelte"
 
 let sample_text = $state("The quick brown fox jumps over the lazy dog")
 

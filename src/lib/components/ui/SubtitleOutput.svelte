@@ -1,12 +1,7 @@
 <script lang="ts">
 import { temp_state } from "$lib/temporary-storage.svelte"
 // See http://www.tcax.org/docs/ass-specs.htm
-import {
-    download_video,
-    format_time_remaining,
-    generate_ass_file,
-    render_video_with_subtitles,
-} from "$lib/utils/subtitle-processing"
+import { download_video, generate_ass_file } from "$lib/utils/subtitle-processing"
 
 async function download_ass_file_wrapper() {
     if (!temp_state.ffmpeg.srt_file) {
