@@ -49,7 +49,7 @@ export type TPermaState = z.infer<typeof PermaState>
 
 export const perma_state = $state<TPermaState>({
     loading: {
-        subtitle_settings: false,
+        subtitle_settings: true,
     },
     subtitle_settings: default_subtitle_settings,
 })
@@ -59,12 +59,12 @@ $effect.root(() => {
     $effect(() => {
         // Save data
         if (browser && !perma_state.loading.subtitle_settings) {
-            localStorage.setItem("vodching_subtitle_settings", JSON.stringify(perma_state.subtitle_settings))
+            localStorage.setItem("subtitle_settings", JSON.stringify(perma_state.subtitle_settings))
         }
         // Load data
         if (browser && perma_state.loading.subtitle_settings) {
             perma_state.loading.subtitle_settings = false
-            const data = localStorage.getItem("vodching_subtitle_settings")
+            const data = localStorage.getItem("subtitle_settings")
             if (data !== null) {
                 perma_state.subtitle_settings = {
                     // Set default

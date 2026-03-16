@@ -36,10 +36,6 @@ function handle_srt_upload(event: Event) {
     }
 }
 
-async function render_ass_frame_preview_wrapper() {
-    await render_ass_frame_preview()
-}
-
 async function download_ass_file_wrapper() {
     if (!temp_state.ffmpeg.srt_file) {
         temp_state.ffmpeg.error_message = "Please upload an SRT file first"
@@ -368,7 +364,7 @@ async function download_ass_file_wrapper() {
 							temp_state.ffmpeg.is_rendering_preview}
                         >
                         <button
-                            onclick={render_ass_frame_preview_wrapper}
+                            onclick={render_ass_frame_preview}
                             disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
                             class="transform rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:from-blue-700 hover:to-blue-800 hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-400 disabled:to-gray-500"
@@ -430,6 +426,7 @@ async function download_ass_file_wrapper() {
                     class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:ring-2 focus:ring-green-500 focus:outline-none"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
+                    <!-- TODO Variably load modes -->
                     <option value="preview">Preview</option>
                     <option value="high">High Quality</option>
                 </select>
