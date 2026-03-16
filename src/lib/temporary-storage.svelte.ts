@@ -7,9 +7,9 @@ export type TempState = {
         is_processing: boolean
         is_rendering_preview: boolean
         progress: number
-        output_blob: File | null
-        output_url: null
-        preview_url: null
+        output_blob: Blob | null
+        output_url: string | null
+        preview_url: string | null
         message: string
         error_message: string | null
         processing_start_time: number | null

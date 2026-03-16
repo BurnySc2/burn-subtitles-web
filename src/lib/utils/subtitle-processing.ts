@@ -272,12 +272,12 @@ export async function load_ffmpeg() {
         })
 
         temp_state.ffmpeg.message = "FFmpeg loaded successfully"
-        return new_ffmpeg
+        temp_state.ffmpeg.ffmpeg = new_ffmpeg
     } catch (err) {
         console.error("Failed to load FFmpeg:", err)
         temp_state.ffmpeg.error_message = "Failed to initialize FFmpeg"
         temp_state.ffmpeg.message = "FFmpeg load failed"
-        return null
+        return
     }
 }
 
@@ -340,18 +340,16 @@ async function write_input_files() {
 }
 
 // Helper function to initialize FFmpeg and load font
-async function initialize_ffmpeg_and_load_font(): Promise<FFmpeg | null> {
-    const ffmpeg_instance = await load_ffmpeg()
-    if (!ffmpeg_instance) {
-        return null
+async function initialize_ffmpeg_and_load_font() {
+    await load_ffmpeg()
+    if (!temp_state.ffmpeg.ffmpeg) {
+        return
     }
 
     const font_loaded = await load_selected_font()
     if (!font_loaded) {
-        return null
+        return
     }
-
-    return ffmpeg_instance
 }
 
 export function build_force_style(): string {
@@ -455,8 +453,8 @@ export async function process_subtitles() {
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font()
-    if (!ffmpeg) {
+    await initialize_ffmpeg_and_load_font()
+    if (!temp_state.ffmpeg.ffmpeg) {
         return
     }
 
@@ -485,7 +483,7 @@ export async function process_subtitles() {
         temp_state.ffmpeg.message = "Burning subtitles to video"
         const config = get_config(temp_state.ffmpeg.selected_quality_mode)
         const vf_filter = `subtitles=${srt_name}:fontsdir=/tmp:force_style='${force_style}'`
-        await ffmpeg.exec([
+        await temp_state.ffmpeg.ffmpeg.exec([
             "-i",
             video_name,
             "-vf",
@@ -508,7 +506,7 @@ export async function process_subtitles() {
 
         // Read output
         temp_state.ffmpeg.message = "Generating output"
-        const output_data = await ffmpeg.readFile(output_name)
+        const output_data = await temp_state.ffmpeg.ffmpeg.readFile(output_name)
         // @ts-expect-error
         const output_blob = new Blob([(output_data as Uint8Array).buffer], {
             type: "video/mp4",
@@ -667,8 +665,8 @@ export async function render_ass_frame_preview() {
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font()
-    if (!ffmpeg) {
+    await initialize_ffmpeg_and_load_font()
+    if (!temp_state.ffmpeg.ffmpeg) {
         return
     }
 
@@ -689,20 +687,20 @@ export async function render_ass_frame_preview() {
     const video_name = `input.${video_ext}`
     const srt_content = await temp_state.ffmpeg.srt_file.text()
     const ass_content = generate_ass_file(srt_content)
-    const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
+    // const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
     const output_name = "preview.png"
 
     try {
         // Write input files
-        await ffmpeg.writeFile(video_name, await fetchFile(temp_state.ffmpeg.video_file))
+        await temp_state.ffmpeg.ffmpeg.writeFile(video_name, await fetchFile(temp_state.ffmpeg.video_file))
         const ass_bytes = new TextEncoder().encode(ass_content)
-        await ffmpeg.writeFile("subtitles.ass", ass_bytes)
+        await temp_state.ffmpeg.ffmpeg.writeFile("subtitles.ass", ass_bytes)
 
         // Build ASS filter
         const ass_filter = `ass='subtitles.ass':fontsdir=/tmp`
 
         // Execute FFmpeg command for frame extraction with ASS subtitles
-        await ffmpeg.exec([
+        await temp_state.ffmpeg.ffmpeg.exec([
             "-i",
             video_name,
             "-ss",
@@ -720,12 +718,12 @@ export async function render_ass_frame_preview() {
         ])
 
         // Read output
-        const frame_data = await ffmpeg.readFile(output_name)
+        const frame_data = await temp_state.ffmpeg.ffmpeg.readFile(output_name)
         // @ts-expect-error
         const frame_blob = new Blob([(frame_data as Uint8Array).buffer], {
             type: "image/png",
         })
-        const preview_url = URL.createObjectURL(frame_blob)
+        temp_state.ffmpeg.preview_url = URL.createObjectURL(frame_blob)
 
         // Cleanup
         await cleanup_ffmpeg_files()
@@ -751,8 +749,8 @@ export async function process_ass_subtitles(): Promise<void> {
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font()
-    if (!ffmpeg) {
+    await initialize_ffmpeg_and_load_font()
+    if (!temp_state.ffmpeg.ffmpeg) {
         return
     }
 
@@ -772,18 +770,18 @@ export async function process_ass_subtitles(): Promise<void> {
     const video_name = `input.${video_ext}`
     const srt_content = await temp_state.ffmpeg.srt_file.text()
     const ass_content = generate_ass_file(srt_content)
-    const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
+    // const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
     const output_name = "output.mp4"
 
     try {
         // Write input files
         temp_state.ffmpeg.message = "Loading video file"
-        await ffmpeg.writeFile(video_name, await fetchFile(temp_state.ffmpeg.video_file))
+        await temp_state.ffmpeg.ffmpeg.writeFile(video_name, await fetchFile(temp_state.ffmpeg.video_file))
         console.log(`Wrote video file: ${video_name}`)
 
         temp_state.ffmpeg.message = "Generating ASS subtitle file"
         const ass_bytes = new TextEncoder().encode(ass_content)
-        await ffmpeg.writeFile("subtitles.ass", ass_bytes)
+        await temp_state.ffmpeg.ffmpeg.writeFile("subtitles.ass", ass_bytes)
         console.log("Wrote ASS subtitles file")
 
         // Build ASS filter
@@ -792,7 +790,7 @@ export async function process_ass_subtitles(): Promise<void> {
         // Execute FFmpeg command
         temp_state.ffmpeg.message = "Burning ASS subtitles to video"
         const config = get_config(temp_state.ffmpeg.selected_quality_mode)
-        await ffmpeg.exec([
+        await temp_state.ffmpeg.ffmpeg.exec([
             "-i",
             video_name,
             "-vf",
@@ -815,12 +813,13 @@ export async function process_ass_subtitles(): Promise<void> {
 
         // Read output
         temp_state.ffmpeg.message = "Generating output"
-        const output_data = await ffmpeg.readFile(output_name)
+        const output_data = await temp_state.ffmpeg.ffmpeg.readFile(output_name)
         // @ts-expect-error
         const output_blob = new Blob([(output_data as Uint8Array).buffer], {
             type: "video/mp4",
         })
-        const output_url = URL.createObjectURL(output_blob)
+        temp_state.ffmpeg.output_blob = output_blob
+        temp_state.ffmpeg.output_url = URL.createObjectURL(output_blob)
 
         // Cleanup
         // TODO:

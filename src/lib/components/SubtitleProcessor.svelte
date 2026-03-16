@@ -40,37 +40,15 @@ function handle_srt_upload(event: Event) {
 }
 
 async function render_frame_preview_wrapper() {
-    await render_frame_preview(
-        my_state,
-        (new_state) => {
-            my_state = { ...my_state, ...new_state }
-        },
-        (message) => {
-            my_state = { ...my_state, message }
-        },
-        (error) => {
-            my_state = { ...my_state, error_message: error }
-        },
-    )
+    await render_frame_preview()
 }
 
 async function process_subtitles_wrapper() {
-    await process_subtitles(
-        my_state,
-        (new_state) => {
-            my_state = { ...my_state, ...new_state }
-        },
-        (message) => {
-            my_state = { ...my_state, message }
-        },
-        (error) => {
-            my_state = { ...my_state, error_message: error }
-        },
-    )
+    await process_subtitles()
 }
 
 function download_video_wrapper() {
-    download_video(my_state.output_blob, my_state.output_url, my_state.video_file)
+    download_video()
 }
 
 function reset_output_wrapper() {

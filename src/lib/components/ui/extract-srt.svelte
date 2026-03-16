@@ -1,4 +1,5 @@
 <script lang="ts">
+// This is a helper file to extract .srt from .ods file
 import JSZip from "jszip"
 import * as FileDropZone from "$lib/components/ui/file-drop-zone"
 import { temp_state } from "$lib/temporary-storage.svelte"
