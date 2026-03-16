@@ -74,41 +74,10 @@ export const available_fonts: FontOption[] = [
     // Always download the Font-Regular version
     // https://fonts.google.com
     {
-        font_family: "Candara",
-        select_name: "Candara",
-        url: "/fonts/Candara.ttf",
-        filename: "Candara.ttf",
-    },
-    {
         font_family: "Arial",
         select_name: "Arial",
         url: "/fonts/Arial.ttf",
         filename: "Arial.ttf",
-    },
-    {
-        font_family: "Roboto",
-        select_name: "Roboto",
-        url: "/fonts/Roboto.ttf",
-        filename: "Roboto.ttf",
-    },
-    {
-        font_family: "OpenSans",
-        select_name: "OpenSans",
-        url: "/fonts/OpenSans.ttf",
-        filename: "OpenSans.ttf",
-    },
-    // Copyright issues? https://font.download/font/tahoma
-    {
-        font_family: "Tahoma",
-        select_name: "Tahoma",
-        url: "/fonts/Tahoma.ttf",
-        filename: "Tahoma.ttf",
-    },
-    {
-        font_family: "Tajawal",
-        select_name: "Tajawal",
-        url: "/fonts/Tajawal.ttf",
-        filename: "Tajawal.ttf",
     },
     {
         font_family: "Cairo",
@@ -117,29 +86,16 @@ export const available_fonts: FontOption[] = [
         filename: "Cairo.ttf",
     },
     {
-        font_family: "Rubik",
-        select_name: "Rubik",
-        url: "/fonts/Rubik.ttf",
-        filename: "Rubik.ttf",
+        font_family: "Candara",
+        select_name: "Candara",
+        url: "/fonts/Candara.ttf",
+        filename: "Candara.ttf",
     },
     {
         font_family: "Lateef",
         select_name: "Lateef",
         url: "/fonts/Lateef.ttf",
         filename: "Lateef.ttf",
-    },
-    {
-        font_family: "Vazirmatn",
-        select_name: "VazirmatnRegular",
-        url: "/fonts/VazirmatnRegular.ttf",
-        filename: "VazirmatnRegular.ttf",
-    },
-    {
-        font_family: "Vazirmatn",
-        select_name: "VazirmatnBold",
-        url: "/fonts/VazirmatnBold.ttf",
-        filename: "VazirmatnBold.ttf",
-        font_weight: "bold",
     },
     {
         font_family: "MaruBuri",
@@ -188,6 +144,50 @@ export const available_fonts: FontOption[] = [
         select_name: "Noto Sans Traditional Chinese",
         url: "/fonts/NotoSansTC.ttf",
         filename: "NotoSansTC.ttf",
+    },
+    {
+        font_family: "OpenSans",
+        select_name: "OpenSans",
+        url: "/fonts/OpenSans.ttf",
+        filename: "OpenSans.ttf",
+    },
+    {
+        font_family: "Roboto",
+        select_name: "Roboto",
+        url: "/fonts/Roboto.ttf",
+        filename: "Roboto.ttf",
+    },
+    {
+        font_family: "Rubik",
+        select_name: "Rubik",
+        url: "/fonts/Rubik.ttf",
+        filename: "Rubik.ttf",
+    },
+    // Copyright issues? https://font.download/font/tahoma
+    {
+        font_family: "Tahoma",
+        select_name: "Tahoma",
+        url: "/fonts/Tahoma.ttf",
+        filename: "Tahoma.ttf",
+    },
+    {
+        font_family: "Tajawal",
+        select_name: "Tajawal",
+        url: "/fonts/Tajawal.ttf",
+        filename: "Tajawal.ttf",
+    },
+    {
+        font_family: "Vazirmatn",
+        select_name: "VazirmatnRegular",
+        url: "/fonts/VazirmatnRegular.ttf",
+        filename: "VazirmatnRegular.ttf",
+    },
+    {
+        font_family: "Vazirmatn",
+        select_name: "VazirmatnBold",
+        url: "/fonts/VazirmatnBold.ttf",
+        filename: "VazirmatnBold.ttf",
+        font_weight: "bold",
     },
 ]
 
