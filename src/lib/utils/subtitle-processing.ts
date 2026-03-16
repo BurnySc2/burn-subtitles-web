@@ -2,6 +2,8 @@ import { FFmpeg } from "@ffmpeg/ffmpeg"
 // @ts-expect-error
 import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg/dist/esm/types"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
+import { perma_state } from "$lib/persistent-storage.svelte"
+import { temp_state } from "$lib/temporary-storage.svelte"
 
 export type QualityMode = "high" | "preview"
 
@@ -246,14 +248,9 @@ export function format_time_remaining(processing_start_time: number | null, prog
     return `${minutes}:${seconds.toString().padStart(2, "0")} remaining`
 }
 
-export async function load_ffmpeg(
-    ffmpeg: FFmpeg | null,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-    set_progress: (progress: number) => void,
-): Promise<FFmpeg | null> {
-    if (ffmpeg) {
-        return ffmpeg
+export async function load_ffmpeg() {
+    if (temp_state.ffmpeg.ffmpeg) {
+        return
     }
 
     const new_ffmpeg = new FFmpeg()
@@ -264,39 +261,34 @@ export async function load_ffmpeg(
     })
 
     new_ffmpeg.on("progress", ({ progress: p }: ProgressEvent) => {
-        set_progress(Math.round(p * 100))
+        temp_state.ffmpeg.progress = Math.round(p * 100)
     })
 
     try {
-        set_message("Loading FFmpeg core")
+        temp_state.ffmpeg.message = "Loading FFmpeg core"
         await new_ffmpeg.load({
             coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
             wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
         })
 
-        set_message("FFmpeg loaded successfully")
+        temp_state.ffmpeg.message = "FFmpeg loaded successfully"
         return new_ffmpeg
     } catch (err) {
         console.error("Failed to load FFmpeg:", err)
-        set_error_message("Failed to initialize FFmpeg")
-        set_message("FFmpeg load failed")
+        temp_state.ffmpeg.error_message = "Failed to initialize FFmpeg"
+        temp_state.ffmpeg.message = "FFmpeg load failed"
         return null
     }
 }
 
-export async function load_selected_font(
-    ffmpeg: FFmpeg | null,
-    selected_font_index: number,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-): Promise<boolean> {
-    if (!ffmpeg) {
+export async function load_selected_font(): Promise<boolean> {
+    if (!temp_state.ffmpeg.ffmpeg) {
         return false
     }
 
-    const selected_font = available_fonts[selected_font_index]
+    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
     try {
-        set_message(`Loading font: ${selected_font.select_name}`)
+        temp_state.ffmpeg.message = `Loading font: ${selected_font.select_name}`
 
         // For local fonts in /fonts/ folder, we need to fetch them as resources
         const font_response = await fetch(selected_font.url)
@@ -304,85 +296,57 @@ export async function load_selected_font(
             throw new Error(`Failed to fetch font: ${font_response.statusText}`)
         }
         const font_buffer = await font_response.arrayBuffer()
-        await ffmpeg.writeFile(`/tmp/${selected_font.filename}`, new Uint8Array(font_buffer))
+        await temp_state.ffmpeg.ffmpeg.writeFile(`/tmp/${selected_font.filename}`, new Uint8Array(font_buffer))
         console.log(`Font ${selected_font.select_name} loaded to /tmp`)
         return true
     } catch (err) {
         console.error("Failed to load font:", err)
-        set_error_message(`Failed to load font ${selected_font.select_name}: ${err}`)
-        set_message("Font load failed")
+        temp_state.ffmpeg.error_message = `Failed to load font ${selected_font.select_name}: ${err}`
+        temp_state.ffmpeg.message = "Font load failed"
         return false
     }
 }
 
 // Helper function to clean up FFmpeg files
-async function cleanup_ffmpeg_files(
-    ffmpeg: FFmpeg,
-    video_name: string,
-    srt_name: string,
-    font_filename: string,
-    output_name: string,
-): Promise<void> {
-    await ffmpeg.deleteFile(video_name).catch(() => {})
-    await ffmpeg.deleteFile(srt_name).catch(() => {})
-    await ffmpeg.deleteFile(`/tmp/${font_filename}`).catch(() => {})
-    await ffmpeg.deleteFile(output_name).catch(() => {})
+async function cleanup_ffmpeg_files() {
+    if (!temp_state.ffmpeg.ffmpeg) {
+        return
+    }
+    if (temp_state.ffmpeg.video_file) {
+        await temp_state.ffmpeg.ffmpeg.deleteFile(temp_state.ffmpeg.video_file.name).catch(() => {})
+    }
+    if (temp_state.ffmpeg.srt_file) {
+        await temp_state.ffmpeg.ffmpeg.deleteFile(temp_state.ffmpeg.srt_file.name).catch(() => {})
+    }
+    if (temp_state.ffmpeg.font_file) {
+        await temp_state.ffmpeg.ffmpeg.deleteFile(`/tmp/${temp_state.ffmpeg.font_file}`).catch(() => {})
+    }
+    if (temp_state.ffmpeg.output_blob) {
+        await temp_state.ffmpeg.ffmpeg.deleteFile(temp_state.ffmpeg.output_blob.name).catch(() => {})
+    }
 }
 
 // Helper function to write video and subtitle files to FFmpeg
-async function write_input_files(
-    ffmpeg: FFmpeg,
-    video_file: File,
-    srt_file: File,
-    srt_name: string = "subtitles.srt",
-): Promise<void> {
-    await ffmpeg.writeFile(`input.${video_file.name.split(".").pop() || "mp4"}`, await fetchFile(video_file))
-    const srt_bytes = new TextEncoder().encode(await srt_file.text())
-    await ffmpeg.writeFile(srt_name, srt_bytes)
-}
-
-// Helper function to set up preview state
-function setup_preview_state(
-    set_state: (new_state: Partial<ProcessingState>) => void,
-    message: string = "Rendering frame preview...",
-): void {
-    set_state({
-        is_rendering_preview: true,
-        progress: 0,
-        error_message: null,
-        message,
-    })
-}
-
-// Helper function to set up processing state
-function setup_processing_state(
-    set_state: (new_state: Partial<ProcessingState>) => void,
-    message: string = "Processing video...",
-): void {
-    set_state({
-        is_processing: true,
-        processing_start_time: Date.now(),
-        progress: 0,
-        error_message: null,
-        message,
-        output_blob: null,
-    })
+async function write_input_files() {
+    if (!temp_state.ffmpeg.ffmpeg || !temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
+        return
+    }
+    await temp_state.ffmpeg.ffmpeg.writeFile(
+        `input.${temp_state.ffmpeg.video_file.name.split(".").pop() || "mp4"}`,
+        await fetchFile(temp_state.ffmpeg.video_file),
+    )
+    const srt_bytes = new TextEncoder().encode(await temp_state.ffmpeg.srt_file.text())
+    await temp_state.ffmpeg.ffmpeg.writeFile("subtitles.srt", srt_bytes)
 }
 
 // Helper function to initialize FFmpeg and load font
-async function initialize_ffmpeg_and_load_font(
-    ffmpeg: FFmpeg | null,
-    selected_font_index: number,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-    set_progress: (progress: number) => void,
-): Promise<FFmpeg | null> {
-    const ffmpeg_instance = await load_ffmpeg(ffmpeg, set_message, set_error_message, set_progress)
+async function initialize_ffmpeg_and_load_font(): Promise<FFmpeg | null> {
+    const ffmpeg_instance = await load_ffmpeg()
     if (!ffmpeg_instance) {
         return null
     }
 
-    const font_loaded = await load_selected_font(ffmpeg_instance, selected_font_index, set_message, set_error_message)
+    const font_loaded = await load_selected_font()
     if (!font_loaded) {
         return null
     }
@@ -390,73 +354,57 @@ async function initialize_ffmpeg_and_load_font(
     return ffmpeg_instance
 }
 
-export function build_force_style(
-    font_index: number,
-    font_size: number,
-    is_bold: boolean,
-    position: "top" | "bottom" | "center",
-): string {
+export function build_force_style(): string {
+    const is_bold = available_fonts[perma_state.subtitle_settings.font.index].font_weight === "bold"
     const bold_style = is_bold ? ",Bold=-1" : ""
     const alignment_map = {
         top: "8",
         bottom: "2",
         center: "5",
     }
-    const alignment = alignment_map[position]
-    const font_name = available_fonts[font_index].font_family
-    return `Fontname=${font_name},FontSize=${font_size}${bold_style},Alignment=${alignment}`
+    const alignment = alignment_map[perma_state.subtitle_settings.position.vertical_anchor]
+    const font_name = available_fonts[perma_state.subtitle_settings.font.index].font_family
+    return `Fontname=${font_name},FontSize=${perma_state.subtitle_settings.font.size}${bold_style},Alignment=${alignment}`
 }
 
-export async function render_frame_preview(
-    state: ProcessingState,
-    set_state: (new_state: Partial<ProcessingState>) => void,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-): Promise<void> {
-    if (!state.video_file || !state.srt_file) {
-        set_error_message("Please upload both video and SRT files")
+export async function render_frame_preview(): Promise<void> {
+    if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
+        temp_state.ffmpeg.error_message = "Please upload both video and SRT files"
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font(
-        state.ffmpeg,
-        state.selected_font_index,
-        set_message,
-        set_error_message,
-        (progress) => set_state({ progress }),
-    )
-    if (!ffmpeg) {
+    await initialize_ffmpeg_and_load_font()
+    if (!temp_state.ffmpeg.ffmpeg) {
         return
     }
 
-    setup_preview_state(set_state, "Rendering frame preview...")
+    temp_state.ffmpeg.message = "Rendering frame preview..."
 
-    if (state.preview_url) {
-        URL.revokeObjectURL(state.preview_url)
+    if (temp_state.ffmpeg.preview_url) {
+        URL.revokeObjectURL(temp_state.ffmpeg.preview_url)
     }
 
-    const timestamp_seconds = parse_timestamp(state.preview_timestamp)
+    const timestamp_seconds = parse_timestamp(temp_state.ffmpeg.preview_timestamp)
     if (timestamp_seconds < 0) {
-        set_error_message("Timestamp must be positive")
-        set_state({ is_rendering_preview: false })
+        temp_state.ffmpeg.error_message = "Timestamp must be positive"
         return
     }
 
-    const video_ext = state.video_file.name.split(".").pop() || "mp4"
+    const video_ext = temp_state.ffmpeg.video_file.name.split(".").pop() || "mp4"
     const video_name = `input.${video_ext}`
     const srt_name = "subtitles.srt"
     const output_name = "preview.png"
 
     try {
         // Write input files
-        await write_input_files(ffmpeg, state.video_file, state.srt_file, srt_name)
+        await write_input_files()
 
         // Build force_style for preview
-        const force_style = build_force_style(state.selected_font_index, state.font_size, state.is_bold, state.position)
+        const force_style = build_force_style()
 
         // Execute FFmpeg command for frame extraction with subtitles
         const vf_filter = `subtitles=${srt_name}:fontsdir=/tmp:force_style='${force_style}'`
-        await ffmpeg.exec([
+        await temp_state.ffmpeg.ffmpeg.exec([
             "-i",
             video_name,
             "-ss",
@@ -474,7 +422,7 @@ export async function render_frame_preview(
         ])
 
         // Read output
-        const frame_data = await ffmpeg.readFile(output_name)
+        const frame_data = await temp_state.ffmpeg.ffmpeg.readFile(output_name)
         // @ts-expect-error
         const frame_blob = new Blob([(frame_data as Uint8Array).buffer], {
             type: "image/png",
@@ -482,89 +430,60 @@ export async function render_frame_preview(
         const preview_url = URL.createObjectURL(frame_blob)
 
         // Cleanup
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            srt_name,
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
+        await cleanup_ffmpeg_files()
 
-        set_state({
-            message: `Frame preview rendered at ${state.preview_timestamp}`,
-            is_rendering_preview: false,
-            progress: 100,
-            preview_url,
-            ffmpeg,
-        })
+        temp_state.ffmpeg.message = `Frame preview rendered at ${temp_state.ffmpeg.preview_timestamp}`
+
+        temp_state.ffmpeg.is_rendering_preview = false
+        temp_state.ffmpeg.progress = 100
     } catch (err) {
         console.error("Frame preview failed:", err)
-        set_error_message(`Frame preview failed: ${err}`)
-        set_message("Frame preview failed")
+        temp_state.ffmpeg.error_message = `Frame preview failed: ${err}`
+        temp_state.ffmpeg.message = "Frame preview failed"
 
         // Cleanup on error
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            srt_name,
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
+        await cleanup_ffmpeg_files()
 
-        set_state({
-            is_rendering_preview: false,
-            progress: 0,
-            ffmpeg,
-        })
+        temp_state.ffmpeg.is_rendering_preview = false
+        temp_state.ffmpeg.progress = 0
     }
 }
 
-export async function process_subtitles(
-    state: ProcessingState,
-    set_state: (new_state: Partial<ProcessingState>) => void,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-): Promise<void> {
-    if (!state.video_file || !state.srt_file) {
-        set_error_message("Please upload both video and SRT files")
+export async function process_subtitles() {
+    if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
+        temp_state.ffmpeg.error_message = "Please upload both video and SRT files"
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font(
-        state.ffmpeg,
-        state.selected_font_index,
-        set_message,
-        set_error_message,
-        (progress) => set_state({ progress }),
-    )
+    const ffmpeg = await initialize_ffmpeg_and_load_font()
     if (!ffmpeg) {
         return
     }
 
-    setup_processing_state(set_state, "Processing video...")
+    temp_state.ffmpeg.message = "Processing video..."
 
-    if (state.output_url) {
-        URL.revokeObjectURL(state.output_url)
+    if (temp_state.ffmpeg.output_url) {
+        URL.revokeObjectURL(temp_state.ffmpeg.output_url)
     }
 
-    const video_ext = state.video_file.name.split(".").pop() || "mp4"
+    const video_ext = temp_state.ffmpeg.video_file.name.split(".").pop() || "mp4"
     const video_name = `input.${video_ext}`
     const srt_name = "subtitles.srt"
     const output_name = "output.mp4"
 
     try {
         // Write input files
-        set_message("Loading video file")
-        await write_input_files(ffmpeg, state.video_file, state.srt_file, srt_name)
+        temp_state.ffmpeg.message = "Loading video file"
+        await write_input_files()
         console.log(`Wrote video file: ${video_name}`)
         console.log("Wrote SRT subtitles file")
 
         // Build force_style
-        const force_style = build_force_style(state.selected_font_index, state.font_size, state.is_bold, state.position)
+        const force_style = build_force_style()
 
         // Execute FFmpeg command
-        set_message("Burning subtitles to video")
-        const config = get_config(state.selected_quality_mode)
+        temp_state.ffmpeg.message = "Burning subtitles to video"
+        const config = get_config(temp_state.ffmpeg.selected_quality_mode)
         const vf_filter = `subtitles=${srt_name}:fontsdir=/tmp:force_style='${force_style}'`
         await ffmpeg.exec([
             "-i",
@@ -588,7 +507,7 @@ export async function process_subtitles(
         ])
 
         // Read output
-        set_message("Generating output")
+        temp_state.ffmpeg.message = "Generating output"
         const output_data = await ffmpeg.readFile(output_name)
         // @ts-expect-error
         const output_blob = new Blob([(output_data as Uint8Array).buffer], {
@@ -597,43 +516,20 @@ export async function process_subtitles(
         const output_url = URL.createObjectURL(output_blob)
 
         // Cleanup
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            srt_name,
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
+        await cleanup_ffmpeg_files()
 
-        set_state({
-            message: "Processing complete!",
-            is_processing: false,
-            progress: 100,
-            output_blob,
-            output_url,
-            ffmpeg,
-        })
+        temp_state.ffmpeg.message = "Processing complete!"
+        temp_state.ffmpeg.is_processing = false
+        temp_state.ffmpeg.progress = 100
     } catch (err) {
         console.error("Processing failed:", err)
-        set_error_message(`Processing failed: ${err}`)
-        set_message("Processing failed")
+        temp_state.ffmpeg.error_message = `Processing failed: ${err}`
+        temp_state.ffmpeg.message = "Processing failed"
 
         // Cleanup on error
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            srt_name,
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
+        await cleanup_ffmpeg_files()
 
-        set_state({
-            is_processing: false,
-            processing_start_time: null,
-            estimated_total_duration: 0,
-            progress: 0,
-            ffmpeg,
-        })
+        // TODO Refactor tempstate on error
     }
 }
 
@@ -711,12 +607,14 @@ function escape_ass_text(text: string): string[] {
 }
 
 // Generate ASS file from SRT content and styling parameters
-export function generate_ass_file(state: ASSProcessingState, srt_content?: string): string {
+export function generate_ass_file(srt_content?: string): string {
     const alignment_map = {
         top: "8",
         bottom: "2",
         center: "5",
-    }
+    } as const
+
+    const state = perma_state.subtitle_settings
 
     const ass_header = `[Script Info]
 Title: Generated Subtitles
@@ -727,7 +625,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${available_fonts[state.selected_font_index].font_family},${state.font_size},&H${hex_to_ass(state.text_color)},&H000000,&H${hex_to_ass(state.stroke_color)},&H000000,0,0,0,0,100,100,0,0,1,${state.stroke_size},${state.shadow_blur},${alignment_map[state.position]},${state.subtitle_horizontal_margin},${state.subtitle_horizontal_margin},${state.subtitle_position_y},1
+Style: Default,${available_fonts[state.font.index].font_family},${state.font.size},&H${hex_to_ass(state.text.color)},&H000000,&H${hex_to_ass(state.text.stroke)},&H000000,0,0,0,0,100,100,0,0,1,${state.text.outline_size},${state.shadow.size},${alignment_map[state.position.vertical_anchor]},${state.position.horizontal_margin},${state.position.horizontal_margin},${state.position.vertical},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -752,7 +650,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             // Add RTL support using Unicode characters
             const lines = escape_ass_text(d.text)
-            const rtl_corrected_lines = lines.map((line) => (state.RTL ? `\u202B${line}\u202C` : line))
+            const rtl_corrected_lines = lines.map((line) => (state.font.right_to_left ? `\u202B${line}\u202C` : line))
             const joined = rtl_corrected_lines.join("\\N")
 
             return `Dialogue: 0,${format_time(d.start)},${format_time(d.end)},Default,,0,0,0,,${joined}`
@@ -763,51 +661,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 }
 
 // Render ASS frame preview
-export async function render_ass_frame_preview(
-    state: ASSProcessingState,
-    set_state: (new_state: Partial<ASSProcessingState>) => void,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-): Promise<void> {
-    if (!state.video_file || !state.srt_file) {
-        set_error_message("Please upload both video and SRT files")
+export async function render_ass_frame_preview() {
+    if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
+        temp_state.ffmpeg.error_message = "Please upload both video and SRT files"
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font(
-        state.ffmpeg,
-        state.selected_font_index,
-        set_message,
-        set_error_message,
-        (progress) => set_state({ progress }),
-    )
+    const ffmpeg = await initialize_ffmpeg_and_load_font()
     if (!ffmpeg) {
         return
     }
 
-    setup_preview_state(set_state, "Rendering ASS frame preview...")
+    temp_state.ffmpeg.message = "Rendering ASS frame preview..."
 
-    if (state.preview_url) {
-        URL.revokeObjectURL(state.preview_url)
+    if (temp_state.ffmpeg.preview_url) {
+        URL.revokeObjectURL(temp_state.ffmpeg.preview_url)
     }
 
-    const timestamp_seconds = parse_timestamp(state.preview_timestamp)
+    const timestamp_seconds = parse_timestamp(temp_state.ffmpeg.preview_timestamp)
     if (timestamp_seconds < 0) {
-        set_error_message("Timestamp must be positive")
-        set_state({ is_rendering_preview: false })
+        temp_state.ffmpeg.error_message = "Timestamp must be positive"
+        temp_state.ffmpeg.is_rendering_preview = false
         return
     }
 
-    const video_ext = state.video_file.name.split(".").pop() || "mp4"
+    const video_ext = temp_state.ffmpeg.video_file.name.split(".").pop() || "mp4"
     const video_name = `input.${video_ext}`
-    const srt_content = await state.srt_file.text()
-    const ass_content = generate_ass_file(state, srt_content)
+    const srt_content = await temp_state.ffmpeg.srt_file.text()
+    const ass_content = generate_ass_file(srt_content)
     const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
     const output_name = "preview.png"
 
     try {
         // Write input files
-        await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+        await ffmpeg.writeFile(video_name, await fetchFile(temp_state.ffmpeg.video_file))
         const ass_bytes = new TextEncoder().encode(ass_content)
         await ffmpeg.writeFile("subtitles.ass", ass_bytes)
 
@@ -841,86 +728,60 @@ export async function render_ass_frame_preview(
         const preview_url = URL.createObjectURL(frame_blob)
 
         // Cleanup
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            "subtitles.ass",
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
+        await cleanup_ffmpeg_files()
 
-        set_state({
-            message: `ASS frame preview rendered at ${state.preview_timestamp}`,
-            is_rendering_preview: false,
-            progress: 100,
-            preview_url,
-            ffmpeg,
-        })
+        temp_state.ffmpeg.message = `ASS frame preview rendered at ${temp_state.ffmpeg.preview_timestamp}`
+        temp_state.ffmpeg.is_rendering_preview = false
+        temp_state.ffmpeg.progress = 100
     } catch (err) {
         console.error("ASS frame preview failed:", err)
-        set_error_message(`ASS frame preview failed: ${err}`)
-        set_message("ASS frame preview failed")
+        temp_state.ffmpeg.error_message = `ASS frame preview failed: ${err}`
+        temp_state.ffmpeg.message = "ASS frame preview failed"
 
         // Cleanup on error
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            "subtitles.ass",
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
-
-        set_state({
-            is_rendering_preview: false,
-            progress: 0,
-            ffmpeg,
-        })
+        // TODO: Remove ffmpeg files, reset temp state partially
     }
 }
 
 // Process video with ASS subtitles
-export async function process_ass_subtitles(
-    state: ASSProcessingState,
-    set_state: (new_state: Partial<ASSProcessingState>) => void,
-    set_message: (message: string) => void,
-    set_error_message: (error: string) => void,
-): Promise<void> {
-    if (!state.video_file || !state.srt_file) {
-        set_error_message("Please upload both video and SRT files")
+export async function process_ass_subtitles(): Promise<void> {
+    temp_state.ffmpeg.processing_start_time = Date.now()
+    if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
+        temp_state.ffmpeg.error_message = "Please upload both video and SRT files"
         return
     }
 
-    const ffmpeg = await initialize_ffmpeg_and_load_font(
-        state.ffmpeg,
-        state.selected_font_index,
-        set_message,
-        set_error_message,
-        (progress) => set_state({ progress }),
-    )
+    const ffmpeg = await initialize_ffmpeg_and_load_font()
     if (!ffmpeg) {
         return
     }
 
-    setup_processing_state(set_state, "Processing video with ASS subtitles...")
+    // Set launch variables for ffmpeg
+    temp_state.ffmpeg.message = "Processing video..."
+    temp_state.ffmpeg.is_processing = true
+    temp_state.ffmpeg.processing_start_time = Date.now()
+    temp_state.ffmpeg.progress = 0
+    temp_state.ffmpeg.error_message = null
+    temp_state.ffmpeg.output_blob = null
 
-    if (state.output_url) {
-        URL.revokeObjectURL(state.output_url)
+    if (temp_state.ffmpeg.output_url) {
+        URL.revokeObjectURL(temp_state.ffmpeg.output_url)
     }
 
-    const video_ext = state.video_file.name.split(".").pop() || "mp4"
+    const video_ext = temp_state.ffmpeg.video_file.name.split(".").pop() || "mp4"
     const video_name = `input.${video_ext}`
-    const srt_content = await state.srt_file.text()
-    const ass_content = generate_ass_file(state, srt_content)
+    const srt_content = await temp_state.ffmpeg.srt_file.text()
+    const ass_content = generate_ass_file(srt_content)
     const _ass_file = new File([ass_content], "subtitles.ass", { type: "text/plain" })
     const output_name = "output.mp4"
 
     try {
         // Write input files
-        set_message("Loading video file")
-        await ffmpeg.writeFile(video_name, await fetchFile(state.video_file))
+        temp_state.ffmpeg.message = "Loading video file"
+        await ffmpeg.writeFile(video_name, await fetchFile(temp_state.ffmpeg.video_file))
         console.log(`Wrote video file: ${video_name}`)
 
-        set_message("Generating ASS subtitle file")
+        temp_state.ffmpeg.message = "Generating ASS subtitle file"
         const ass_bytes = new TextEncoder().encode(ass_content)
         await ffmpeg.writeFile("subtitles.ass", ass_bytes)
         console.log("Wrote ASS subtitles file")
@@ -929,8 +790,8 @@ export async function process_ass_subtitles(
         const ass_filter = `ass='subtitles.ass':fontsdir=/tmp`
 
         // Execute FFmpeg command
-        set_message("Burning ASS subtitles to video")
-        const config = get_config(state.selected_quality_mode)
+        temp_state.ffmpeg.message = "Burning ASS subtitles to video"
+        const config = get_config(temp_state.ffmpeg.selected_quality_mode)
         await ffmpeg.exec([
             "-i",
             video_name,
@@ -953,7 +814,7 @@ export async function process_ass_subtitles(
         ])
 
         // Read output
-        set_message("Generating output")
+        temp_state.ffmpeg.message = "Generating output"
         const output_data = await ffmpeg.readFile(output_name)
         // @ts-expect-error
         const output_blob = new Blob([(output_data as Uint8Array).buffer], {
@@ -962,51 +823,23 @@ export async function process_ass_subtitles(
         const output_url = URL.createObjectURL(output_blob)
 
         // Cleanup
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            "subtitles.ass",
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
-
-        set_state({
-            message: "ASS subtitle processing complete!",
-            is_processing: false,
-            progress: 100,
-            output_blob,
-            output_url,
-            ffmpeg,
-        })
+        // TODO:
+        await cleanup_ffmpeg_files()
     } catch (err) {
         console.error("ASS processing failed:", err)
-        set_error_message(`ASS processing failed: ${err}`)
-        set_message("ASS processing failed")
+        temp_state.ffmpeg.error_message = `ASS processing failed: ${err}`
+        temp_state.ffmpeg.message = "ASS processing failed"
 
         // Cleanup on error
-        await cleanup_ffmpeg_files(
-            ffmpeg,
-            video_name,
-            "subtitles.ass",
-            available_fonts[state.selected_font_index].filename,
-            output_name,
-        )
-
-        set_state({
-            is_processing: false,
-            processing_start_time: null,
-            estimated_total_duration: 0,
-            progress: 0,
-            ffmpeg,
-        })
+        await cleanup_ffmpeg_files()
     }
 }
 
-export function download_video(output_blob: Blob | null, output_url: string | null, video_file: File | null): void {
-    if (output_blob && output_url) {
+export function download_video(): void {
+    if (temp_state.ffmpeg.output_blob && temp_state.ffmpeg.output_url) {
         const a = document.createElement("a")
-        a.href = output_url
-        a.download = `subtitled-${video_file?.name.replace(/\.[^/.]+$/, "") || "video"}.mp4`
+        a.href = temp_state.ffmpeg.output_url
+        a.download = `subtitled-${temp_state.ffmpeg.video_file?.name.replace(/\.[^/.]+$/, "") || "video"}.mp4`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
