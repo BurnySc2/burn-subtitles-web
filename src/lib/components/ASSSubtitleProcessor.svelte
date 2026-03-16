@@ -1,7 +1,7 @@
 <script lang="ts">
 import { temp_state } from "$lib/temporary-storage.svelte"
 // See http://www.tcax.org/docs/ass-specs.htm
-import { format_time_remaining, process_ass_subtitles } from "$lib/utils/subtitle-processing"
+import { format_time_remaining, render_video_with_subtitles } from "$lib/utils/subtitle-processing"
 import SubtitleFramePreview from "./ui/SubtitleFramePreview.svelte"
 import SubtitleOutput from "./ui/SubtitleOutput.svelte"
 import SubtitleSettings from "./ui/SubtitleSettings.svelte"
@@ -96,7 +96,7 @@ import SubtitleUpload from "./ui/SubtitleUpload.svelte"
 
             <!-- Process Button -->
             <button
-                onclick={process_ass_subtitles}
+                onclick={render_video_with_subtitles}
                 disabled={temp_state.ffmpeg.is_processing ||
 				!temp_state.ffmpeg.video_file ||
 				!temp_state.ffmpeg.srt_file}

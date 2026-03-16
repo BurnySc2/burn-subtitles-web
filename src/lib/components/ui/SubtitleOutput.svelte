@@ -5,7 +5,7 @@ import {
     download_video,
     format_time_remaining,
     generate_ass_file,
-    process_ass_subtitles,
+    render_video_with_subtitles,
 } from "$lib/utils/subtitle-processing"
 
 async function download_ass_file_wrapper() {
