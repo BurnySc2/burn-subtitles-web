@@ -7,7 +7,7 @@ import {
     download_video,
     format_time_remaining,
     generate_ass_file,
-    process_ass_subtitles,
+    render_video_with_subtitles,
     render_ass_frame_preview,
 } from "$lib/utils/subtitle-processing"
 </script>

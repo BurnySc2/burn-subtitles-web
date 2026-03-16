@@ -742,7 +742,7 @@ export async function render_ass_frame_preview() {
 }
 
 // Process video with ASS subtitles
-export async function process_ass_subtitles(): Promise<void> {
+export async function render_video_with_subtitles(): Promise<void> {
     temp_state.ffmpeg.processing_start_time = Date.now()
     if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
         temp_state.ffmpeg.error_message = "Please upload both video and SRT files"
