@@ -17,7 +17,9 @@ const video_url = "https://raw.githubusercontent.com/ffmpegwasm/testdata/master/
 const font_url = "https://fonts.gstatic.com/s/geostar/v27/sykz-yx4n701VLOftSq9-trEvlQ.ttf"
 
 async function load_ffmpeg() {
-    if (ffmpeg) return
+    if (ffmpeg) {
+        return
+    }
     ffmpeg = new FFmpeg()
 
     ffmpeg.on("log", ({ message: msg }: LogEvent) => {
@@ -53,7 +55,9 @@ async function load_ffmpeg() {
 async function convert_video() {
     if (!ffmpeg) {
         await load_ffmpeg()
-        if (!ffmpeg) return
+        if (!ffmpeg) {
+            return
+        }
     }
 
     is_processing = true

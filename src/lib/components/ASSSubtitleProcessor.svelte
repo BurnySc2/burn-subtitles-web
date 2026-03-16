@@ -1,11 +1,24 @@
 <script lang="ts">
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { format_time_remaining } from "$lib/utils/format_time"
 // See http://www.tcax.org/docs/ass-specs.htm
-import { format_time_remaining, render_video_with_subtitles } from "$lib/utils/subtitle-processing"
+import { render_video_with_subtitles } from "$lib/utils/video-processing"
 import SubtitleFramePreview from "./ui/SubtitleFramePreview.svelte"
 import SubtitleOutput from "./ui/SubtitleOutput.svelte"
 import SubtitleSettings from "./ui/SubtitleSettings.svelte"
 import SubtitleUpload from "./ui/SubtitleUpload.svelte"
+
+export function reset_output(): void {
+    temp_state.ffmpeg.output_blob = null
+    temp_state.ffmpeg.output_url = null
+    temp_state.ffmpeg.preview_url = null
+    temp_state.ffmpeg.error_message = null
+    temp_state.ffmpeg.is_processing = false
+    temp_state.ffmpeg.message = "Ready to process"
+    temp_state.ffmpeg.progress = 0
+    temp_state.ffmpeg.video_file = null
+    temp_state.ffmpeg.srt_file = null
+}
 </script>
 
 <div class="flex flex-col space-y-2">
