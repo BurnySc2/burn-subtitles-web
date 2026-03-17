@@ -6,10 +6,20 @@ import { available_fonts } from "./fonts"
 import { parse_timestamp } from "./format_time"
 import { generate_ass_file, load_selected_font } from "./subtitle-processing"
 
+type FfmpegPresets =
+    | "ultrafast"
+    | "superfast"
+    | "veryfast"
+    | "faster"
+    | "fast"
+    | "medium"
+    | "slow"
+    | "slower"
+    | "veryslow"
 export type QualityMode = "high" | "preview"
 
 export type FfmpegConfig = {
-    preset: string
+    preset: FfmpegPresets
     crf: string
     audio_bitrate: string
 }
