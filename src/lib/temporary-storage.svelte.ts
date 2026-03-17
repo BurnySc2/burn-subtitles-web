@@ -16,7 +16,6 @@ export type TempState = {
         estimated_total_duration: number
         selected_quality_mode: "preview"
         preview_timestamp: "00:00:05"
-        font_file: string | null
         video_file: File | null
         srt_file: File | null
     }
@@ -45,7 +44,6 @@ export const temp_state: TempState = $state({
         estimated_total_duration: 0,
         selected_quality_mode: "preview",
         preview_timestamp: "00:00:05",
-        font_file: null,
         video_file: null,
         srt_file: null,
     },
