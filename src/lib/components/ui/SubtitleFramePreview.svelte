@@ -10,10 +10,10 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
 </script>
 
 <!-- Font Preview -->
-<div class="rounded-lg border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-6">
-    <h3 class="mb-4 text-lg font-bold text-gray-800">Font Preview</h3>
-    <div class="rounded-lg bg-white p-2 shadow-inner">
-        <div class="mx-auto flex w-full items-center justify-center space-x-4">
+<div class="rounded-lg border border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 p-4">
+    <h3 class="mb-2 text-lg font-bold text-gray-800">Font Preview</h3>
+    <div class="rounded-lg bg-white p-1 shadow-inner">
+        <div class="mx-auto flex w-full items-center justify-center">
             <FontPreview
                 font_name={available_fonts[perma_state.subtitle_settings.font.index]
 						.font_family}
