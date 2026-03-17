@@ -93,7 +93,7 @@ let { children } = $props()
     </style>
 </svelte:head>
 
-<main class="container  flex min-w-screen min-h-screen flex-col mx-auto">
+<main class="flex flex-col mx-auto">
     <Navigation />
     <!-- Main Content -->
     {@render children?.()}
