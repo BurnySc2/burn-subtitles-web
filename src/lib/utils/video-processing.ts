@@ -39,7 +39,6 @@ export const preview_config: FfmpegConfig = {
 export const get_config = (mode: QualityMode = "preview"): FfmpegConfig => {
     return mode === "high" ? high_quality_config : preview_config
 }
-const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
 
 export async function load_ffmpeg() {
     // Already loaded?
@@ -56,12 +55,13 @@ export async function load_ffmpeg() {
 
     // @ts-expect-error
     new_ffmpeg.on("progress", ({ progress, time }: ProgressEvent) => {
-        console.log([progress, time])
         temp_state.ffmpeg.progress = Math.round(progress * 10000) / 100
     })
 
     try {
         temp_state.ffmpeg.message = "Loading FFmpeg core"
+        const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
+        // const base_url = page.url.origin
         await new_ffmpeg.load({
             coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
             wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
