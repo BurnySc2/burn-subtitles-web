@@ -122,9 +122,3 @@ export function reset_output(): void {
         <SubtitleOutput />
     </div>
 </div>
-
-<style>
-.processor-container {
-    max-width: none;
-}
-</style>
