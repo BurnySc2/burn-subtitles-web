@@ -118,7 +118,7 @@ export async function render_prepare(): Promise<boolean> {
     return true
 }
 
-// Render ASS frame preview
+// Render frame preview
 export async function render_ass_frame_preview() {
     const is_prepared = await render_prepare()
     if (!is_prepared) {
@@ -174,13 +174,13 @@ export async function render_ass_frame_preview() {
         // Cleanup
         await cleanup_ffmpeg_files(false)
 
-        temp_state.ffmpeg.message = `ASS frame preview rendered at ${temp_state.ffmpeg.preview_timestamp}`
+        temp_state.ffmpeg.message = `Frame preview rendered at ${temp_state.ffmpeg.preview_timestamp}`
         temp_state.ffmpeg.is_rendering_preview = false
         temp_state.ffmpeg.progress = 100
     } catch (err) {
-        console.error("ASS frame preview failed:", err)
-        temp_state.ffmpeg.error_message = `ASS frame preview failed: ${err}`
-        temp_state.ffmpeg.message = "ASS frame preview failed"
+        console.error("Frame preview failed:", err)
+        temp_state.ffmpeg.error_message = `Frame preview failed: ${err}`
+        temp_state.ffmpeg.message = "Frame preview failed"
 
         // Cleanup on error
         await cleanup_ffmpeg_files()

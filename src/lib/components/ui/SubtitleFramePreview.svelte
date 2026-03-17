@@ -69,7 +69,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                 <div class="mx-auto max-w-4xl rounded-lg p-1">
                     <img
                         src={temp_state.ffmpeg.preview_url}
-                        alt="ASS frame preview with subtitles"
+                        alt="Frame preview with subtitles"
                         class="w-full rounded-lg"
                         style="max-height: 500px;"
                     >
