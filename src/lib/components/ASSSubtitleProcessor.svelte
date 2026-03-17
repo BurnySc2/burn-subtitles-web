@@ -123,7 +123,7 @@ export function reset_output(): void {
                         Processing with ASS Subtitles...
                     </span>
                 {:else}
-                    Burn ASS Subtitles to Video
+                    Render Subtitles into Video
                 {/if}
             </button>
         </div>
