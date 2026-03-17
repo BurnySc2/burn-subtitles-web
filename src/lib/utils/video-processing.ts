@@ -54,7 +54,7 @@ export async function load_ffmpeg() {
     })
 
     // @ts-expect-error
-    new_ffmpeg.on("progress", ({ progress, time }: ProgressEvent) => {
+    new_ffmpeg.on("progress", ({ progress }: ProgressEvent) => {
         temp_state.ffmpeg.progress = Math.round(progress * 10000) / 100
     })
 
