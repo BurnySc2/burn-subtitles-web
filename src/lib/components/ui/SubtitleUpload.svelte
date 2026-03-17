@@ -26,14 +26,14 @@ function handle_srt_upload(event: Event) {
 </script>
 
 <!-- Upload Section -->
-<div class="rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 p-3">
+<div class="rounded-lg border p-3">
     <h2 class="mb-3 text-lg font-bold ">Upload Files</h2>
     <div class="flex flex-wrap gap-3">
         <!-- Video Upload -->
         <div class="flex-1 min-w-[200px]">
             <label
                 for="video-upload"
-                class="mb-1 block font-semibold "
+                class="mb-1 block font-semibold"
                 >Video</label
             >
             <div class="relative">
@@ -42,7 +42,7 @@ function handle_srt_upload(event: Event) {
                     type="file"
                     accept="video/*"
                     onchange={handle_video_upload}
-                    class="w-full rounded-lg border-2 border-dashed border-gray-300 px-2 py-2 transition-all duration-200 file:mr-1 file:rounded file:border-0 file:bg-green-50 file:px-2 file:py-0.5 file:text-xs file:font-semibold file:text-green-800 hover:border-green-400 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    class="w-full rounded-lg px-2 py-2 file:rounded file:text-xs"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
             </div>
@@ -61,7 +61,7 @@ function handle_srt_upload(event: Event) {
                     type="file"
                     accept=".srt"
                     onchange={handle_srt_upload}
-                    class="w-full rounded-lg border-2 border-dashed border-gray-300 px-2 py-2 transition-all duration-200 file:mr-1 file:rounded file:border-0 file:bg-green-50 file:px-2 file:py-0.5 file:text-xs file:font-semibold file:text-green-800 hover:border-green-400 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                    class="w-full rounded-lg px-2 py-2 file:rounded file:text-xs"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
             </div>
