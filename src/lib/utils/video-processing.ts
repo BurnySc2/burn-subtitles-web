@@ -1,6 +1,8 @@
 import { FFmpeg, type LogEvent } from "@ffmpeg/ffmpeg"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
+import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { available_fonts } from "./fonts"
 import { parse_timestamp } from "./format_time"
 import { generate_ass_file, load_selected_font } from "./subtitle-processing"
 
@@ -81,7 +83,10 @@ export async function render_prepare(): Promise<boolean> {
     await cleanup_ffmpeg_files()
 
     // Load font
-    await load_selected_font()
+    const font_success = await load_selected_font()
+    if (!font_success) {
+        return false
+    }
 
     // Write input files
     // Write video file
@@ -127,11 +132,10 @@ export async function render_ass_frame_preview() {
     }
 
     const output_name = "preview.png"
+    // Build ASS filter
+    const ass_filter = `ass='subtitles.ass':fontsdir=/tmp`
 
     try {
-        // Build ASS filter
-        const ass_filter = `ass='subtitles.ass':fontsdir=/tmp`
-
         // Execute FFmpeg command for frame extraction with ASS subtitles
         await temp_state.ffmpeg.ffmpeg.exec([
             "-i",
@@ -249,15 +253,18 @@ async function cleanup_ffmpeg_files(delete_output: boolean = true) {
     if (!temp_state.ffmpeg.ffmpeg) {
         return
     }
+    // Delete input files
     if (temp_state.ffmpeg.video_file) {
         await temp_state.ffmpeg.ffmpeg.deleteFile(temp_state.ffmpeg.video_file.name).catch(() => {})
     }
     if (temp_state.ffmpeg.srt_file) {
         await temp_state.ffmpeg.ffmpeg.deleteFile(temp_state.ffmpeg.srt_file.name).catch(() => {})
     }
-    if (temp_state.ffmpeg.font_file) {
-        await temp_state.ffmpeg.ffmpeg.deleteFile(`/tmp/${temp_state.ffmpeg.font_file}`).catch(() => {})
-    }
+    // Delete font file
+    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
+    await temp_state.ffmpeg.ffmpeg.deleteFile(`/tmp/${selected_font.filename}`).catch(() => {})
+
+    // Delete output files
     if (delete_output) {
         await temp_state.ffmpeg.ffmpeg.deleteFile("output.mp4").catch(() => {})
         await temp_state.ffmpeg.ffmpeg.deleteFile("preview.png").catch(() => {})

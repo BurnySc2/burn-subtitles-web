@@ -1,5 +1,5 @@
 <script lang="ts">
-// Simplest working example
+// Simplest standalone working example
 import { FFmpeg } from "@ffmpeg/ffmpeg"
 // @ts-expect-error
 import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg/dist/esm/types"
