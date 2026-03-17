@@ -83,7 +83,7 @@ export function reset_output(): void {
                         <div class="mb-4 flex h-2 overflow-hidden rounded-full text-xs">
                             <div
                                 style="width: {temp_state.ffmpeg.progress}%"
-                                class="flex flex-col justify-center text-center whitespace-nowrap"
+                                class="flex flex-col justify-center text-center whitespace-nowrap bg-green-500"
                             ></div>
                         </div>
                         {#if temp_state.ffmpeg.is_processing && temp_state.ffmpeg.processing_start_time}
