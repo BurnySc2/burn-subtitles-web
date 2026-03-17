@@ -27,16 +27,10 @@ let {
 
 <button
     onclick={() => {
-		sample_text = "The quick brown fox jumps over the lazy dog";
+		sample_text = "The quick brown fox jumps over the lazy dog"
 	}}
-    class="mt-2 px-3 py-1.5 bg-blue-500 text-white text-sm rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+    class="px-3 rounded-md"
+    disabled={sample_text === "The quick brown fox jumps over the lazy dog"}
 >
     Reset Text
 </button>
-
-<style>
-.font-preview {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-}
-</style>

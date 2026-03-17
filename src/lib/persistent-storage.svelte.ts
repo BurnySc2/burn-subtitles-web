@@ -68,7 +68,7 @@ $effect.root(() => {
             if (data !== null) {
                 perma_state.subtitle_settings = {
                     // Set default
-                    ...default_subtitle_settings,
+                    ...perma_state,
                     // Load using zod instead
                     ...SubtitleSettings.parse(JSON.parse(data)),
                 }

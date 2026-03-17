@@ -7,16 +7,16 @@ const is_active = (path: string) => {
 }
 </script>
 
-<nav class="bg-gray-800 p-4 text-white">
+<nav class="bg-gray-300 p-4 text-black">
     <div class="container mx-auto flex justify-center space-x-8">
         <a
             href={resolve('/')}
-            class="transition-colors hover:text-gray-300 {is_active('/') ? 'font-bold' : ''}"
-            >Burn Subtitles</a
+            class="transition-colors hover:text-gray-800 {is_active('/') ? 'font-bold' : ''}"
+            >Subtitles Burner</a
         >
         <a
             href={resolve('/download-srt')}
-            class="transition-colors hover:text-gray-300 {is_active('/download-srt') ? 'font-bold' : ''}"
+            class="transition-colors hover:text-gray-800 {is_active('/download-srt') ? 'font-bold' : ''}"
             >Download SRT</a
         >
     </div>
