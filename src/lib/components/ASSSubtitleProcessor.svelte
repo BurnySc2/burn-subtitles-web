@@ -111,7 +111,7 @@ export function reset_output(): void {
                 {#if temp_state.ffmpeg.is_processing}
                     <span class="flex items-center">
                         <div class="mr-3 h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"></div>
-                        Processing with ASS Subtitles...
+                        Rendering video with subtitles...
                     </span>
                 {:else}
                     Render Subtitles into Video
