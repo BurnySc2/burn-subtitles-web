@@ -25,7 +25,7 @@ async function download_ass_file_wrapper() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `styled-subtitles-${temp_state.ffmpeg.video_file?.name.replace(/\.[^/.]+$/, "") || "video"}.ass`
+    a.download = "styled_subtitles.ass"
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
