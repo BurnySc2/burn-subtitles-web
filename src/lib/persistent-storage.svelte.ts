@@ -1,78 +1,79 @@
-import { writable } from "svelte/store"
+import * as z from "zod"
 import { browser } from "$app/environment"
 
-// A simple class that keeps a state in sync with localStorage
-// Should only be used inside one component
-export class LocalStorageState<T> {
-	key = ""
-	#value = $state<T>() as T
+// Zod
+const VerticalAnchor = z.union([z.literal("top"), z.literal("center"), z.literal("bottom")])
 
-	constructor(key: string, value: T) {
-		this.key = key
-		this.#value = value
-		if (browser) {
-			const item = localStorage.getItem(key)
-			if (item) {
-				this.#value = this.deserialize(item)
-			} else {
-				localStorage.setItem(this.key, this.serialize(this.#value))
-			}
-		}
+const default_subtitle_settings = {
+    font: {
+        index: 0,
+        size: 24,
+        right_to_left: false,
+    },
+    text: { color: "#ffff7f", stroke: "#000000", outline_size: 1 },
+    shadow: { size: 1 },
+    position: { horizontal_margin: 30, vertical_anchor: "top", vertical: 0 },
+} as const
+const SubtitleSettings = z
+    .object({
+        font: z.object({
+            index: z.number(),
+            size: z.number().min(1).max(1000).catch(24),
+            right_to_left: z.boolean(),
+        }),
+        text: z.object({
+            color: z.string(), // TODO Use hex validation instead
+            stroke: z.string(), // TODO Use hex validation instead
+            outline_size: z.number().min(0).max(10),
+        }),
+        shadow: z.object({
+            size: z.number().min(0).max(10),
+        }),
+        position: z.object({
+            horizontal_margin: z.number().min(0).max(2000),
+            vertical_anchor: VerticalAnchor,
+            vertical: z.number().min(0).max(2000),
+        }),
+    })
+    .catch(default_subtitle_settings)
+const PermaState = z.object({
+    loading: z.object({
+        subtitle_settings: true,
+    }),
+    subtitle_settings: SubtitleSettings,
+})
 
-		$effect(() => {
-			localStorage.setItem(this.key, this.serialize(this.#value))
-		})
-	}
+// Types
+export type TSubtitleSettings = z.infer<typeof SubtitleSettings>
+export type TPermaState = z.infer<typeof PermaState>
 
-	get value(): T {
-		return this.#value
-	}
+export const perma_state = $state<TPermaState>({
+    loading: {
+        subtitle_settings: true,
+    },
+    subtitle_settings: default_subtitle_settings,
+})
 
-	set value(new_value: T) {
-		this.#value = new_value
-		if (browser) {
-			localStorage.setItem(this.key, this.serialize(this.#value))
-		}
-	}
-
-	serialize(value: T): string {
-		return JSON.stringify(value)
-	}
-	deserialize(value: string): T {
-		return JSON.parse(value)
-	}
-}
-
-export const use_local_storage_state = <T>(key: string, value: T) => {
-	return new LocalStorageState<T>(key, value)
-}
-
-// A simple function to initialize a writable that can be used in multiple components
-// while keeping the value in sync with localStorage
-export const use_local_storage_writeable = <T>(key: string, value: T) => {
-	// Initialize the store
-	const my_writable = writable<T>(value)
-
-	// Load value from localStorage
-	if (browser) {
-		const item = localStorage.getItem(key)
-		if (item) {
-			my_writable.set(JSON.parse(item))
-		} else {
-			localStorage.setItem(key, JSON.stringify(value))
-		}
-	}
-
-	// On change, save to localStorage
-	my_writable.subscribe((new_value: T) => {
-		if (browser) {
-			localStorage.setItem(key, JSON.stringify(new_value))
-		}
-	})
-
-	return my_writable
-}
-
-// Declare global variables in this file to access them globally via `$my_var`
-// Update them via `$my_var += 1` or `$my_var = new_value`
-export const my_counter_writable = use_local_storage_writeable("my_counter_writeable", 0)
+$effect.root(() => {
+    // Global settings
+    $effect(() => {
+        // Save data
+        if (browser && !perma_state.loading.subtitle_settings) {
+            localStorage.setItem("subtitle_settings", JSON.stringify(perma_state.subtitle_settings))
+        }
+        // Load data
+        if (browser && perma_state.loading.subtitle_settings) {
+            perma_state.loading.subtitle_settings = false
+            const data = localStorage.getItem("subtitle_settings")
+            if (data !== null) {
+                perma_state.subtitle_settings = {
+                    // Set default
+                    ...perma_state,
+                    // Load using zod instead
+                    ...SubtitleSettings.parse(JSON.parse(data)),
+                }
+            }
+        }
+        $state.snapshot(perma_state.subtitle_settings)
+    })
+})
