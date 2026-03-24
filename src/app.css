@@ -294,6 +294,29 @@ input[type="range"]::-webkit-slider-runnable-track {
     border-radius: 2px;
 }
 
+/* Firefox range input styling */
+input[type="range"]::-moz-range-thumb {
+    height: 24px;
+    width: 24px;
+    border-radius: 50%;
+    background: #000;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+
+input[type="range"]::-moz-range-track {
+    height: 4px;
+    background: #666;
+    border-radius: 2px;
+}
+
+input[type="range"]::-moz-range-progress {
+    height: 4px;
+    background: #3b82f6;
+    border-radius: 2px;
+}
+
 input[type="range"]:focus {
     outline: 3px solid rgba(0, 102, 204, 0.3);
     outline-offset: 2px;
