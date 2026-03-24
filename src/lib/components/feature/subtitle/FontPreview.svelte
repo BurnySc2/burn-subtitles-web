@@ -27,9 +27,9 @@ let {
 
 <button
     onclick={() => {
-		sample_text = "The quick brown fox jumps over the lazy dog"
-	}}
-    class="px-3 rounded-md"
+ 		sample_text = "The quick brown fox jumps over the lazy dog"
+ 	}}
+    class="mt-2 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
     disabled={sample_text === "The quick brown fox jumps over the lazy dog"}
 >
     Reset Text

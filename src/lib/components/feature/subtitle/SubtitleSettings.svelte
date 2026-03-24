@@ -152,7 +152,7 @@ import { available_fonts } from "$lib/utils/fonts"
             <!-- Horizontal Margin -->
             <div class="mb-4">
                 <label
-                    for="position-y"
+                    for="margin-h"
                     class="mb-2 block text-sm font-semibold"
                     >Horizontal Margin: {perma_state.subtitle_settings.position.horizontal_margin}px</label
                 >
