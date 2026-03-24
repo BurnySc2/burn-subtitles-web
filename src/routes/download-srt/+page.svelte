@@ -1,5 +1,5 @@
 <script>
-import ExtractSrtFromOds from "$lib/components/ui/ExtractSrtFromOds.svelte"
+import ExtractSrtFromOds from "$lib/components/feature/subtitle/ExtractSrtFromOds.svelte"
 </script>
 
 <ExtractSrtFromOds />

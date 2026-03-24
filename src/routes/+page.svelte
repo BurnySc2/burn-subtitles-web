@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte"
-import ASSSubtitleProcessor from "$lib/components/ASSSubtitleProcessor.svelte"
+import ASSSubtitleProcessor from "$lib/components/feature/subtitle/ASSSubtitleProcessor.svelte"
 
 onMount(() => {
     function sendHeight() {

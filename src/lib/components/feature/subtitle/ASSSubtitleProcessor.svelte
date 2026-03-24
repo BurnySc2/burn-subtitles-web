@@ -3,10 +3,10 @@ import { temp_state } from "$lib/temporary-storage.svelte"
 import { format_time_remaining } from "$lib/utils/format_time"
 // See http://www.tcax.org/docs/ass-specs.htm
 import { render_video_with_subtitles } from "$lib/utils/video-processing"
-import SubtitleFramePreview from "./ui/SubtitleFramePreview.svelte"
-import SubtitleOutput from "./ui/SubtitleOutput.svelte"
-import SubtitleSettings from "./ui/SubtitleSettings.svelte"
-import SubtitleUpload from "./ui/SubtitleUpload.svelte"
+import SubtitleFramePreview from "./SubtitleFramePreview.svelte"
+import SubtitleOutput from "./SubtitleOutput.svelte"
+import SubtitleSettings from "./SubtitleSettings.svelte"
+import SubtitleUpload from "./SubtitleUpload.svelte"
 
 export function reset_output(): void {
     temp_state.ffmpeg.output_blob = null

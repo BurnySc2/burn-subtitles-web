@@ -1,8 +1,8 @@
 <script lang="ts">
 // This is a helper file to extract .srt from .ods file
 import JSZip from "jszip"
+import Spinner from "$lib/components/ui/Spinner.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
-import Spinner from "./Spinner.svelte"
 
 export async function parse_odt(file: File) {
     const zip = await JSZip.loadAsync(file)

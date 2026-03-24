@@ -1,8 +1,8 @@
 <script lang="ts">
+import Spinner from "$lib/components/ui/Spinner.svelte"
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
 import { available_fonts } from "$lib/utils/fonts"
-import Spinner from "./Spinner.svelte"
 // http: //www.tcax.org/docs/ass-specs.htm
 </script>
 

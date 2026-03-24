@@ -135,7 +135,7 @@ Use `onclick` instead of `on:click`. Call `preventDefault()` inside the handler.
 - **Variables/Functions**: `snake_case` (e.g., `my_variable`, `handle_click`)
 - **Components**: PascalCase (e.g., `MyComponent.svelte`)
 - **Types/Interfaces**: PascalCase (e.g., `TodoItem`, `FilterType`)
-- **Constants**: `SCREAMING_SNAKE_CASE` or `snake_case`
+- **Constants**: `SCREAMING_SNAKE_CASE`
 - **CSS Classes**: kebab-case (e.g., `bg-blue-600`, `text-gray-800`)
 - **Props/Callbacks**: `snake_case` (e.g., `on_click`, `item_id`)
 
