@@ -29,20 +29,19 @@ export function reset_output(): void {
         <SubtitleFramePreview />
 
         <!-- Render Section -->
-        <div class="rounded-lg border p-6">
-            <h2 class="mb-6 text-xl font-bold">Render Section</h2>
+        <div class="section">
+            <h2 class="section-title">Render Section</h2>
 
             <!-- Quality Mode -->
             <div class="mb-6">
                 <label
                     for="quality-mode"
-                    class="mb-3 block text-sm font-semibold"
+                    class="form-label"
                     >Quality Mode</label
                 >
                 <select
                     id="quality-mode"
                     bind:value={temp_state.ffmpeg.selected_quality_mode}
-                    class="w-full rounded-lg border px-4 py-3 focus:ring-2 focus:outline-none"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
                     <!-- TODO Variably load modes -->
@@ -106,7 +105,7 @@ export function reset_output(): void {
                 disabled={temp_state.ffmpeg.is_processing ||
 				!temp_state.ffmpeg.video_file ||
 				!temp_state.ffmpeg.srt_file}
-                class="flex w-full transform items-center justify-center rounded-lg px-8 py-4 text-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                class="btn btn-primary btn-lg"
             >
                 {#if temp_state.ffmpeg.is_processing}
                     <span class="flex items-center">
