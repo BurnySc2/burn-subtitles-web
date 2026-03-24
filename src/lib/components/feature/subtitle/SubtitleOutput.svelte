@@ -41,7 +41,7 @@ async function download_ass_file_wrapper() {
     {:else}
         <button
             onclick={download_ass_file_wrapper}
-            class="flex flex-1 transform items-center justify-center rounded-lg px-8 py-4 text-lg font-bold"
+            class="btn btn-secondary w-full mb-4"
         >
             Download .ass File
         </button>
@@ -50,7 +50,7 @@ async function download_ass_file_wrapper() {
 
 <!-- Output Section -->
 {#if temp_state.ffmpeg.output_url}
-    <div class="space-y-6 rounded-lg border p-6">
+    <div class="section space-y-6">
         <div class="overflow-hidden rounded-xl">
             <video
                 src={temp_state.ffmpeg.output_url}
@@ -63,7 +63,7 @@ async function download_ass_file_wrapper() {
         <div class="flex flex-col gap-4 border-t pt-4 sm:flex-row">
             <button
                 onclick={download_video}
-                class="flex flex-1 transform items-center justify-center rounded-lg px-8 py-4 text-lg font-bold"
+                class="btn btn-primary flex-1"
             >
                 Download Video
             </button>

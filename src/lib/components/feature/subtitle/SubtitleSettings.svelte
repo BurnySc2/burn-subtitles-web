@@ -12,20 +12,19 @@ import { available_fonts } from "$lib/utils/fonts"
     <!-- Settings Section -->
     <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <!-- Basic Font Settings -->
-        <div class="rounded-lg border p-6">
-            <h2 class="mb-4 text-xl font-bold">Font Settings</h2>
+        <div class="section">
+            <h2 class="section-title">Font Settings</h2>
 
             <!-- Font Selection -->
             <div class="mb-4">
                 <label
                     for="font-select"
-                    class="mb-2 block text-sm font-semibold"
+                    class="form-label-lg"
                     >Font Family</label
                 >
                 <select
                     id="font-select"
                     bind:value={perma_state.subtitle_settings.font.index}
-                    class="w-full rounded-lg border px-4 py-3 shadow-sm"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
                     {#each available_fonts as font, index}
@@ -36,31 +35,30 @@ import { available_fonts } from "$lib/utils/fonts"
 
             <!-- Font Size -->
             <div class="mb-4">
-                <label
-                    for="font-size"
-                    class="mb-2 block text-sm font-semibold"
-                    >Font Size</label
-                >
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 mb-2">
+                    <label
+                        for="font-size"
+                        class="form-label-lg mb-0 mr-auto"
+                        >Font Size</label
+                    >
                     <input
                         id="font-size"
                         type="number"
                         min="12"
                         max="120"
                         bind:value={perma_state.subtitle_settings.font.size}
-                        class="w-20 rounded-lg border px-3 py-2 text-center"
+                        class="input-number-xs"
                         disabled={temp_state.ffmpeg.is_processing}
                     >
                     <span class="text-sm text-gray-500">px</span>
-                    <input
-                        type="range"
-                        min="12"
-                        max="120"
-                        bind:value={perma_state.subtitle_settings.font.size}
-                        class="flex-1"
-                        disabled={temp_state.ffmpeg.is_processing}
-                    >
                 </div>
+                <input
+                    type="range"
+                    min="12"
+                    max="120"
+                    bind:value={perma_state.subtitle_settings.font.size}
+                    disabled={temp_state.ffmpeg.is_processing}
+                >
             </div>
 
             <!-- RTL Support -->
@@ -78,8 +76,8 @@ import { available_fonts } from "$lib/utils/fonts"
         </div>
 
         <!-- Text Color Settings -->
-        <div class="rounded-lg border p-6">
-            <h2 class="mb-4 text-xl font-bold">Text Colors</h2>
+        <div class="section">
+            <h2 class="section-title">Text Colors</h2>
 
             <!-- Text Color -->
             <div class="mb-4">
@@ -139,8 +137,8 @@ import { available_fonts } from "$lib/utils/fonts"
         </div>
 
         <!-- Shadow & Position Settings -->
-        <div class="rounded-lg border p-6">
-            <h2 class="mb-4 text-xl font-bold">Shadow & Position</h2>
+        <div class="section">
+            <h2 class="section-title">Shadow & Position</h2>
 
             <!-- Shadow Blur -->
             <div class="mb-4">
@@ -162,31 +160,30 @@ import { available_fonts } from "$lib/utils/fonts"
 
             <!-- Horizontal Margin -->
             <div class="mb-4">
-                <label
-                    for="margin-h"
-                    class="mb-2 block text-sm font-semibold"
-                    >Horizontal Margin</label
-                >
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 mb-2">
+                    <label
+                        for="margin-h"
+                        class="form-label-lg mb-0 mr-auto"
+                        >Horizontal Margin</label
+                    >
                     <input
                         id="margin-h"
                         type="number"
                         min="0"
                         max="1080"
                         bind:value={perma_state.subtitle_settings.position.horizontal_margin}
-                        class="w-20 rounded-lg border px-3 py-2 text-center"
+                        class="input-number-xs"
                         disabled={temp_state.ffmpeg.is_processing}
                     >
                     <span class="text-sm text-gray-500">px</span>
-                    <input
-                        type="range"
-                        min="0"
-                        max="1080"
-                        bind:value={perma_state.subtitle_settings.position.horizontal_margin}
-                        class="flex-1"
-                        disabled={temp_state.ffmpeg.is_processing}
-                    >
                 </div>
+                <input
+                    type="range"
+                    min="0"
+                    max="1080"
+                    bind:value={perma_state.subtitle_settings.position.horizontal_margin}
+                    disabled={temp_state.ffmpeg.is_processing}
+                >
             </div>
 
             <!-- Vertical Anchor -->
@@ -211,31 +208,30 @@ import { available_fonts } from "$lib/utils/fonts"
             <!-- Position Y -->
             {#if perma_state.subtitle_settings.position.vertical_anchor !== "center"}
                 <div class="mb-4">
-                    <label
-                        for="position-y"
-                        class="mb-2 block text-sm font-semibold"
-                        >Vertical Position</label
-                    >
-                    <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 mb-2">
+                        <label
+                            for="position-y"
+                            class="form-label-lg mb-0 mr-auto"
+                            >Vertical Position</label
+                        >
                         <input
                             id="position-y"
                             type="number"
                             min="0"
                             max="1080"
                             bind:value={perma_state.subtitle_settings.position.vertical}
-                            class="w-20 rounded-lg border px-3 py-2 text-center"
+                            class="input-number-xs"
                             disabled={temp_state.ffmpeg.is_processing}
                         >
                         <span class="text-sm text-gray-500">px</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1080"
-                            bind:value={perma_state.subtitle_settings.position.vertical}
-                            class="flex-1"
-                            disabled={temp_state.ffmpeg.is_processing}
-                        >
                     </div>
+                    <input
+                        type="range"
+                        min="0"
+                        max="1080"
+                        bind:value={perma_state.subtitle_settings.position.vertical}
+                        disabled={temp_state.ffmpeg.is_processing}
+                    >
                 </div>
             {/if}
         </div>

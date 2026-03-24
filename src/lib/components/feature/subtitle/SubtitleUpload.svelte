@@ -26,8 +26,8 @@ function handle_srt_upload(event: Event) {
 </script>
 
 <!-- Upload Section -->
-<div class="rounded-lg border p-6">
-    <h2 class="mb-3 text-xl font-bold">Upload Files</h2>
+<div class="section">
+    <h2 class="section-title">Upload Files</h2>
     <div class="flex flex-wrap gap-3">
         <!-- Video Upload -->
         <div class="flex-1 min-w-[200px]">
