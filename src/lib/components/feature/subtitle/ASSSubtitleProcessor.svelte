@@ -53,8 +53,8 @@ export function reset_output(): void {
 
             <!-- Status Messages -->
             {#if temp_state.ffmpeg.error_message}
-                <div class="mb-6 rounded-lg border-2 px-5 py-4">
-                    <div class="flex items-center">
+                <div class="mb-6 rounded-lg border border-red-500 bg-red-50 px-5 py-4">
+                    <div class="flex items-center text-red-700">
                         <span class="mr-3">!</span>
                         <span>{temp_state.ffmpeg.error_message}</span>
                     </div>
@@ -82,8 +82,8 @@ export function reset_output(): void {
                         </div>
                         <div class="mb-4 flex h-2 overflow-hidden rounded-full text-xs">
                             <div
+                                class="flex flex-col justify-center text-center whitespace-nowrap bg-green-500 transition-all duration-300"
                                 style="width: {temp_state.ffmpeg.progress}%"
-                                class="flex flex-col justify-center text-center whitespace-nowrap bg-green-500"
                             ></div>
                         </div>
                         {#if temp_state.ffmpeg.is_processing && temp_state.ffmpeg.processing_start_time}
@@ -106,7 +106,7 @@ export function reset_output(): void {
                 disabled={temp_state.ffmpeg.is_processing ||
 				!temp_state.ffmpeg.video_file ||
 				!temp_state.ffmpeg.srt_file}
-                class="flex w-full transform items-center justify-center rounded-lg px-8 py-4 text-xl font-bold disabled:cursor-not-allowed"
+                class="flex w-full transform items-center justify-center rounded-lg px-8 py-4 text-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {#if temp_state.ffmpeg.is_processing}
                     <span class="flex items-center">

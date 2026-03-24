@@ -10,8 +10,8 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
 </script>
 
 <!-- Font Preview -->
-<div class="rounded-lg border p-4">
-    <h3 class="mb-2 text-lg font-bold">Font Preview</h3>
+<div class="rounded-lg border p-6">
+    <h3 class="mb-2 text-xl font-bold">Font Preview</h3>
     <div class="rounded-lg p-1">
         <div class="flex w-full">
             <FontPreview
@@ -43,7 +43,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     type="text"
                     bind:value={temp_state.ffmpeg.preview_timestamp}
                     placeholder="00:00:00"
-                    class="flex-1 rounded-lg border px-4 py-3 focus:ring-2 focus:outline-none"
+                    class="flex-1 rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50"
                     disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
                 >
@@ -51,7 +51,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     onclick={render_ass_frame_preview}
                     disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
-                    class="transform rounded-lg px-6 py-3 font-semibold disabled:cursor-not-allowed"
+                    class="transform rounded-lg px-6 py-3 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     {#if temp_state.ffmpeg.is_rendering_preview}
                         <span class="flex items-center justify-center">
@@ -70,8 +70,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     <img
                         src={temp_state.ffmpeg.preview_url}
                         alt="Frame preview with subtitles"
-                        class="w-full rounded-lg"
-                        style="max-height: 500px;"
+                        class="w-full max-h-[500px] rounded-lg object-contain"
                     >
                 </div>
                 <p class="mt-3 inline-block rounded-full px-4 py-2 text-sm font-medium">
