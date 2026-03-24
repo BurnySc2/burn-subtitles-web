@@ -4,7 +4,7 @@ import { temp_state } from "$lib/temporary-storage.svelte"
 import { available_fonts } from "$lib/utils/fonts"
 import { render_ass_frame_preview } from "$lib/utils/video-processing"
 // See http://www.tcax.org/docs/ass-specs.htm
-import FontPreview from "../FontPreview.svelte"
+import FontPreview from "./FontPreview.svelte"
 
 let sample_text = $state("The quick brown fox jumps over the lazy dog")
 </script>
