@@ -19,5 +19,10 @@ const is_active = (path: string) => {
             class="transition-colors hover:text-gray-800 {is_active('/download-srt') ? 'font-bold' : ''}"
             >Download SRT</a
         >
+        <a
+            href={resolve('/clip')}
+            class="transition-colors hover:text-gray-800 {is_active('/clip') ? 'font-bold' : ''}"
+            >Clip Extractor</a
+        >
     </div>
 </nav>
