@@ -27,6 +27,18 @@ export type TempState = {
         selected_start_row: number
         selected_end_row: number
     }
+    clip: {
+        video_file: File | null
+        video_url: string | null
+        start_time: string
+        end_time: string
+        output_blob: Blob | null
+        output_url: string | null
+        is_processing: boolean
+        progress: number
+        message: string | null
+        error_message: string | null
+    }
 }
 
 export const temp_state: TempState = $state({
@@ -54,5 +66,17 @@ export const temp_state: TempState = $state({
         selected_column: 1,
         selected_start_row: 1,
         selected_end_row: 999,
+    },
+    clip: {
+        video_file: null,
+        video_url: null,
+        start_time: "00:00.000",
+        end_time: "00:00.000",
+        output_blob: null,
+        output_url: null,
+        is_processing: false,
+        progress: 0,
+        message: null,
+        error_message: null,
     },
 })
