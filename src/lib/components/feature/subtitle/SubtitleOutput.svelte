@@ -35,6 +35,23 @@ async function download_ass_file_wrapper() {
     URL.revokeObjectURL(url)
 }
 
+async function download_selected_font_wrapper() {
+    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
+    if (!selected_font) {
+        return
+    }
+    const response = await fetch(selected_font.url)
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = selected_font.filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+}
+
 const ffmpeg_command = $derived.by(() => {
     if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
         return null
@@ -43,12 +60,20 @@ const ffmpeg_command = $derived.by(() => {
     const config = get_config(temp_state.ffmpeg.selected_quality_mode)
     const video_name = temp_state.ffmpeg.video_file.name
     const output_name = `output_${video_name.replace(/\.[^/.]+$/, "")}.mp4`
-    // TODO: Add download selected font
-    return `ffmpeg -i input.mp4 -vf "ass=subtitles.ass:fontsdir=/path/to/fonts" -c:v libx264 -preset ${config.preset} -crf ${config.crf} -pix_fmt yuv420p -c:a aac -b:a ${config.audio_bitrate} -y output.mp4`
+    return `ffmpeg -i input.mp4 -vf "ass=subtitles.ass:fontsdir=." -c:v libx264 -preset ${config.preset} -crf ${config.crf} -pix_fmt yuv420p -c:a aac -b:a ${config.audio_bitrate} -y output.mp4`
 })
+
+const selected_font_name = $derived(available_fonts[perma_state.subtitle_settings.font.index]?.font_family ?? "Unknown")
 
 let copy_button_text = $state("Copy Command")
 </script>
+
+<button
+    onclick={download_selected_font_wrapper}
+    class="btn btn-secondary w-full mb-4"
+>
+    Download {selected_font_name} Font File
+</button>
 
 {#await ass_content_promise}
 <!-- File content is being generated -->
@@ -83,8 +108,8 @@ let copy_button_text = $state("Copy Command")
         </div>
         <pre class="overflow-x-auto text-sm text-blue-800">{ffmpeg_command}</pre>
         <p class="mt-2 text-xs text-blue-700">
-            Note: You need to generate the .ass file (download above), have FFmpeg installed, and place your font file
-            at the specified path.
+            Note: You need to download the .ass file, download the font ({selected_font_name}), have FFmpeg installed,
+            and place the font file in the same directory as your video.
         </p>
     </div>
 {/if}
