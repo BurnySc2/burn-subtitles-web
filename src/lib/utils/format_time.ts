@@ -7,6 +7,24 @@ export function parse_timestamp(timestamp: string): number {
     return hours * 3600 + minutes * 60 + seconds
 }
 
+// Parse mm:ss.ms or mm:ss.mmm format to seconds
+export function parse_clip_timestamp(timestamp: string): number {
+    const match = timestamp.match(/^(\d+):(\d+)\.(\d+)$/)
+    if (!match) {
+        throw new Error("Invalid timestamp format. Use mm:ss.mmm")
+    }
+    const [, minutes, seconds, ms] = match
+    return parseInt(minutes) * 60 + parseInt(seconds) + parseInt(ms) / 1000
+}
+
+// Format seconds to mm:ss.mmm
+export function format_to_clip_timestamp(totalSeconds: number): string {
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = Math.floor(totalSeconds % 60)
+    const ms = Math.round((totalSeconds % 1) * 1000)
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`
+}
+
 export function format_time_remaining(processing_start_time: number | null, progress: number): string {
     if (!processing_start_time || progress <= 0 || progress >= 100) {
         return ""
