@@ -168,6 +168,7 @@ function download_video() {
                 controls
                 class="w-full max-w-3xl rounded-lg shadow-lg"
             >
+                <track kind="captions">
                 Your browser does not support the video tag.
             </video>
             <button

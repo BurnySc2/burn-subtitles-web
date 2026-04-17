@@ -123,6 +123,7 @@ let copy_button_text = $state("Copy Command")
                 controls
                 class="mx-auto w-full max-w-4xl"
             >
+                <track kind="captions">
                 Your browser does not support the video tag.
             </video>
         </div>
