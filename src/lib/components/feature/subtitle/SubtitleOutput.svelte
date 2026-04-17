@@ -1,75 +1,48 @@
 <script lang="ts">
-// See http://www.tcax.org/docs/ass-specs.htm
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
-import { available_fonts } from "$lib/utils/fonts"
 import { download_video, generate_ass_file } from "$lib/utils/subtitle-processing"
-import { get_config } from "$lib/utils/video-processing"
+import {
+    build_ffmpeg_command,
+    download_ass_file,
+    download_selected_font,
+    get_selected_font_name,
+} from "./SubtitleOutput.state.svelte"
 
 const ass_content_promise = $derived.by(async () => {
     if (!temp_state.ffmpeg.srt_file) {
         return null
     }
     const srt_content = await temp_state.ffmpeg.srt_file.text()
-    const ass_content = generate_ass_file(srt_content)
-    return ass_content
+    return generate_ass_file(srt_content)
 })
 
-async function download_ass_file_wrapper() {
-    if (!temp_state.ffmpeg.srt_file) {
-        temp_state.ffmpeg.error_message = "Please upload an SRT file first"
-        return
-    }
-    const ass_content = await ass_content_promise
-    if (ass_content === null) {
-        return
-    }
-    const blob = new Blob([ass_content], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "styled_subtitles.ass"
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-}
+const selected_font_name = $derived(get_selected_font_name(perma_state.subtitle_settings.font.index))
 
-async function download_selected_font_wrapper() {
-    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
-    if (!selected_font) {
-        return
-    }
-    const response = await fetch(selected_font.url)
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = selected_font.filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-}
-
-const ffmpeg_command = $derived.by(() => {
-    if (!temp_state.ffmpeg.video_file || !temp_state.ffmpeg.srt_file) {
-        return null
-    }
-    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
-    const config = get_config(temp_state.ffmpeg.selected_quality_mode)
-    const video_name = temp_state.ffmpeg.video_file.name
-    const output_name = `output_${video_name.replace(/\.[^/.]+$/, "")}.mp4`
-    return `ffmpeg -i input.mp4 -vf "ass=subtitles.ass:fontsdir=." -c:v libx264 -preset ${config.preset} -crf ${config.crf} -pix_fmt yuv420p -c:a aac -b:a ${config.audio_bitrate} -y output.mp4`
-})
-
-const selected_font_name = $derived(available_fonts[perma_state.subtitle_settings.font.index]?.font_family ?? "Unknown")
+const ffmpeg_command = $derived(
+    build_ffmpeg_command(
+        temp_state.ffmpeg.video_file,
+        temp_state.ffmpeg.srt_file,
+        temp_state.ffmpeg.selected_quality_mode,
+        perma_state.subtitle_settings.font.index,
+    ),
+)
 
 let copy_button_text = $state("Copy Command")
+
+function copy_ffmpeg_command() {
+    if (ffmpeg_command) {
+        navigator.clipboard.writeText(ffmpeg_command)
+        copy_button_text = "Copied!"
+        setTimeout(() => {
+            copy_button_text = "Copy Command"
+        }, 2000)
+    }
+}
 </script>
 
 <button
-    onclick={download_selected_font_wrapper}
+    onclick={download_selected_font}
     class="btn btn-secondary w-full mb-4"
 >
     Download {selected_font_name} Font File
@@ -82,7 +55,7 @@ let copy_button_text = $state("Copy Command")
     <!-- Unable to generate file content, no srt loaded? -->
     {:else}
         <button
-            onclick={download_ass_file_wrapper}
+            onclick={() => download_ass_file(ass_content)}
             class="btn btn-secondary w-full mb-4"
         >
             Download .ass File
@@ -96,11 +69,7 @@ let copy_button_text = $state("Copy Command")
         <div class="mb-2 flex items-center justify-between">
             <span class="font-medium text-blue-900">Run locally with FFmpeg</span>
             <button
-                onclick={() => {
-                    navigator.clipboard.writeText(ffmpeg_command)
-                    copy_button_text = "Copied!"
-                    setTimeout(() => { copy_button_text = "Copy Command" }, 2000)
-                }}
+                onclick={copy_ffmpeg_command}
                 class="rounded bg-blue-200 px-3 py-1 text-xs font-medium text-blue-800 hover:bg-blue-300"
             >
                 {copy_button_text}
