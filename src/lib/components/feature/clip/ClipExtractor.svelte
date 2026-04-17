@@ -32,13 +32,13 @@ async function handle_extract() {
 }
 
 function handle_download() {
-    if (!temp_state.clip.output_blob || !temp_state.clip.video_file) {
+    if (!temp_state.clip.output_blob || !temp_state.clip.video_file || !temp_state.clip.output_url) {
         return
     }
 
     const ext = temp_state.clip.video_file.name.split(".").pop() || "mp4"
     const filename = `clip.${ext}`
-    const url = temp_state.clip.output_url!
+    const url = temp_state.clip.output_url
     const a = document.createElement("a")
     a.href = url
     a.download = filename

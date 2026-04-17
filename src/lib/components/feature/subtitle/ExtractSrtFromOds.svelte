@@ -79,7 +79,7 @@ async function download_srt() {
     if (data === null) {
         return
     }
-    const blob = new Blob([data.join("\n") + "\n"], { type: "text/vtt+srt;charset=utf-8" })
+    const blob = new Blob([`${data.join("\n")}\n`], { type: "text/vtt+srt;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url

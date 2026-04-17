@@ -14,7 +14,7 @@ export function parse_clip_timestamp(timestamp: string): number {
         throw new Error("Invalid timestamp format. Use mm:ss.mmm")
     }
     const [, minutes, seconds, ms] = match
-    return parseInt(minutes) * 60 + parseInt(seconds) + parseInt(ms) / 1000
+    return parseInt(minutes, 10) * 60 + parseInt(seconds, 10) + parseInt(ms, 10) / 1000
 }
 
 // Format seconds to mm:ss.mmm
