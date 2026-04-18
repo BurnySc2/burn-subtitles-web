@@ -112,7 +112,7 @@ input[type="number"]::placeholder {
 }
 
 .btn-primary:hover {
-    background-color: #3b82f6;
+    background-color: #93c5fd;
 }
 
 .btn-primary:focus {
@@ -234,11 +234,6 @@ button {
     background-color: #fff;
     color: #1f2937;
     cursor: pointer;
-}
-
-button:hover:not(:disabled) {
-    background-color: #f9fafb;
-    border-color: #9ca3af;
 }
 
 button:focus {
