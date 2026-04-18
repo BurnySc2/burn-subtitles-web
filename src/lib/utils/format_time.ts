@@ -18,10 +18,10 @@ export function parse_clip_timestamp(timestamp: string): number {
 }
 
 // Format seconds to mm:ss.mmm
-export function format_to_clip_timestamp(totalSeconds: number): string {
-    const minutes = Math.floor(totalSeconds / 60)
-    const seconds = Math.floor(totalSeconds % 60)
-    const ms = Math.round((totalSeconds % 1) * 1000)
+export function format_to_clip_timestamp(total_seconds: number): string {
+    const minutes = Math.floor(total_seconds / 60)
+    const seconds = Math.floor(total_seconds % 60)
+    const ms = Math.round((total_seconds % 1) * 1000)
     return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`
 }
 

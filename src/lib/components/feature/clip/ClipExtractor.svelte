@@ -46,7 +46,7 @@ function handle_download() {
 }
 </script>
 
-<div class="flex w-full max-w-4xl flex-col gap-6 p-4">
+<div class="flex w-full max-w-4xl flex-col gap-2 p-4">
     <!-- Upload Section -->
     <div class="rounded-lg bg-gray-100 p-4">
         <h2 class="mb-3 text-lg font-semibold">Upload Video</h2>
@@ -66,9 +66,13 @@ function handle_download() {
                 src={temp_state.clip.video_url}
                 controls
                 class="w-full rounded"
+                onerror={() => temp_state.clip.error_message = "Video codec not supported by browser and can't be previewed. Try transcoding the video to H.264 first."}
             >
                 <track kind="captions">
             </video>
+            <p class="mt-2 text-sm text-gray-600">
+                If the video doesn't load, your browser may not support this codec. Extracting a clip may still work.
+            </p>
         </div>
     {/if}
 

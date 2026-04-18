@@ -45,23 +45,23 @@ export async function trim_video(): Promise<boolean> {
         return false
     }
 
-    let startSeconds: number
-    let endSeconds: number
+    let start_seconds: number
+    let end_seconds: number
 
     try {
-        startSeconds = parse_clip_timestamp(temp_state.clip.start_time)
-        endSeconds = parse_clip_timestamp(temp_state.clip.end_time)
+        start_seconds = parse_clip_timestamp(temp_state.clip.start_time)
+        end_seconds = parse_clip_timestamp(temp_state.clip.end_time)
     } catch {
         temp_state.clip.error_message = "Invalid timestamp format. Use mm:ss.mmm"
         return false
     }
 
-    if (startSeconds < 0) {
+    if (start_seconds < 0) {
         temp_state.clip.error_message = "Start time must be positive"
         return false
     }
 
-    if (endSeconds <= startSeconds) {
+    if (end_seconds <= start_seconds) {
         temp_state.clip.error_message = "End time must be greater than start time"
         return false
     }
@@ -83,7 +83,7 @@ export async function trim_video(): Promise<boolean> {
         temp_state.clip.output_url = null
     }
 
-    const duration = endSeconds - startSeconds
+    const duration = end_seconds - start_seconds
     const input_name = `input${get_file_extension(temp_state.clip.video_file.name)}`
     const output_name = `output${get_file_extension(temp_state.clip.video_file.name)}`
 
@@ -95,7 +95,7 @@ export async function trim_video(): Promise<boolean> {
         // Using input seeking (-ss before -i) for faster processing
         await ffmpeg.exec([
             "-ss",
-            startSeconds.toString(),
+            start_seconds.toString(),
             "-i",
             input_name,
             "-t",
