@@ -26,14 +26,14 @@ function handle_srt_upload(event: Event) {
 </script>
 
 <!-- Upload Section -->
-<div class="rounded-lg border p-3">
-    <h2 class="mb-3 text-lg font-bold ">Upload Files</h2>
+<div class="section">
+    <h2 class="section-title">Upload Files</h2>
     <div class="flex flex-wrap gap-3">
         <!-- Video Upload -->
         <div class="flex-1 min-w-[200px]">
             <label
                 for="video-upload"
-                class="mb-1 block font-semibold"
+                class="mb-2 block text-sm font-semibold"
                 >Video</label
             >
             <div class="relative">
@@ -42,7 +42,7 @@ function handle_srt_upload(event: Event) {
                     type="file"
                     accept="video/*"
                     onchange={handle_video_upload}
-                    class="w-full rounded-lg px-2 py-2 file:rounded file:text-xs"
+                    class="w-full rounded-lg border border-gray-300 px-2 py-2 file:rounded file:text-xs focus:border-blue-500 disabled:opacity-50"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
             </div>
@@ -52,7 +52,7 @@ function handle_srt_upload(event: Event) {
         <div class="flex-1 min-w-[200px]">
             <label
                 for="srt-upload"
-                class="mb-1 block font-semibold"
+                class="mb-2 block text-sm font-semibold"
                 >Subtitles File</label
             >
             <div class="relative">
@@ -61,7 +61,7 @@ function handle_srt_upload(event: Event) {
                     type="file"
                     accept=".srt"
                     onchange={handle_srt_upload}
-                    class="w-full rounded-lg px-2 py-2 file:rounded file:text-xs"
+                    class="w-full rounded-lg border border-gray-300 px-2 py-2 file:rounded file:text-xs focus:border-blue-500 disabled:opacity-50"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
             </div>

@@ -4,14 +4,14 @@ import { temp_state } from "$lib/temporary-storage.svelte"
 import { available_fonts } from "$lib/utils/fonts"
 import { render_ass_frame_preview } from "$lib/utils/video-processing"
 // See http://www.tcax.org/docs/ass-specs.htm
-import FontPreview from "../FontPreview.svelte"
+import FontPreview from "./FontPreview.svelte"
 
 let sample_text = $state("The quick brown fox jumps over the lazy dog")
 </script>
 
 <!-- Font Preview -->
-<div class="rounded-lg border p-4">
-    <h3 class="mb-2 text-lg font-bold">Font Preview</h3>
+<div class="section">
+    <h3 class="section-title-sm">Font Preview</h3>
     <div class="rounded-lg p-1">
         <div class="flex w-full">
             <FontPreview
@@ -28,22 +28,22 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
 
 <!-- Frame Preview Section -->
 {#if temp_state.ffmpeg.video_file && temp_state.ffmpeg.srt_file}
-    <div class="rounded-lg border p-6">
-        <h2 class="mb-4 text-xl font-bold">Frame Preview</h2>
+    <div class="section">
+        <h2 class="section-title">Frame Preview</h2>
         <!-- Preview Timestamp Input -->
         <div class="mb-6">
             <label
                 for="preview-timestamp"
-                class="mb-2 block text-sm font-semibold"
+                class="form-label-lg"
                 >Preview Timestamp</label
             >
-            <div class="flex items-center space-x-3">
+            <div class="flex items-center gap-3">
                 <input
                     id="preview-timestamp"
                     type="text"
                     bind:value={temp_state.ffmpeg.preview_timestamp}
                     placeholder="00:00:00"
-                    class="flex-1 rounded-lg border px-4 py-3 focus:ring-2 focus:outline-none"
+                    class="flex-1"
                     disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
                 >
@@ -51,7 +51,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     onclick={render_ass_frame_preview}
                     disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
-                    class="transform rounded-lg px-6 py-3 font-semibold disabled:cursor-not-allowed"
+                    class="btn btn-secondary btn-md"
                 >
                     {#if temp_state.ffmpeg.is_rendering_preview}
                         <span class="flex items-center justify-center">
@@ -70,8 +70,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     <img
                         src={temp_state.ffmpeg.preview_url}
                         alt="Frame preview with subtitles"
-                        class="w-full rounded-lg"
-                        style="max-height: 500px;"
+                        class="w-full max-h-[500px] rounded-lg object-contain"
                     >
                 </div>
                 <p class="mt-3 inline-block rounded-full px-4 py-2 text-sm font-medium">

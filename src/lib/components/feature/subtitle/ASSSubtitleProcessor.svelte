@@ -3,10 +3,10 @@ import { temp_state } from "$lib/temporary-storage.svelte"
 import { format_time_remaining } from "$lib/utils/format_time"
 // See http://www.tcax.org/docs/ass-specs.htm
 import { render_video_with_subtitles } from "$lib/utils/video-processing"
-import SubtitleFramePreview from "./ui/SubtitleFramePreview.svelte"
-import SubtitleOutput from "./ui/SubtitleOutput.svelte"
-import SubtitleSettings from "./ui/SubtitleSettings.svelte"
-import SubtitleUpload from "./ui/SubtitleUpload.svelte"
+import SubtitleFramePreview from "./SubtitleFramePreview.svelte"
+import SubtitleOutput from "./SubtitleOutput.svelte"
+import SubtitleSettings from "./SubtitleSettings.svelte"
+import SubtitleUpload from "./SubtitleUpload.svelte"
 
 export function reset_output(): void {
     temp_state.ffmpeg.output_blob = null
@@ -14,7 +14,7 @@ export function reset_output(): void {
     temp_state.ffmpeg.preview_url = null
     temp_state.ffmpeg.error_message = null
     temp_state.ffmpeg.is_processing = false
-    temp_state.ffmpeg.message = "Ready to render"
+    temp_state.ffmpeg.message = "Status: Ready to render"
     temp_state.ffmpeg.progress = 0
     temp_state.ffmpeg.video_file = null
     temp_state.ffmpeg.srt_file = null
@@ -29,20 +29,19 @@ export function reset_output(): void {
         <SubtitleFramePreview />
 
         <!-- Render Section -->
-        <div class="rounded-lg border p-6">
-            <h2 class="mb-6 text-xl font-bold">Render Section</h2>
+        <div class="section">
+            <h2 class="section-title">Render Section</h2>
 
             <!-- Quality Mode -->
             <div class="mb-6">
                 <label
                     for="quality-mode"
-                    class="mb-3 block text-sm font-semibold"
+                    class="form-label"
                     >Quality Mode</label
                 >
                 <select
                     id="quality-mode"
                     bind:value={temp_state.ffmpeg.selected_quality_mode}
-                    class="w-full rounded-lg border px-4 py-3 focus:ring-2 focus:outline-none"
                     disabled={temp_state.ffmpeg.is_processing}
                 >
                     <!-- TODO Variably load modes -->
@@ -53,8 +52,8 @@ export function reset_output(): void {
 
             <!-- Status Messages -->
             {#if temp_state.ffmpeg.error_message}
-                <div class="mb-6 rounded-lg border-2 px-5 py-4">
-                    <div class="flex items-center">
+                <div class="mb-6 rounded-lg border border-red-500 bg-red-50 px-5 py-4">
+                    <div class="flex items-center text-red-700">
                         <span class="mr-3">!</span>
                         <span>{temp_state.ffmpeg.error_message}</span>
                     </div>
@@ -82,8 +81,8 @@ export function reset_output(): void {
                         </div>
                         <div class="mb-4 flex h-2 overflow-hidden rounded-full text-xs">
                             <div
+                                class="flex flex-col justify-center text-center whitespace-nowrap bg-green-500 transition-all duration-300"
                                 style="width: {temp_state.ffmpeg.progress}%"
-                                class="flex flex-col justify-center text-center whitespace-nowrap bg-green-500"
                             ></div>
                         </div>
                         {#if temp_state.ffmpeg.is_processing && temp_state.ffmpeg.processing_start_time}
@@ -106,7 +105,7 @@ export function reset_output(): void {
                 disabled={temp_state.ffmpeg.is_processing ||
 				!temp_state.ffmpeg.video_file ||
 				!temp_state.ffmpeg.srt_file}
-                class="flex w-full transform items-center justify-center rounded-lg px-8 py-4 text-xl font-bold disabled:cursor-not-allowed"
+                class="btn btn-primary btn-lg text-black px-4 py-2"
             >
                 {#if temp_state.ffmpeg.is_processing}
                     <span class="flex items-center">

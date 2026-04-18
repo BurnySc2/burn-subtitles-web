@@ -2,28 +2,40 @@ name: Run Tests
 
 on:
   push:
-    branches: [master]
+    branches: [ master, develop ]
   pull_request:
-    branches: [master]
+    branches: [ master, develop ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
-        run: npm i
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run biome checks
+        run: npm run lint
+
+      - name: Run typescript checks
+        run: npm run check
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Run tests
-        run: npm run test
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run playwright tests
+        run: npm run test:integration
