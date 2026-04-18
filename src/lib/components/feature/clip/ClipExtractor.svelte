@@ -88,7 +88,7 @@ function handle_download() {
                 id="start-time"
                 type="text"
                 bind:value={temp_state.clip.start_time}
-                placeholder="00:00.000"
+                placeholder="00:00.000 or 00:00:00.000"
                 class="rounded border border-gray-300 px-3 py-2"
             >
         </div>
@@ -102,7 +102,7 @@ function handle_download() {
                 id="end-time"
                 type="text"
                 bind:value={temp_state.clip.end_time}
-                placeholder="00:00.000"
+                placeholder="00:00.000 or 00:00:00.000"
                 class="rounded border border-gray-300 px-3 py-2"
             >
         </div>
