@@ -50,7 +50,7 @@ export const temp_state: TempState = $state({
         output_blob: null,
         output_url: null,
         preview_url: null,
-        message: "Ready to render",
+        message: "Status: Ready to render",
         error_message: null,
         processing_start_time: null,
         estimated_total_duration: 0,

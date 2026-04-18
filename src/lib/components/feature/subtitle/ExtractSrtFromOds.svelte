@@ -59,16 +59,47 @@ const srt_data = $derived.by(async () => {
             return row[column - 1] ?? ""
         })
 })
+async function process_file(file: File) {
+    if (file.name.endsWith(".ods")) {
+        const parsed = await parse_odt(file)
+        if (parsed !== null) {
+            temp_state.extract_srt.file = file
+            return true
+        }
+    }
+    return false
+}
+
 const handle_file_change = async (event: Event) => {
     const input = event.target as HTMLInputElement
-    if (input.files && input.files.length > 0) {
+    if (input.files) {
         for (const file of input.files) {
-            if (file.name.endsWith(".ods")) {
-                const parsed = parse_odt(file)
-                if (parsed !== null) {
-                    temp_state.extract_srt.file = file
-                    break
-                }
+            if (await process_file(file)) {
+                break
+            }
+        }
+    }
+}
+
+let is_dragging = $state(false)
+
+function handle_drag_over(event: DragEvent) {
+    event.preventDefault()
+    is_dragging = true
+}
+
+function handle_drag_leave() {
+    is_dragging = false
+}
+
+async function handle_drop(event: DragEvent) {
+    event.preventDefault()
+    is_dragging = false
+    const files = event.dataTransfer?.files
+    if (files) {
+        for (const file of files) {
+            if (await process_file(file)) {
+                break
             }
         }
     }
@@ -79,7 +110,7 @@ async function download_srt() {
     if (data === null) {
         return
     }
-    const blob = new Blob([data.join("\n") + "\n"], { type: "text/vtt+srt;charset=utf-8" })
+    const blob = new Blob([`${data.join("\n")}\n`], { type: "text/vtt+srt;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
@@ -91,19 +122,28 @@ async function download_srt() {
 
 <div class="flex flex-col h-full my-6 mx-16 items-center space-y-4">
     <!-- Input .ods file upload -->
-    <div class="flex">
+    <div class="flex flex-col items-center space-y-2">
         <input
             type="file"
-            class="rounded-lg px-2 py-2 file:rounded file:text-xs"
+            class="hidden"
             onchange={handle_file_change}
             id="ods-file-input"
         >
         <label
             for="ods-file-input"
-            class="px-6 py-3 rounded-lg font-medium text-center cursor-pointer inline-block"
+            class="ods-drop-zone flex flex-col items-center justify-center w-64 h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors {is_dragging ? 'border-primary bg-primary/10' : 'border-gray-400 hover:border-primary'}"
+            ondragover={handle_drag_over}
+            ondragleave={handle_drag_leave}
+            ondrop={handle_drop}
         >
-            Click to upload .ods file
+            {#if temp_state.extract_srt.file}
+                <span class="text-sm text-gray-600 truncate max-w-full px-2">{temp_state.extract_srt.file.name}</span>
+                <span class="text-xs text-gray-400 mt-1">Click or drop to replace</span>
+            {:else}
+                <span class="text-gray-500">Click or drag & drop .ods file</span>
+            {/if}
         </label>
+        <p class="text-xs text-gray-500">Upload an .ods file (click or drag and drop a .ods file)</p>
     </div>
     <div class="grid grid-cols-4 gap-4 w-full max-w-2xl">
         <label
@@ -164,7 +204,7 @@ async function download_srt() {
     {:then ods_data}
         <button
             onclick={download_srt}
-            class="px-6 py-3 rounded-lg font-medium"
+            class="btn btn-primary mx-8"
             disabled={ods_data===null}
         >
             Download SRT
@@ -184,6 +224,14 @@ async function download_srt() {
 </div>
 
 <style>
+.ods-drop-zone {
+    border-color: var(--fallback-b1, oklch(var(--b1)));
+}
+
+.ods-drop-zone:hover {
+    border-color: var(--fallback-p, oklch(var(--p)));
+}
+
 .srt-display {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 14px;
