@@ -11,7 +11,7 @@ const default_subtitle_settings = {
         right_to_left: false,
     },
     text: { color: "#ffff7f", stroke: "#000000", outline_size: 1 },
-    shadow: { size: 1 },
+    shadow: { size: 0 },
     position: { horizontal_margin: 30, vertical_anchor: "top", vertical: 0 },
 } as const
 const SubtitleSettings = z
