@@ -16,7 +16,7 @@ export async function download_ass_file(ass_content: string | null | Promise<str
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "styled_subtitles.ass"
+    a.download = "subtitles.ass"
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

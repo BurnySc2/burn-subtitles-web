@@ -108,12 +108,11 @@ input[type="number"]::placeholder {
 }
 
 .btn-primary {
-    background-color: #3b82f6;
-    color: #fff;
+    background-color: #60a5fa;
 }
 
 .btn-primary:hover {
-    background-color: #2563eb;
+    background-color: #3b82f6;
 }
 
 .btn-primary:focus {
