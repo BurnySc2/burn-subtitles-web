@@ -70,8 +70,8 @@ export const temp_state: TempState = $state({
     clip: {
         video_file: null,
         video_url: null,
-        start_time: "00:00.000",
-        end_time: "00:00.000",
+        start_time: "00:00:00.000",
+        end_time: "00:00:00.000",
         output_blob: null,
         output_url: null,
         is_processing: false,

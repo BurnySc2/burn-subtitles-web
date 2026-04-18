@@ -7,13 +7,18 @@ export function parse_timestamp(timestamp: string): number {
     return hours * 3600 + minutes * 60 + seconds
 }
 
-// Parse mm:ss.ms or mm:ss.mmm format to seconds
+// Parse mm:ss.ms or mm:ss.mmm or hh:mm:ss.mmm format to seconds
 export function parse_clip_timestamp(timestamp: string): number {
-    const match = timestamp.match(/^(\d+):(\d+)\.(\d+)$/)
-    if (!match) {
-        throw new Error("Invalid timestamp format. Use mm:ss.mmm")
+    const match = timestamp.match(/^(\d+):(\d+):(\d+)\.(\d+)$/)
+    if (match) {
+        const [, hours, minutes, seconds, ms] = match
+        return parseInt(hours, 10) * 3600 + parseInt(minutes, 10) * 60 + parseInt(seconds, 10) + parseInt(ms, 10) / 1000
     }
-    const [, minutes, seconds, ms] = match
+    const match2 = timestamp.match(/^(\d+):(\d+)\.(\d+)$/)
+    if (!match2) {
+        throw new Error("Invalid timestamp format. Use mm:ss.mmm or hh:mm:ss.mmm")
+    }
+    const [, minutes, seconds, ms] = match2
     return parseInt(minutes, 10) * 60 + parseInt(seconds, 10) + parseInt(ms, 10) / 1000
 }
 
