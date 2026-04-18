@@ -115,22 +115,6 @@ function handle_download() {
         </button>
     </div>
 
-    <!-- Progress -->
-    {#if temp_state.clip.is_processing || temp_state.clip.progress > 0}
-        <div class="rounded-lg bg-gray-100 p-4">
-            <div class="mb-2 flex justify-between text-sm">
-                <span>Progress</span>
-                <span>{temp_state.clip.progress}%</span>
-            </div>
-            <div class="h-3 w-full overflow-hidden rounded-full bg-gray-300">
-                <div
-                    class="h-full bg-blue-600 transition-all duration-300"
-                    style="width: {temp_state.clip.progress}%"
-                ></div>
-            </div>
-        </div>
-    {/if}
-
     <!-- Messages -->
     {#if temp_state.clip.message}
         <div class="rounded-lg bg-green-100 p-3 text-green-800">{temp_state.clip.message}</div>
