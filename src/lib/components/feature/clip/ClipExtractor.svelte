@@ -105,7 +105,7 @@ function handle_download() {
         <button
             onclick={handle_extract}
             disabled={!temp_state.clip.video_file || temp_state.clip.is_processing}
-            class="mt-auto rounded bg-blue-600 px-6 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            class="btn btn-primary mx-8"
         >
             {temp_state.clip.is_processing ? "Processing..." : "Extract Clip"}
         </button>

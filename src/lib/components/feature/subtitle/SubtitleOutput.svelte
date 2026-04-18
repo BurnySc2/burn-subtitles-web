@@ -43,7 +43,7 @@ function copy_ffmpeg_command() {
 
 <button
     onclick={download_selected_font}
-    class="btn btn-secondary w-full mb-4"
+    class="btn btn-primary mx-8"
 >
     Download {selected_font_name} Font File
 </button>
@@ -56,7 +56,7 @@ function copy_ffmpeg_command() {
     {:else}
         <button
             onclick={() => download_ass_file(ass_content)}
-            class="btn btn-secondary w-full mb-4"
+            class="btn btn-primary mx-8"
         >
             Download .ass File
         </button>
@@ -70,12 +70,12 @@ function copy_ffmpeg_command() {
             <span class="font-medium text-blue-900">Run locally with FFmpeg</span>
             <button
                 onclick={copy_ffmpeg_command}
-                class="rounded bg-blue-200 px-3 py-1 text-xs font-medium text-blue-800 hover:bg-blue-300"
+                class="btn btn-primary mx-8"
             >
                 {copy_button_text}
             </button>
         </div>
-        <pre class="overflow-x-auto text-sm text-blue-800">{ffmpeg_command}</pre>
+        <pre class="overflow-x-auto text-sm text-blue-800 text-wrap">{ffmpeg_command}</pre>
         <p class="mt-2 text-xs text-blue-700">
             Note: You need to download the .ass file, download the font ({selected_font_name}), have FFmpeg installed,
             and place the font file in the same directory as your video.
@@ -100,7 +100,7 @@ function copy_ffmpeg_command() {
         <div class="flex flex-col gap-4 border-t pt-4 sm:flex-row">
             <button
                 onclick={download_video}
-                class="btn btn-primary flex-1"
+                class="btn btn-primary mx-8"
             >
                 Download Video
             </button>

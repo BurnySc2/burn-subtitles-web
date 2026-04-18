@@ -105,7 +105,7 @@ export function reset_output(): void {
                 disabled={temp_state.ffmpeg.is_processing ||
 				!temp_state.ffmpeg.video_file ||
 				!temp_state.ffmpeg.srt_file}
-                class="btn btn-primary btn-lg"
+                class="btn btn-primary btn-lg text-black px-4 py-2"
             >
                 {#if temp_state.ffmpeg.is_processing}
                     <span class="flex items-center">
