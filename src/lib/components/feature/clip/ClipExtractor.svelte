@@ -82,7 +82,7 @@ function handle_download() {
             <label
                 for="start-time"
                 class="text-sm font-medium"
-                >Start Time</label
+                >Start Time (HH:MM:SS.mmm)</label
             >
             <input
                 id="start-time"
@@ -96,7 +96,7 @@ function handle_download() {
             <label
                 for="end-time"
                 class="text-sm font-medium"
-                >End Time</label
+                >End Time (HH:MM:SS.mmm)</label
             >
             <input
                 id="end-time"
