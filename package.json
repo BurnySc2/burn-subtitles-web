@@ -6,15 +6,17 @@
     "scripts": {
         "generate-types": "openapi-typescript http://localhost:8000/schema/openapi.json --output src/lib/types/api.ts",
         "dev": "vite dev --host 0.0.0.0 --port 8000",
-        "build": "vite build",
-        "preview": "vite preview",
-        "prepare": "svelte-kit sync || echo ''",
+        "build": "svelte-kit sync && vite build",
+        "lint": "biome check . --error-on-warnings",
+        "lint:fix": "biome check . --write --error-on-warnings",
+        "format": "biome format .",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-        "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-        "lint-format": "biome check --write",
-        "test:unit": "vitest",
-        "test": "npm run test:unit -- --run && npm run test:e2e",
-        "test:e2e": "playwright test"
+        "preview": "vite preview",
+        "precommit": "npm run build && npm run lint && npm run check",
+        "prepush": "npm run precommit && npm run test:unit && npm run test:integration",
+        "test": "npm run test:unit -- --run && npm run test:integraton",
+        "test:unit": "vitest run",
+        "test:integration": "playwright test"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.4",

@@ -14,7 +14,7 @@ export function reset_output(): void {
     temp_state.ffmpeg.preview_url = null
     temp_state.ffmpeg.error_message = null
     temp_state.ffmpeg.is_processing = false
-    temp_state.ffmpeg.message = "Ready to render"
+    temp_state.ffmpeg.message = "Status: Ready to render"
     temp_state.ffmpeg.progress = 0
     temp_state.ffmpeg.video_file = null
     temp_state.ffmpeg.srt_file = null
@@ -105,7 +105,7 @@ export function reset_output(): void {
                 disabled={temp_state.ffmpeg.is_processing ||
 				!temp_state.ffmpeg.video_file ||
 				!temp_state.ffmpeg.srt_file}
-                class="btn btn-primary btn-lg"
+                class="btn btn-primary btn-lg text-black px-4 py-2"
             >
                 {#if temp_state.ffmpeg.is_processing}
                     <span class="flex items-center">

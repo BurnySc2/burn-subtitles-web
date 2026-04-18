@@ -84,8 +84,8 @@ export async function trim_video(): Promise<boolean> {
     }
 
     const duration = endSeconds - startSeconds
-    const input_name = "input" + get_file_extension(temp_state.clip.video_file.name)
-    const output_name = "output" + get_file_extension(temp_state.clip.video_file.name)
+    const input_name = `input${get_file_extension(temp_state.clip.video_file.name)}`
+    const output_name = `output${get_file_extension(temp_state.clip.video_file.name)}`
 
     try {
         // Write input file
