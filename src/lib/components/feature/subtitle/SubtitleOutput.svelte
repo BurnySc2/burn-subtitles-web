@@ -13,6 +13,8 @@ const ass_content_promise = $derived.by(async () => {
     if (!temp_state.ffmpeg.srt_file) {
         return null
     }
+    // Update .ass file whenever settings update
+    $state.snapshot(perma_state.subtitle_settings)
     const srt_content = await temp_state.ffmpeg.srt_file.text()
     return generate_ass_file(srt_content)
 })
