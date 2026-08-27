@@ -106,7 +106,12 @@ export async function render_prepare(): Promise<boolean> {
     )
     // Generate and write .ass file
     const srt_content = await temp_state.ffmpeg.srt_file.text()
-    const ass_content = generate_ass_file(srt_content)
+    const ass_content = generate_ass_file(
+        srt_content,
+        temp_state.ffmpeg.video_width !== null && temp_state.ffmpeg.video_height !== null
+            ? { x: temp_state.ffmpeg.video_width, y: temp_state.ffmpeg.video_height }
+            : undefined,
+    )
     const ass_bytes = new TextEncoder().encode(ass_content)
     await temp_state.ffmpeg.ffmpeg.writeFile("subtitles.ass", ass_bytes)
 

@@ -15,8 +15,12 @@ const ass_content_promise = $derived.by(async () => {
     }
     // Update .ass file whenever settings update
     $state.snapshot(perma_state.subtitle_settings)
+    const play_res =
+        temp_state.ffmpeg.video_width !== null && temp_state.ffmpeg.video_height !== null
+            ? { x: temp_state.ffmpeg.video_width, y: temp_state.ffmpeg.video_height }
+            : undefined
     const srt_content = await temp_state.ffmpeg.srt_file.text()
-    return generate_ass_file(srt_content)
+    return generate_ass_file(srt_content, play_res)
 })
 
 const selected_font_name = $derived(get_selected_font_name(perma_state.subtitle_settings.font.index))

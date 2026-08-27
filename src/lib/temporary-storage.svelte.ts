@@ -18,6 +18,8 @@ export type TempState = {
         preview_timestamp: "00:00:05"
         video_file: File | null
         srt_file: File | null
+        video_width: number | null
+        video_height: number | null
     }
     extract_srt: {
         file: File | null
@@ -58,6 +60,8 @@ export const temp_state: TempState = $state({
         preview_timestamp: "00:00:05",
         video_file: null,
         srt_file: null,
+        video_width: null,
+        video_height: null,
     },
     extract_srt: {
         file: null,

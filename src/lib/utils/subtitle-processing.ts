@@ -103,7 +103,7 @@ function escape_ass_text(text: string): string[] {
 }
 
 // Generate ASS file from SRT content and styling parameters
-export function generate_ass_file(srt_content?: string): string {
+export function generate_ass_file(srt_content?: string, play_res?: { x: number; y: number }): string {
     const alignment_map = {
         top: "8",
         bottom: "2",
@@ -117,6 +117,8 @@ Title: Generated Subtitles
 ScriptType: v4.00+
 WrapStyle: 0
 ScaledBorderAndShadow: yes
+PlayResX: ${play_res?.x ?? 1920}
+PlayResY: ${play_res?.y ?? 1080}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding

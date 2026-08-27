@@ -1,15 +1,27 @@
 <script lang="ts">
 // See http://www.tcax.org/docs/ass-specs.htm
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { get_video_dimensions } from "$lib/utils/video-metadata"
 
 function handle_video_upload(event: Event) {
     const target = event.target as HTMLInputElement
     if (target.files?.[0]) {
-        temp_state.ffmpeg.video_file = target.files[0]
+        const file = target.files[0]
+        temp_state.ffmpeg.video_file = file
+        temp_state.ffmpeg.video_width = null
+        temp_state.ffmpeg.video_height = null
         if (temp_state.ffmpeg.preview_url) {
             URL.revokeObjectURL(temp_state.ffmpeg.preview_url)
             temp_state.ffmpeg.preview_url = null
         }
+        get_video_dimensions(file).then((dimensions) => {
+            // Ignore stale results: a newer upload may have replaced the file
+            // while this probe was still in flight.
+            if (dimensions && temp_state.ffmpeg.video_file === file) {
+                temp_state.ffmpeg.video_width = dimensions.width
+                temp_state.ffmpeg.video_height = dimensions.height
+            }
+        })
     }
 }
 
