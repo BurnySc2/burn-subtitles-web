@@ -47,12 +47,14 @@ function copy_ffmpeg_command() {
 }
 </script>
 
-<button
-    onclick={download_selected_font}
-    class="btn btn-primary mx-8"
->
-    Download {selected_font_name} Font File
-</button>
+<div class="flex flex-wrap justify-center gap-3">
+    <button
+        onclick={download_selected_font}
+        class="btn btn-primary w-full sm:w-auto"
+    >
+        Download {selected_font_name} Font File
+    </button>
+</div>
 
 {#await ass_content_promise}
 <!-- File content is being generated -->
@@ -60,23 +62,25 @@ function copy_ffmpeg_command() {
     {#if ass_content === null}
     <!-- Unable to generate file content, no srt loaded? -->
     {:else}
-        <button
-            onclick={() => download_ass_file(ass_content)}
-            class="btn btn-primary mx-8"
-        >
-            Download .ass File
-        </button>
+        <div class="flex flex-wrap justify-center gap-3">
+            <button
+                onclick={() => download_ass_file(ass_content)}
+                class="btn btn-primary w-full sm:w-auto"
+            >
+                Download .ass File
+            </button>
+        </div>
     {/if}
 {/await}
 
 <!-- FFmpeg Command for Local Run -->
 {#if ffmpeg_command}
     <div class="rounded-lg border border-blue-300 bg-blue-50 p-4">
-        <div class="mb-2 flex items-center justify-between">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-3">
             <span class="font-medium text-blue-900">Run locally with FFmpeg</span>
             <button
                 onclick={copy_ffmpeg_command}
-                class="btn btn-primary mx-8"
+                class="btn btn-secondary btn-md w-full sm:w-auto"
             >
                 {copy_button_text}
             </button>
@@ -103,10 +107,10 @@ function copy_ffmpeg_command() {
             </video>
         </div>
 
-        <div class="flex flex-col gap-4 border-t pt-4 sm:flex-row">
+        <div class="flex flex-wrap gap-3 border-t pt-4">
             <button
                 onclick={download_video}
-                class="btn btn-primary mx-8"
+                class="btn btn-primary w-full sm:w-auto"
             >
                 Download Video
             </button>

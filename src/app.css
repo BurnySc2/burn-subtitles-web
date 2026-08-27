@@ -1,25 +1,42 @@
 @import "tailwindcss";
 
 /* ============================================
+   Design Tokens
+   ============================================ */
+:root {
+    --color-primary: #3b82f6;
+    --color-primary-hover: #2563eb;
+    --color-primary-active: #1d4ed8;
+    --color-surface: #ffffff;
+    --color-border: #d1d5db;
+    --color-text: #1f2937;
+    --color-text-muted: #6b7280;
+    --radius-card: 0.5rem;
+    --focus-ring: rgba(59, 130, 246, 0.5);
+    --border-focus: #0066cc;
+    --border-default: #666666;
+}
+
+/* ============================================
    Section/Card Styles
    ============================================ */
 .section {
-    border: 1px solid #d1d5db;
-    border-radius: 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
     padding: 1.5rem;
-    background-color: #fff;
+    background-color: var(--color-surface);
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 .section-title {
     font-weight: 600;
-    color: #1f2937;
+    color: var(--color-text);
     margin-bottom: 0.75rem;
 }
 
 .section-title-sm {
     font-weight: 600;
-    color: #1f2937;
+    color: var(--color-text);
     margin-bottom: 0.5rem;
 }
 
@@ -30,7 +47,7 @@ input[type="text"],
 input[type="number"] {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--color-border);
     border-radius: 0.375rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     transition-property: color, background-color, border-color;
@@ -40,8 +57,15 @@ input[type="number"] {
 input[type="text"]:focus,
 input[type="number"]:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
-    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    border-color: var(--color-primary);
+}
+
+input[type="text"]:focus-visible,
+input[type="number"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    border-color: var(--color-primary);
 }
 
 input[type="text"]:hover,
@@ -100,6 +124,7 @@ input[type="number"]::placeholder {
     font-weight: 500;
     transition-property: color, background-color, border-color;
     transition-duration: 150ms;
+    border: none;
 }
 
 .btn:focus {
@@ -107,16 +132,36 @@ input[type="number"]::placeholder {
     box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.5);
 }
 
-.btn-primary {
-    background-color: #60a5fa;
+.btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.5);
 }
 
-.btn-primary:hover {
-    background-color: #93c5fd;
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    color: #fff;
+    border: 1px solid transparent;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--color-primary-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+    background-color: var(--color-primary-active);
 }
 
 .btn-primary:focus {
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.btn-primary:focus-visible {
+    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .btn-primary:disabled {
@@ -127,15 +172,23 @@ input[type="number"]::placeholder {
 .btn-secondary {
     background-color: #f3f4f6;
     color: #374151;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--color-border);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
     background-color: #e5e7eb;
     border-color: #9ca3af;
 }
 
+.btn-secondary:active:not(:disabled) {
+    background-color: #d1d5db;
+}
+
 .btn-secondary:focus {
+    box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.5);
+}
+
+.btn-secondary:focus-visible {
     box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.5);
 }
 
@@ -156,6 +209,13 @@ input[type="number"]::placeholder {
 .btn-md {
     padding: 0.75rem 1.5rem;
     font-weight: 600;
+}
+
+/* Secondary button small */
+.btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
 }
 
 /* ============================================
@@ -181,14 +241,74 @@ input[type="number"]::placeholder {
     margin-bottom: 0;
 }
 
+.form-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+}
+
+/* ============================================
+   File Pill & Drop Zone
+   ============================================ */
+.file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    background-color: var(--color-surface);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-pill button {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.file-pill button:hover {
+    color: var(--color-text);
+}
+
+.drop-zone {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-card);
+    background-color: var(--color-surface);
+    padding: 1rem;
+    text-align: center;
+    transition-property: border-color, background-color;
+    transition-duration: 150ms;
+    cursor: pointer;
+}
+
+.drop-zone:hover {
+    border-color: var(--color-primary);
+}
+
+.drop-zone.drag-over,
+.drop-zone[data-drag-over="true"] {
+    border-color: var(--color-primary);
+    background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+.drop-zone:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
 /* ============================================
    Global Base Styles
    ============================================ */
-:root {
-    --border-focus: #0066cc;
-    --border-default: #666666;
-}
-
 html {
     font-size: 18px;
 }
@@ -199,7 +319,7 @@ select,
 textarea {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--color-border);
     border-radius: 0.375rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     transition-property: color, background-color, border-color;
@@ -210,8 +330,16 @@ input[type="range"]:focus,
 select:focus,
 textarea:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
-    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    border-color: var(--color-primary);
+}
+
+input[type="range"]:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+    border-color: var(--color-primary);
 }
 
 /* Placeholder */
@@ -222,26 +350,37 @@ textarea:focus {
 /* Disabled state */
 input:disabled,
 select:disabled,
-button:disabled {
+button:not(.btn):disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
+.btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled {
+    opacity: 0.5;
+}
+
 /* Button base */
-button {
+button:not(.btn) {
     font-weight: 500;
-    border: 1px solid #d1d5db;
-    background-color: #fff;
-    color: #1f2937;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
 }
 
-button:focus {
+button:not(.btn):focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+    box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-button:active:not(:disabled) {
+button:not(.btn):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+button:not(.btn):active:not(:disabled) {
     background-color: #f3f4f6;
 }
 
@@ -254,13 +393,13 @@ label {
 /* Checkbox and radio */
 input[type="checkbox"],
 input[type="radio"] {
-    border-color: #d1d5db;
+    border-color: var(--color-border);
 }
 
 input[type="checkbox"]:checked,
 input[type="radio"]:checked {
-    background-color: #3b82f6;
-    border-color: #3b82f6;
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
 }
 
 /* Range input - requires custom CSS for webkit */
@@ -307,7 +446,7 @@ input[type="range"]::-moz-range-track {
 
 input[type="range"]::-moz-range-progress {
     height: 4px;
-    background: #3b82f6;
+    background: var(--color-primary);
     border-radius: 2px;
 }
 
@@ -316,9 +455,14 @@ input[type="range"]:focus {
     outline-offset: 2px;
 }
 
+input[type="range"]:focus-visible {
+    outline: 3px solid rgba(0, 102, 204, 0.3);
+    outline-offset: 2px;
+}
+
 /* Color picker */
 input[type="color"] {
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--color-border);
     border-radius: 0.375rem;
     width: 60px;
     height: 40px;
@@ -327,14 +471,14 @@ input[type="color"] {
 
 /* File input */
 input[type="file"] {
-    border: 2px dashed #d1d5db;
-    background-color: #fff;
+    border: 2px dashed var(--color-border);
+    background-color: var(--color-surface);
     border-radius: 0.375rem;
 }
 
 input[type="file"]::file-selector-button {
     background-color: #f3f4f6;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--color-border);
     color: #374151;
     font-weight: 500;
     border-radius: 0.375rem;
@@ -349,7 +493,7 @@ input[type="file"]::file-selector-button:hover {
 /* Code blocks */
 pre,
 code {
-    color: #1f2937;
+    color: var(--color-text);
     background-color: #f3f4f6;
     border: 1px solid #e5e7eb;
     border-radius: 0.375rem;

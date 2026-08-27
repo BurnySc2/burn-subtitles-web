@@ -15,7 +15,13 @@ let {
 </script>
 
 <div class="flex flex-col w-full">
+    <label
+        for="sample-text"
+        class="form-label"
+        >Preview text</label
+    >
     <textarea
+        id="sample-text"
         bind:value={sample_text}
         placeholder="Enter sample text..."
         class="w-full rounded border border-gray-300 p-1 focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -28,8 +34,8 @@ let {
 <button
     onclick={() => {
  		sample_text = "The quick brown fox jumps over the lazy dog"
- 	}}
-    class="mt-2 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+  	}}
+    class="btn btn-secondary btn-sm mt-2"
     disabled={sample_text === "The quick brown fox jumps over the lazy dog"}
 >
     Reset Text

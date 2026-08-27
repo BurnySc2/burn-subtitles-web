@@ -83,7 +83,7 @@ import { available_fonts } from "$lib/utils/fonts"
             <div class="mb-4">
                 <label
                     for="text-color"
-                    class="mb-2 block text-sm font-semibold"
+                    class="form-label"
                     >Text Color</label
                 >
                 <div class="flex items-center space-x-3">
@@ -102,7 +102,7 @@ import { available_fonts } from "$lib/utils/fonts"
             <div class="mb-4">
                 <label
                     for="stroke-color"
-                    class="mb-2 block text-sm font-semibold"
+                    class="form-label"
                     >Stroke Color</label
                 >
                 <div class="flex items-center space-x-3">
@@ -121,7 +121,7 @@ import { available_fonts } from "$lib/utils/fonts"
             <div class="mb-4">
                 <label
                     for="stroke-size"
-                    class="mb-2 block text-sm font-semibold"
+                    class="form-label"
                     >Outline Size: {perma_state.subtitle_settings.text.outline_size}px</label
                 >
                 <input
@@ -144,7 +144,7 @@ import { available_fonts } from "$lib/utils/fonts"
             <div class="mb-4">
                 <label
                     for="shadow-blur"
-                    class="mb-2 block text-sm font-semibold"
+                    class="form-label"
                     >Shadow: {perma_state.subtitle_settings.shadow.size}px</label
                 >
                 <input
@@ -190,7 +190,7 @@ import { available_fonts } from "$lib/utils/fonts"
             <div class="mb-4">
                 <label
                     for="anchor-y"
-                    class="mb-2 block text-sm font-semibold"
+                    class="form-label-lg"
                     >Vertical Anchor</label
                 >
                 <select

@@ -44,6 +44,8 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     bind:value={temp_state.ffmpeg.preview_timestamp}
                     placeholder="00:00:00"
                     class="flex-1"
+                    aria-describedby="preview-timestamp-hint"
+                    aria-busy={temp_state.ffmpeg.is_rendering_preview}
                     disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
                 >
@@ -56,20 +58,32 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     {#if temp_state.ffmpeg.is_rendering_preview}
                         <span class="flex items-center justify-center">
                             Rendering...
-                            <div class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"></div>
+                            <div
+                                class="ml-2 h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
+                                aria-hidden="true"
+                            ></div>
                         </span>
                     {:else}
                         Render Preview
                     {/if}
                 </button>
             </div>
+            <p
+                id="preview-timestamp-hint"
+                class="form-hint"
+            >
+                Use format HH:MM:SS (e.g., 00:00:05)
+            </p>
         </div>
         {#if temp_state.ffmpeg.preview_url}
-            <div class="text-center">
+            <div
+                class="text-center"
+                aria-busy={temp_state.ffmpeg.is_rendering_preview}
+            >
                 <div class="mx-auto max-w-4xl rounded-lg p-1">
                     <img
                         src={temp_state.ffmpeg.preview_url}
-                        alt="Frame preview with subtitles"
+                        alt="Preview frame at {temp_state.ffmpeg.preview_timestamp} with styled subtitles"
                         class="w-full max-h-[500px] rounded-lg object-contain"
                     >
                 </div>
