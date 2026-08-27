@@ -46,7 +46,7 @@ function handle_srt_upload(event: Event) {
             <label
                 for="video-upload"
                 class="mb-2 block text-sm font-semibold"
-                >Video</label
+                >Video <span class="font-normal text-gray-500 text-xs">(max 2 GB)</span></label
             >
             <div class="relative">
                 <input

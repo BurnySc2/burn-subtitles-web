@@ -49,7 +49,9 @@ function handle_download() {
 <div class="flex w-full max-w-4xl flex-col gap-2 p-4">
     <!-- Upload Section -->
     <div class="rounded-lg bg-gray-100 p-4">
-        <h2 class="mb-3 text-lg font-semibold">Upload Video</h2>
+        <h2 class="mb-3 text-lg font-semibold">
+            Upload Video <span class="font-normal text-gray-500 text-sm">(max 2 GB)</span>
+        </h2>
         <input
             type="file"
             accept="video/*"
