@@ -1,11 +1,28 @@
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { get_effective_font_family } from "./custom-font"
 import { available_fonts } from "./fonts"
 
 export async function load_selected_font(): Promise<boolean> {
     // Loads and writes selected font into /tmp folder for ffmpeg to read
     if (!temp_state.ffmpeg.ffmpeg) {
         return false
+    }
+
+    const custom = temp_state.ffmpeg.custom_font
+    if (custom) {
+        try {
+            temp_state.ffmpeg.message = `Loading custom font: ${custom.file.name}`
+            const buffer = await custom.file.arrayBuffer()
+            await temp_state.ffmpeg.ffmpeg.writeFile(`/tmp/${custom.tmp_filename}`, new Uint8Array(buffer))
+            console.log(`Custom font ${custom.file.name} loaded to /tmp/${custom.tmp_filename}`)
+            return true
+        } catch (err) {
+            console.error("Failed to load custom font:", err)
+            temp_state.ffmpeg.error_message = `Failed to load custom font ${custom.file.name}: ${err}`
+            temp_state.ffmpeg.message = "Font load failed"
+            return false
+        }
     }
 
     // clamp to handle purged fonts
@@ -113,8 +130,8 @@ export function generate_ass_file(srt_content?: string, play_res?: { x: number; 
     } as const
 
     const state = perma_state.subtitle_settings
-    // clamp to handle purged fonts
-    const idx = Math.min(Math.max(0, state.font.index ?? 0), available_fonts.length - 1)
+    const custom = temp_state.ffmpeg.custom_font
+    const font_family = get_effective_font_family(state.font.index ?? 0, custom)
 
     const ass_header = `[Script Info]
 Title: Generated Subtitles
@@ -127,7 +144,7 @@ PlayResY: ${play_res?.y ?? 1080}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${available_fonts[idx].font_family},${state.font.size},&H${hex_to_ass(state.text.color)},&H000000,&H${hex_to_ass(state.text.stroke)},&H000000,0,0,0,0,100,100,0,0,1,${state.text.outline_size},${state.shadow.size},${alignment_map[state.position.vertical_anchor]},${state.position.horizontal_margin},${state.position.horizontal_margin},${state.position.vertical},1
+Style: Default,${font_family},${state.font.size},&H${hex_to_ass(state.text.color)},&H000000,&H${hex_to_ass(state.text.stroke)},&H000000,0,0,0,0,100,100,0,0,1,${state.text.outline_size},${state.shadow.size},${alignment_map[state.position.vertical_anchor]},${state.position.horizontal_margin},${state.position.horizontal_margin},${state.position.vertical},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

@@ -1,6 +1,8 @@
 <script lang="ts">
+import { onDestroy } from "svelte"
 // See http://www.tcax.org/docs/ass-specs.htm
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { load_custom_font, revoke_custom_font } from "$lib/utils/custom-font"
 import { get_video_dimensions } from "$lib/utils/video-metadata"
 
 function handle_video_upload(event: Event) {
@@ -33,6 +35,25 @@ function handle_srt_upload(event: Event) {
             URL.revokeObjectURL(temp_state.ffmpeg.preview_url)
             temp_state.ffmpeg.preview_url = null
         }
+    }
+}
+
+async function handle_font_upload(event: Event) {
+    const target = event.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (!file) {
+        return
+    }
+    const previous = temp_state.ffmpeg.custom_font
+    if (previous) {
+        revoke_custom_font(previous)
+    }
+    const loaded = await load_custom_font(file)
+    temp_state.ffmpeg.custom_font = loaded
+    temp_state.ffmpeg.error_message = null
+    if (temp_state.ffmpeg.preview_url) {
+        URL.revokeObjectURL(temp_state.ffmpeg.preview_url)
+        temp_state.ffmpeg.preview_url = null
     }
 }
 
@@ -71,6 +92,42 @@ function remove_srt(): void {
         el.value = ""
     }
 }
+
+function remove_custom_font(): void {
+    const cf = temp_state.ffmpeg.custom_font
+    if (cf) {
+        revoke_custom_font(cf)
+        const ffmpeg = temp_state.ffmpeg.ffmpeg
+        if (ffmpeg) {
+            const candidates = [
+                `/tmp/${cf.tmp_filename}`,
+                "/tmp/__custom.ttf",
+                "/tmp/__custom.otf",
+                "/tmp/__custom.woff",
+                "/tmp/__custom.woff2",
+            ]
+            for (const p of candidates) {
+                ffmpeg.deleteFile(p).catch(() => {})
+            }
+        }
+    }
+    temp_state.ffmpeg.custom_font = null
+    const el = document.getElementById("font-upload") as HTMLInputElement | null
+    if (el) {
+        el.value = ""
+    }
+    if (temp_state.ffmpeg.preview_url) {
+        URL.revokeObjectURL(temp_state.ffmpeg.preview_url)
+        temp_state.ffmpeg.preview_url = null
+    }
+}
+
+onDestroy(() => {
+    const cf = temp_state.ffmpeg.custom_font
+    if (cf) {
+        revoke_custom_font(cf)
+    }
+})
 </script>
 
 <!-- Upload Section -->
@@ -171,6 +228,65 @@ function remove_srt(): void {
                 {:else}
                     <p
                         id="srt-hint"
+                        class="form-hint"
+                    >
+                        No file selected
+                    </p>
+                {/if}
+            </div>
+        </div>
+
+        <!-- Custom Font Upload -->
+        <div class="flex-1 min-w-[200px]">
+            <label
+                for="font-upload"
+                class="form-label-lg"
+                >Custom Font <span class="form-hint font-normal">(Optional)</span>
+                <span class="form-hint">(ttf/otf)</span></label
+            >
+            <div class="relative">
+                <input
+                    id="font-upload"
+                    type="file"
+                    accept=".ttf,.otf,.woff,.woff2,font/*"
+                    onchange={handle_font_upload}
+                    aria-describedby="font-hint"
+                    class="w-full rounded-lg border border-gray-300 px-2 py-2 file:rounded file:text-xs focus:border-blue-500 disabled:opacity-50"
+                    disabled={temp_state.ffmpeg.is_processing}
+                >
+            </div>
+            <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+            >
+                {#if temp_state.ffmpeg.custom_font}
+                    <div
+                        id="font-hint"
+                        class="file-pill mt-2"
+                    >
+                        <span title={temp_state.ffmpeg.custom_font.file.name}
+                            >{temp_state.ffmpeg.custom_font.file.name}</span
+                        ><span class="text-xs text-gray-500"
+                            >{format_bytes(temp_state.ffmpeg.custom_font.file.size)}</span
+                        ><button
+                            type="button"
+                            aria-label="Remove custom font"
+                            onclick={remove_custom_font}
+                            class="ml-1 rounded-full p-1 hover:bg-blue-100"
+                            disabled={temp_state.ffmpeg.is_processing}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    {#if temp_state.ffmpeg.custom_font.tmp_filename.endsWith(".woff") || temp_state.ffmpeg.custom_font.tmp_filename.endsWith(".woff2")}
+                        <p class="mt-1 text-xs text-amber-600">
+                            Warning: woff/woff2 may not be supported — use ttf/otf
+                        </p>
+                    {/if}
+                {:else}
+                    <p
+                        id="font-hint"
                         class="form-hint"
                     >
                         No file selected

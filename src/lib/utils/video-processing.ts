@@ -50,7 +50,28 @@ export async function load_ffmpeg() {
 
     new_ffmpeg.on("log", ({ message: msg }: LogEvent) => {
         console.log("FFmpeg log:", msg)
-        // Don't update UI message with technical logs
+        const lower = msg.toLowerCase()
+        if (
+            lower.includes("font") ||
+            lower.includes("ass") ||
+            lower.includes("fallback") ||
+            lower.includes("not found") ||
+            lower.includes("using fontsdir")
+        ) {
+            // surface font/ass warnings to UI via error_message; dedup to avoid spamming
+            if (!temp_state.ffmpeg.error_message || !temp_state.ffmpeg.error_message.includes(msg)) {
+                // only surface if it looks like a warning about missing font
+                if (
+                    lower.includes("no font") ||
+                    lower.includes("fontselect") ||
+                    lower.includes("fallback") ||
+                    lower.includes("failed to load")
+                ) {
+                    temp_state.ffmpeg.error_message = `Font warning: ${msg}`
+                    console.warn(`Font warning: ${msg}`)
+                }
+            }
+        }
     })
 
     // @ts-expect-error
@@ -276,8 +297,27 @@ async function cleanup_ffmpeg_files(delete_output: boolean = true) {
         await temp_state.ffmpeg.ffmpeg.deleteFile(temp_state.ffmpeg.srt_file.name).catch(() => {})
     }
     // Delete font file
-    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
-    await temp_state.ffmpeg.ffmpeg.deleteFile(`/tmp/${selected_font.filename}`).catch(() => {})
+    const custom = temp_state.ffmpeg.custom_font
+    if (custom) {
+        const candidates = [
+            `/tmp/${custom.tmp_filename}`,
+            "/tmp/__custom.ttf",
+            "/tmp/__custom.otf",
+            "/tmp/__custom.woff",
+            "/tmp/__custom.woff2",
+        ]
+        for (const p of candidates) {
+            try {
+                await temp_state.ffmpeg.ffmpeg.deleteFile(p)
+            } catch {}
+        }
+    } else {
+        const idx = Math.min(Math.max(0, perma_state.subtitle_settings.font.index ?? 0), available_fonts.length - 1)
+        const filename = available_fonts[idx].filename
+        try {
+            await temp_state.ffmpeg.ffmpeg.deleteFile(`/tmp/${filename}`)
+        } catch {}
+    }
 
     // Delete output files
     if (delete_output) {

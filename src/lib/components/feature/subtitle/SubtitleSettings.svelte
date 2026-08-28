@@ -3,7 +3,10 @@ import Spinner from "$lib/components/ui/Spinner.svelte"
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
 import { available_fonts } from "$lib/utils/fonts"
+
 // http: //www.tcax.org/docs/ass-specs.htm
+
+let has_custom = $derived(!!temp_state.ffmpeg.custom_font)
 </script>
 
 {#if perma_state.loading.subtitle_settings}
@@ -22,10 +25,19 @@ import { available_fonts } from "$lib/utils/fonts"
                     class="form-label-lg"
                     >Font Family</label
                 >
+                {#if has_custom && temp_state.ffmpeg.custom_font}
+                    <div
+                        role="status"
+                        aria-live="polite"
+                        class="mb-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800"
+                    >
+                        Using uploaded font: {temp_state.ffmpeg.custom_font.file.name}
+                    </div>
+                {/if}
                 <select
                     id="font-select"
                     bind:value={perma_state.subtitle_settings.font.index}
-                    disabled={temp_state.ffmpeg.is_processing}
+                    disabled={has_custom || temp_state.ffmpeg.is_processing}
                 >
                     {#each available_fonts as font, index}
                         <option value={index}>{font.select_name}</option>

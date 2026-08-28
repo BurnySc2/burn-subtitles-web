@@ -35,7 +35,7 @@ let {
     onclick={() => {
  		sample_text = "The quick brown fox jumps over the lazy dog"
   	}}
-    class="btn btn-secondary btn-sm mt-2"
+    class="btn btn-primary btn-sm mt-2"
     disabled={sample_text === "The quick brown fox jumps over the lazy dog"}
 >
     Reset Text

@@ -1,6 +1,14 @@
 import type { FFmpeg } from "@ffmpeg/ffmpeg"
 
 // Types
+export type CustomFontState = {
+    file: File
+    object_url: string
+    font_family: string // real family parsed from name table, e.g., "Roboto", "MyFont"
+    tmp_filename: `__custom.${string}`
+    font_face?: FontFace
+}
+
 export type TempState = {
     ffmpeg: {
         ffmpeg: FFmpeg | null
@@ -20,6 +28,7 @@ export type TempState = {
         srt_file: File | null
         video_width: number | null
         video_height: number | null
+        custom_font: CustomFontState | null
     }
     extract_srt: {
         file: File | null
@@ -62,6 +71,7 @@ export const temp_state: TempState = $state({
         srt_file: null,
         video_width: null,
         video_height: null,
+        custom_font: null,
     },
     extract_srt: {
         file: null,

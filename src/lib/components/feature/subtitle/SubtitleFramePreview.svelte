@@ -1,12 +1,18 @@
 <script lang="ts">
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
-import { available_fonts } from "$lib/utils/fonts"
+import { get_effective_font_family, get_effective_font_weight } from "$lib/utils/custom-font"
 import { render_ass_frame_preview } from "$lib/utils/video-processing"
 // See http://www.tcax.org/docs/ass-specs.htm
 import FontPreview from "./FontPreview.svelte"
 
 let sample_text = $state("The quick brown fox jumps over the lazy dog")
+let effective_family = $derived(
+    get_effective_font_family(perma_state.subtitle_settings.font.index, temp_state.ffmpeg.custom_font),
+)
+let effective_weight = $derived(
+    get_effective_font_weight(perma_state.subtitle_settings.font.index, temp_state.ffmpeg.custom_font),
+)
 </script>
 
 <!-- Font Preview -->
@@ -15,12 +21,10 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
     <div class="rounded-lg p-1">
         <div class="flex w-full">
             <FontPreview
-                font_name={available_fonts[perma_state.subtitle_settings.font.index]
-						.font_family}
+                font_name={effective_family}
+                font_weight={effective_weight}
                 font_size={perma_state.subtitle_settings.font.size}
                 {sample_text}
-                font_weight={available_fonts[perma_state.subtitle_settings.font.index]
-						.font_weight}
             />
         </div>
     </div>
@@ -53,7 +57,7 @@ let sample_text = $state("The quick brown fox jumps over the lazy dog")
                     onclick={render_ass_frame_preview}
                     disabled={temp_state.ffmpeg.is_processing ||
 							temp_state.ffmpeg.is_rendering_preview}
-                    class="btn btn-secondary btn-md"
+                    class="btn btn-primary btn-md"
                 >
                     {#if temp_state.ffmpeg.is_rendering_preview}
                         <span class="flex items-center justify-center">
