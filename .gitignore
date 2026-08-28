@@ -23,3 +23,12 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Font licensing guard: proprietary fonts purged 2026-08-28 (see static/fonts/FONT_LICENSES.md)
+# Disallow accidentally re-adding proprietary fonts
+/static/fonts/Arial.ttf
+/static/fonts/Candara.ttf
+/static/fonts/Tahoma.ttf
+/static/fonts/Arial*.ttf
+/static/fonts/Candara*.ttf
+/static/fonts/Tahoma*.ttf

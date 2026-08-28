@@ -19,3 +19,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+---
+## Fonts — Separate Licenses
+
+This repository distributes 16 font files in `static/fonts/` under their own licenses, not MIT:
+
+- 14 fonts under SIL Open Font License 1.1 — see `static/fonts/OFL.txt`
+- 2 fonts (OpenSans, Roboto) under Apache License 2.0 — see `static/fonts/APACHE-2.0.txt`
+
+Per-font copyright holders and upstream sources are listed in `static/fonts/FONT_LICENSES.md`. The MIT license above applies only to code and documentation, not to the font binaries. Bundling the fonts with the software is permitted under OFL §2 / Apache §4 provided the license texts and copyright notices accompany the fonts (as done here).
