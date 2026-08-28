@@ -7,7 +7,7 @@ type FontPreviewProps = {
 }
 
 let {
-    font_name = "Arial",
+    font_name = "Noto Sans",
     font_size = 16,
     font_weight = "normal",
     sample_text = "Sample text",

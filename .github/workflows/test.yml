@@ -28,6 +28,9 @@ jobs:
       - name: Run biome checks
         run: npm run lint
 
+      - name: Check font licenses
+        run: npm run check:fonts
+
       - name: Run typescript checks
         run: npm run check
 

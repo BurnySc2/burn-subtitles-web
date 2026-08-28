@@ -8,7 +8,9 @@ export async function load_selected_font(): Promise<boolean> {
         return false
     }
 
-    const selected_font = available_fonts[perma_state.subtitle_settings.font.index]
+    // clamp to handle purged fonts
+    const idx = Math.min(Math.max(0, perma_state.subtitle_settings.font.index ?? 0), available_fonts.length - 1)
+    const selected_font = available_fonts[idx]
     try {
         temp_state.ffmpeg.message = `Loading font: ${selected_font.select_name}`
 
@@ -111,6 +113,8 @@ export function generate_ass_file(srt_content?: string, play_res?: { x: number; 
     } as const
 
     const state = perma_state.subtitle_settings
+    // clamp to handle purged fonts
+    const idx = Math.min(Math.max(0, state.font.index ?? 0), available_fonts.length - 1)
 
     const ass_header = `[Script Info]
 Title: Generated Subtitles
@@ -123,7 +127,7 @@ PlayResY: ${play_res?.y ?? 1080}
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 
-Style: Default,${available_fonts[state.font.index].font_family},${state.font.size},&H${hex_to_ass(state.text.color)},&H000000,&H${hex_to_ass(state.text.stroke)},&H000000,0,0,0,0,100,100,0,0,1,${state.text.outline_size},${state.shadow.size},${alignment_map[state.position.vertical_anchor]},${state.position.horizontal_margin},${state.position.horizontal_margin},${state.position.vertical},1
+Style: Default,${available_fonts[idx].font_family},${state.font.size},&H${hex_to_ass(state.text.color)},&H000000,&H${hex_to_ass(state.text.stroke)},&H000000,0,0,0,0,100,100,0,0,1,${state.text.outline_size},${state.shadow.size},${alignment_map[state.position.vertical_anchor]},${state.position.horizontal_margin},${state.position.horizontal_margin},${state.position.vertical},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

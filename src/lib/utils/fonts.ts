@@ -9,24 +9,13 @@ type FontOption = {
 export const available_fonts: FontOption[] = [
     // Needs to be in sync with +layout.svelte font-face
     // Always download the Font-Regular version
-    // https://fonts.google.com
-    {
-        font_family: "Arial",
-        select_name: "Arial",
-        url: "/fonts/Arial.ttf",
-        filename: "Arial.ttf",
-    },
+    // Sources: google/fonts (Cairo, Noto*, OpenSans, Roboto, Rubik, Tajawal), SIL (Lateef), naver/maruBuri (MaruBuri), rastikerdar/vazirmatn (Vazirmatn)
+    // See static/fonts/FONT_LICENSES.md for per-font license & copyright
     {
         font_family: "Cairo",
         select_name: "Cairo",
         url: "/fonts/Cairo.ttf",
         filename: "Cairo.ttf",
-    },
-    {
-        font_family: "Candara",
-        select_name: "Candara",
-        url: "/fonts/Candara.ttf",
-        filename: "Candara.ttf",
     },
     {
         font_family: "Lateef",
@@ -99,13 +88,6 @@ export const available_fonts: FontOption[] = [
         select_name: "Rubik",
         url: "/fonts/Rubik.ttf",
         filename: "Rubik.ttf",
-    },
-    // Copyright issues? https://font.download/font/tahoma
-    {
-        font_family: "Tahoma",
-        select_name: "Tahoma",
-        url: "/fonts/Tahoma.ttf",
-        filename: "Tahoma.ttf",
     },
     {
         font_family: "Tajawal",
