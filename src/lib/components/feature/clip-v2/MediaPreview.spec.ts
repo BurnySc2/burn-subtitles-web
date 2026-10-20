@@ -43,4 +43,28 @@ describe("MediaPreview", () => {
         audio.dispatchEvent(new Event("error"))
         expect(on_error).toHaveBeenCalledTimes(1)
     })
+
+    it("forwards a finite current time via on_time", async () => {
+        const on_time = vi.fn()
+        const screen = await render(MediaPreview, { url: fake_url, has_video: true, on_time })
+        const video = screen.container.querySelector("video") as HTMLVideoElement
+        Object.defineProperty(video, "currentTime", { value: 7.5, configurable: true })
+        video.dispatchEvent(new Event("timeupdate"))
+        expect(on_time).toHaveBeenCalledWith(7.5)
+    })
+
+    it("forwards null via on_time for a non-finite current time", async () => {
+        const on_time = vi.fn()
+        const screen = await render(MediaPreview, { url: fake_url, has_video: true, on_time })
+        const video = screen.container.querySelector("video") as HTMLVideoElement
+        Object.defineProperty(video, "currentTime", { value: Number.NaN, configurable: true })
+        video.dispatchEvent(new Event("timeupdate"))
+        expect(on_time).toHaveBeenCalledWith(null)
+    })
+
+    it("does not throw on time updates without on_time", async () => {
+        const screen = await render(MediaPreview, { url: fake_url, has_video: true })
+        const video = screen.container.querySelector("video") as HTMLVideoElement
+        expect(() => video.dispatchEvent(new Event("timeupdate"))).not.toThrow()
+    })
 })

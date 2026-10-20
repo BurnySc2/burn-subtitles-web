@@ -54,4 +54,43 @@ describe("clip-v2-state", () => {
         expect(() => revoke_all()).not.toThrow()
         expect(URL.revokeObjectURL).not.toHaveBeenCalled()
     })
+
+    it("reset_output keeps the loaded source untouched", () => {
+        const file = new File(["x"], "a.mp4", { type: "video/mp4" })
+        clip_v2_state.source = { file, url: "blob:source", probe: null }
+        clip_v2_state.result = {
+            url: "blob:result",
+            mime: "video/mp4",
+            ext: "mp4",
+            size_bytes: 10,
+            duration: "00:00:01.000",
+        }
+        reset_output()
+        expect(clip_v2_state.source?.url).toBe("blob:source")
+        expect(clip_v2_state.result).toBeNull()
+        expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1)
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:result")
+    })
+
+    it("revoke_all revokes a sourceless-probe source without throwing", () => {
+        const file = new File(["x"], "a.mp4", { type: "video/mp4" })
+        clip_v2_state.source = { file, url: "blob:source", probe: null }
+        expect(() => revoke_all()).not.toThrow()
+        expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:source")
+        expect(clip_v2_state.source).toBeNull()
+    })
+
+    it("double reset_output revokes only once", () => {
+        clip_v2_state.result = {
+            url: "blob:result",
+            mime: "video/mp4",
+            ext: "mp4",
+            size_bytes: 10,
+            duration: "00:00:01.000",
+        }
+        reset_output()
+        expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1)
+        reset_output()
+        expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1)
+    })
 })
