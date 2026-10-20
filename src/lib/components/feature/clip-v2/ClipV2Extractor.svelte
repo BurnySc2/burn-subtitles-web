@@ -384,7 +384,9 @@ onDestroy(() => {
                     src={clip_v2_state.result_url}
                     controls
                     class="mb-4 w-full"
-                ></audio>
+                >
+                    <track kind="captions">
+                </audio>
             {/if}
             <p class="mb-4 text-sm text-gray-600">
                 Duration {result_duration} · {result_size_mb} MB · {clip_v2_state.result_mime}

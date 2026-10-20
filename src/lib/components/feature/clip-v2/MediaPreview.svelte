@@ -36,5 +36,7 @@ function handle_loaded(event: Event) {
         class="w-full"
         onloadedmetadata={handle_loaded}
         onerror={() => on_error?.()}
-    ></audio>
+    >
+        <track kind="captions">
+    </audio>
 {/if}
