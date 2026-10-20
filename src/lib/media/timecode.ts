@@ -12,7 +12,7 @@ function fraction_to_seconds(frac: string): number {
     return Number.parseInt(frac.padEnd(3, "0"), 10) / 1000
 }
 
-export function parseTimecode(raw: string): number {
+export function parse_timecode(raw: string): number {
     const value = raw.trim()
     let match = value.match(HH_MM_SS)
     if (match) {
@@ -36,7 +36,7 @@ export function parseTimecode(raw: string): number {
     throw new TimecodeError(`Invalid timecode "${raw}": expected mm:ss.mmm or hh:mm:ss.mmm`)
 }
 
-export function formatTimecode(total_seconds: number): string {
+export function format_timecode(total_seconds: number): string {
     const total_ms = Math.round(Math.max(0, total_seconds) * 1000)
     const ms = total_ms % 1000
     const total_s = Math.floor(total_ms / 1000)
@@ -46,7 +46,7 @@ export function formatTimecode(total_seconds: number): string {
     return `${pad(Math.floor(total_m / 60), 2)}:${pad(total_m % 60, 2)}:${pad(s, 2)}.${pad(ms, 3)}`
 }
 
-export function clampTimecode(start: number, end: number, duration: number | null): { start: number; end: number } {
+export function clamp_timecode(start: number, end: number, duration: number | null): { start: number; end: number } {
     const hi = duration === null ? Number.POSITIVE_INFINITY : Math.max(0, duration)
     const clamped_start = Math.min(Math.max(0, start), hi)
     const clamped_end = Math.min(Math.max(0, end), hi)

@@ -1,31 +1,31 @@
 <script lang="ts">
 let {
     url,
-    hasVideo,
-    onDuration,
-    onError,
+    has_video,
+    on_duration,
+    on_error,
 }: {
     url: string
-    hasVideo: boolean
-    onDuration?: (duration: number) => void
-    onError?: () => void
+    has_video: boolean
+    on_duration?: (duration: number) => void
+    on_error?: () => void
 } = $props()
 
 function handle_loaded(event: Event) {
     const el = event.currentTarget as HTMLVideoElement | HTMLAudioElement
     if (Number.isFinite(el.duration)) {
-        onDuration?.(el.duration)
+        on_duration?.(el.duration)
     }
 }
 </script>
 
-{#if hasVideo}
+{#if has_video}
     <video
         src={url}
         controls
         class="w-full rounded"
         onloadedmetadata={handle_loaded}
-        onerror={() => onError?.()}
+        onerror={() => on_error?.()}
     >
         <track kind="captions">
     </video>
@@ -35,6 +35,6 @@ function handle_loaded(event: Event) {
         controls
         class="w-full"
         onloadedmetadata={handle_loaded}
-        onerror={() => onError?.()}
+        onerror={() => on_error?.()}
     ></audio>
 {/if}

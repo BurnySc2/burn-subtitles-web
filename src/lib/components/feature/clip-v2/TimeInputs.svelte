@@ -1,16 +1,16 @@
 <script lang="ts">
-import { parseTimecode } from "$lib/media/timecode"
+import { parse_timecode } from "$lib/media/timecode"
 
 let {
-    startStr,
-    endStr,
-    hasSource = false,
-    onChange,
+    start_str,
+    end_str,
+    has_source = false,
+    on_change,
 }: {
-    startStr: string
-    endStr: string
-    hasSource?: boolean
-    onChange?: (start: string, end: string) => void
+    start_str: string
+    end_str: string
+    has_source?: boolean
+    on_change?: (start: string, end: string) => void
 } = $props()
 
 let start_touched = $state(false)
@@ -18,23 +18,23 @@ let end_touched = $state(false)
 
 function validate_one(value: string): string | null {
     try {
-        parseTimecode(value)
+        parse_timecode(value)
         return null
     } catch (error) {
         return (error as Error).message
     }
 }
 
-let start_error = $derived(start_touched || hasSource ? validate_one(startStr) : null)
-let end_error = $derived(end_touched || hasSource ? validate_one(endStr) : null)
+let start_error = $derived(start_touched || has_source ? validate_one(start_str) : null)
+let end_error = $derived(end_touched || has_source ? validate_one(end_str) : null)
 let range_error = $derived.by(() => {
-    if (!(start_touched || end_touched || hasSource)) {
+    if (!(start_touched || end_touched || has_source)) {
         return null
     }
     if (start_error || end_error) {
         return null
     }
-    return parseTimecode(endStr) <= parseTimecode(startStr) ? "End time must be greater than start time" : null
+    return parse_timecode(end_str) <= parse_timecode(start_str) ? "End time must be greater than start time" : null
 })
 </script>
 
@@ -48,10 +48,10 @@ let range_error = $derived.by(() => {
         <input
             id="clip-v2-start"
             type="text"
-            value={startStr}
+            value={start_str}
             oninput={(e) => {
                 start_touched = true
-                onChange?.(e.currentTarget.value, endStr)
+                on_change?.(e.currentTarget.value, end_str)
             }}
             onchange={() => {
                 start_touched = true
@@ -72,10 +72,10 @@ let range_error = $derived.by(() => {
         <input
             id="clip-v2-end"
             type="text"
-            value={endStr}
+            value={end_str}
             oninput={(e) => {
                 end_touched = true
-                onChange?.(startStr, e.currentTarget.value)
+                on_change?.(start_str, e.currentTarget.value)
             }}
             onchange={() => {
                 end_touched = true

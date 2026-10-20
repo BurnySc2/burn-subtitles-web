@@ -1,70 +1,70 @@
 import type { ProbeResult } from "./mediabunny-clip"
 
 export interface ClipV2State {
-    sourceFile: File | null
-    sourceUrl: string | null
+    source_file: File | null
+    source_url: string | null
     duration: number | null
-    hasVideo: boolean
-    hasAudio: boolean
-    mediaDetails: ProbeResult | null
-    startStr: string
-    endStr: string
-    isProcessing: boolean
-    resultUrl: string | null
-    resultMime: string | null
+    has_video: boolean
+    has_audio: boolean
+    media_details: ProbeResult | null
+    start_str: string
+    end_str: string
+    is_processing: boolean
+    result_url: string | null
+    result_mime: string | null
     error: string | null
     message: string | null
 }
 
 function initial_state(): ClipV2State {
     return {
-        sourceFile: null,
-        sourceUrl: null,
+        source_file: null,
+        source_url: null,
         duration: null,
-        hasVideo: false,
-        hasAudio: false,
-        mediaDetails: null,
-        startStr: "00:00:00.000",
-        endStr: "",
-        isProcessing: false,
-        resultUrl: null,
-        resultMime: null,
+        has_video: false,
+        has_audio: false,
+        media_details: null,
+        start_str: "00:00:00.000",
+        end_str: "",
+        is_processing: false,
+        result_url: null,
+        result_mime: null,
         error: null,
         message: null,
     }
 }
 
-export const clipV2State: ClipV2State = $state(initial_state())
+export const clip_v2_state: ClipV2State = $state(initial_state())
 
-export function resetOutput(): void {
-    if (clipV2State.resultUrl) {
-        URL.revokeObjectURL(clipV2State.resultUrl)
+export function reset_output(): void {
+    if (clip_v2_state.result_url) {
+        URL.revokeObjectURL(clip_v2_state.result_url)
     }
-    clipV2State.resultUrl = null
-    clipV2State.resultMime = null
-    clipV2State.error = null
-    clipV2State.message = null
+    clip_v2_state.result_url = null
+    clip_v2_state.result_mime = null
+    clip_v2_state.error = null
+    clip_v2_state.message = null
 }
 
-export function revokeAll(): void {
-    if (clipV2State.sourceUrl) {
-        URL.revokeObjectURL(clipV2State.sourceUrl)
+export function revoke_all(): void {
+    if (clip_v2_state.source_url) {
+        URL.revokeObjectURL(clip_v2_state.source_url)
     }
-    if (clipV2State.resultUrl) {
-        URL.revokeObjectURL(clipV2State.resultUrl)
+    if (clip_v2_state.result_url) {
+        URL.revokeObjectURL(clip_v2_state.result_url)
     }
     const fresh = initial_state()
-    clipV2State.sourceFile = fresh.sourceFile
-    clipV2State.sourceUrl = fresh.sourceUrl
-    clipV2State.duration = fresh.duration
-    clipV2State.hasVideo = fresh.hasVideo
-    clipV2State.hasAudio = fresh.hasAudio
-    clipV2State.mediaDetails = fresh.mediaDetails
-    clipV2State.startStr = fresh.startStr
-    clipV2State.endStr = fresh.endStr
-    clipV2State.isProcessing = fresh.isProcessing
-    clipV2State.resultUrl = fresh.resultUrl
-    clipV2State.resultMime = fresh.resultMime
-    clipV2State.error = fresh.error
-    clipV2State.message = fresh.message
+    clip_v2_state.source_file = fresh.source_file
+    clip_v2_state.source_url = fresh.source_url
+    clip_v2_state.duration = fresh.duration
+    clip_v2_state.has_video = fresh.has_video
+    clip_v2_state.has_audio = fresh.has_audio
+    clip_v2_state.media_details = fresh.media_details
+    clip_v2_state.start_str = fresh.start_str
+    clip_v2_state.end_str = fresh.end_str
+    clip_v2_state.is_processing = fresh.is_processing
+    clip_v2_state.result_url = fresh.result_url
+    clip_v2_state.result_mime = fresh.result_mime
+    clip_v2_state.error = fresh.error
+    clip_v2_state.message = fresh.message
 }

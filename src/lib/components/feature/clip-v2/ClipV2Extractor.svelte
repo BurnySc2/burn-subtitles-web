@@ -1,9 +1,9 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
 import Spinner from "$lib/components/ui/Spinner.svelte"
-import { clipV2State, resetOutput, revokeAll } from "$lib/media/clip-v2-state.svelte"
-import { ClipError, defaultOutputKind, extractClip, probeMedia } from "$lib/media/mediabunny-clip"
-import { clampTimecode, formatTimecode, parseTimecode, TimecodeError } from "$lib/media/timecode"
+import { clip_v2_state, reset_output, revoke_all } from "$lib/media/clip-v2-state.svelte"
+import { ClipError, default_output_kind, extract_clip, probe_media } from "$lib/media/mediabunny-clip"
+import { clamp_timecode, format_timecode, parse_timecode, TimecodeError } from "$lib/media/timecode"
 import MediaPreview from "./MediaPreview.svelte"
 import TimeInputs from "./TimeInputs.svelte"
 
@@ -27,39 +27,39 @@ async function handle_file(event: Event) {
     aborter?.abort()
     aborter = null
     const mine = ++file_token
-    if (clipV2State.sourceUrl) {
-        URL.revokeObjectURL(clipV2State.sourceUrl)
+    if (clip_v2_state.source_url) {
+        URL.revokeObjectURL(clip_v2_state.source_url)
     }
-    resetOutput()
+    reset_output()
     is_unsupported = false
-    clipV2State.sourceFile = file
-    clipV2State.sourceUrl = URL.createObjectURL(file)
-    clipV2State.duration = null
-    clipV2State.hasVideo = false
-    clipV2State.hasAudio = false
-    clipV2State.mediaDetails = null
+    clip_v2_state.source_file = file
+    clip_v2_state.source_url = URL.createObjectURL(file)
+    clip_v2_state.duration = null
+    clip_v2_state.has_video = false
+    clip_v2_state.has_audio = false
+    clip_v2_state.media_details = null
     try {
-        const probe = await probeMedia(file)
-        if (mine !== file_token || clipV2State.sourceFile !== file) {
+        const probe = await probe_media(file)
+        if (mine !== file_token || clip_v2_state.source_file !== file) {
             return
         }
-        clipV2State.duration = probe.duration
-        clipV2State.hasVideo = probe.hasVideo
-        clipV2State.hasAudio = probe.hasAudio
-        clipV2State.mediaDetails = probe
+        clip_v2_state.duration = probe.duration
+        clip_v2_state.has_video = probe.has_video
+        clip_v2_state.has_audio = probe.has_audio
+        clip_v2_state.media_details = probe
         if (probe.duration !== null) {
-            clipV2State.startStr = formatTimecode(0)
-            clipV2State.endStr = formatTimecode(probe.duration)
+            clip_v2_state.start_str = format_timecode(0)
+            clip_v2_state.end_str = format_timecode(probe.duration)
         }
     } catch (error) {
-        if (mine !== file_token || clipV2State.sourceFile !== file) {
+        if (mine !== file_token || clip_v2_state.source_file !== file) {
             return
         }
         if (error instanceof ClipError && error.code === "UNSUPPORTED") {
-            clipV2State.error = error.message
+            clip_v2_state.error = error.message
             is_unsupported = true
         } else {
-            clipV2State.error = `Failed to read media: ${(error as Error).message}`
+            clip_v2_state.error = `Failed to read media: ${(error as Error).message}`
         }
     } finally {
         input.value = ""
@@ -67,68 +67,68 @@ async function handle_file(event: Event) {
 }
 
 async function handle_extract() {
-    if (!clipV2State.sourceFile || clipV2State.isProcessing) {
+    if (!clip_v2_state.source_file || clip_v2_state.is_processing) {
         return
     }
-    const file = clipV2State.sourceFile
+    const file = clip_v2_state.source_file
     const mine = file_token
-    resetOutput()
+    reset_output()
     is_unsupported = false
-    clipV2State.isProcessing = true
+    clip_v2_state.is_processing = true
     try {
-        const { start, end } = clampTimecode(
-            parseTimecode(clipV2State.startStr),
-            parseTimecode(clipV2State.endStr),
-            clipV2State.duration,
+        const { start, end } = clamp_timecode(
+            parse_timecode(clip_v2_state.start_str),
+            parse_timecode(clip_v2_state.end_str),
+            clip_v2_state.duration,
         )
         aborter = new AbortController()
-        const result = await extractClip({
+        const result = await extract_clip({
             file,
             start,
             end,
-            outputKind: defaultOutputKind({ hasVideo: clipV2State.hasVideo }),
+            output_kind: default_output_kind({ has_video: clip_v2_state.has_video }),
             signal: aborter.signal,
         })
-        clipV2State.resultUrl = URL.createObjectURL(result.blob)
-        clipV2State.resultMime = result.mime
+        clip_v2_state.result_url = URL.createObjectURL(result.blob)
+        clip_v2_state.result_mime = result.mime
         result_ext = result.extension.replace(/^\./, "")
         result_size_mb = (result.blob.size / 1024 / 1024).toFixed(2)
-        result_duration = formatTimecode(end - start)
-        clipV2State.message = `Clip ready: ${result_duration}, ${result_size_mb} MB`
+        result_duration = format_timecode(end - start)
+        clip_v2_state.message = `Clip ready: ${result_duration}, ${result_size_mb} MB`
     } catch (error) {
         if (error instanceof ClipError) {
             if (error.code === "CANCELLED") {
-                if (mine !== file_token || clipV2State.sourceFile !== file) {
+                if (mine !== file_token || clip_v2_state.source_file !== file) {
                     return
                 }
-                clipV2State.message = "Cancelled."
+                clip_v2_state.message = "Cancelled."
             } else if (error.code === "UNSUPPORTED") {
-                clipV2State.error = error.message
+                clip_v2_state.error = error.message
                 is_unsupported = true
             } else {
-                clipV2State.error = error.message
+                clip_v2_state.error = error.message
             }
         } else if (error instanceof TimecodeError) {
-            clipV2State.error = error.message
+            clip_v2_state.error = error.message
         } else {
-            clipV2State.error = `Failed to extract clip: ${(error as Error).message}`
+            clip_v2_state.error = `Failed to extract clip: ${(error as Error).message}`
         }
     } finally {
-        clipV2State.isProcessing = false
+        clip_v2_state.is_processing = false
         aborter = null
     }
 }
 
 function handle_preview_duration(value: number) {
-    if (clipV2State.duration === null) {
-        clipV2State.duration = value
-        clipV2State.endStr = formatTimecode(value)
+    if (clip_v2_state.duration === null) {
+        clip_v2_state.duration = value
+        clip_v2_state.end_str = format_timecode(value)
     }
 }
 
 let times_valid = $derived.by(() => {
     try {
-        return parseTimecode(clipV2State.endStr) > parseTimecode(clipV2State.startStr)
+        return parse_timecode(clip_v2_state.end_str) > parse_timecode(clip_v2_state.start_str)
     } catch {
         return false
     }
@@ -136,7 +136,7 @@ let times_valid = $derived.by(() => {
 
 onDestroy(() => {
     aborter?.abort()
-    revokeAll()
+    revoke_all()
 })
 </script>
 
@@ -175,27 +175,28 @@ onDestroy(() => {
         >
     </div>
 
-    {#if clipV2State.sourceUrl}
+    {#if clip_v2_state.source_url}
         <div class="rounded-lg bg-gray-100 p-4">
             <h2 class="mb-3 text-lg font-semibold">Preview</h2>
             <MediaPreview
-                url={clipV2State.sourceUrl}
-                hasVideo={clipV2State.hasVideo}
-                onDuration={handle_preview_duration}
-                onError={() => (clipV2State.error = "Preview failed: this codec may not be supported by the browser.")}
+                url={clip_v2_state.source_url}
+                has_video={clip_v2_state.has_video}
+                on_duration={handle_preview_duration}
+                on_error={() =>
+                    (clip_v2_state.error = "Preview failed: this codec may not be supported by the browser.")}
             />
-            {#if clipV2State.mediaDetails}
-                {@const details = clipV2State.mediaDetails}
+            {#if clip_v2_state.media_details}
+                {@const details = clip_v2_state.media_details}
                 <details class="mt-3">
                     <summary class="cursor-pointer text-sm font-medium text-gray-700">Media details</summary>
                     <dl class="mt-2 space-y-1 text-sm text-gray-500">
                         <div class="flex gap-2">
                             <dt class="font-medium">File:</dt>
-                            <dd>{details.fileName}</dd>
+                            <dd>{details.file_name}</dd>
                         </div>
                         <div class="flex gap-2">
                             <dt class="font-medium">Size:</dt>
-                            <dd>{(details.fileSize / 1024 / 1024).toFixed(2)} MB</dd>
+                            <dd>{(details.file_size / 1024 / 1024).toFixed(2)} MB</dd>
                         </div>
                         {#if details.container}
                             <div class="flex gap-2">
@@ -203,92 +204,92 @@ onDestroy(() => {
                                 <dd>{details.container}</dd>
                             </div>
                         {/if}
-                        {#if details.mimeType}
+                        {#if details.mime_type}
                             <div class="flex gap-2">
                                 <dt class="font-medium">MIME:</dt>
-                                <dd>{details.mimeType}</dd>
+                                <dd>{details.mime_type}</dd>
                             </div>
                         {/if}
                         {#if details.duration !== null}
                             <div class="flex gap-2">
                                 <dt class="font-medium">Duration:</dt>
-                                <dd>{formatTimecode(details.duration)}</dd>
+                                <dd>{format_timecode(details.duration)}</dd>
                             </div>
                         {/if}
-                        {#if details.overallBitrate !== null}
+                        {#if details.overall_bitrate !== null}
                             <div class="flex gap-2">
                                 <dt class="font-medium">Overall bitrate:</dt>
-                                <dd>{Math.round(details.overallBitrate / 1000)} kbps</dd>
+                                <dd>{Math.round(details.overall_bitrate / 1000)} kbps</dd>
                             </div>
                         {/if}
                         <div class="flex gap-2">
                             <dt class="font-medium">Tracks:</dt>
-                            <dd>Video {details.videoCount} · Audio {details.audioCount}</dd>
+                            <dd>Video {details.video_count} · Audio {details.audio_count}</dd>
                         </div>
-                        {#if details.hasVideo}
-                            {#if details.videoCodec}
+                        {#if details.has_video}
+                            {#if details.video_codec}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Video codec:</dt>
                                     <dd>
-                                        {details.videoCodec}
-                                        {details.videoCodecParam ? ` (${details.videoCodecParam})` : ""}
+                                        {details.video_codec}
+                                        {details.video_codec_param ? ` (${details.video_codec_param})` : ""}
                                     </dd>
                                 </div>
                             {/if}
-                            {#if details.displayWidth !== null && details.displayHeight !== null}
+                            {#if details.display_width !== null && details.display_height !== null}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Resolution:</dt>
-                                    <dd>{details.displayWidth}x{details.displayHeight}</dd>
+                                    <dd>{details.display_width}x{details.display_height}</dd>
                                 </div>
                             {/if}
-                            {#if details.codedWidth !== null &&
-                                details.codedHeight !== null &&
-                                (details.codedWidth !== details.displayWidth ||
-                                    details.codedHeight !== details.displayHeight)}
+                            {#if details.coded_width !== null &&
+                                details.coded_height !== null &&
+                                (details.coded_width !== details.display_width ||
+                                    details.coded_height !== details.display_height)}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Coded size:</dt>
-                                    <dd>{details.codedWidth}x{details.codedHeight}</dd>
+                                    <dd>{details.coded_width}x{details.coded_height}</dd>
                                 </div>
                             {/if}
-                            {#if details.frameRate !== null}
+                            {#if details.frame_rate !== null}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Frame rate:</dt>
-                                    <dd>{details.frameRate.toFixed(2)} fps</dd>
+                                    <dd>{details.frame_rate.toFixed(2)} fps</dd>
                                 </div>
                             {/if}
-                            {#if details.videoBitrate !== null}
+                            {#if details.video_bitrate !== null}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Video bitrate:</dt>
-                                    <dd>{Math.round(details.videoBitrate / 1000)} kbps</dd>
+                                    <dd>{Math.round(details.video_bitrate / 1000)} kbps</dd>
                                 </div>
                             {/if}
                         {/if}
-                        {#if details.hasAudio}
-                            {#if details.audioCodec}
+                        {#if details.has_audio}
+                            {#if details.audio_codec}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Audio codec:</dt>
                                     <dd>
-                                        {details.audioCodec}
-                                        {details.audioCodecParam ? ` (${details.audioCodecParam})` : ""}
+                                        {details.audio_codec}
+                                        {details.audio_codec_param ? ` (${details.audio_codec_param})` : ""}
                                     </dd>
                                 </div>
                             {/if}
-                            {#if details.audioChannels !== null}
+                            {#if details.audio_channels !== null}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Channels:</dt>
-                                    <dd>{details.audioChannels}</dd>
+                                    <dd>{details.audio_channels}</dd>
                                 </div>
                             {/if}
-                            {#if details.audioSampleRate !== null}
+                            {#if details.audio_sample_rate !== null}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Sample rate:</dt>
-                                    <dd>{details.audioSampleRate} Hz</dd>
+                                    <dd>{details.audio_sample_rate} Hz</dd>
                                 </div>
                             {/if}
-                            {#if details.audioBitrate !== null}
+                            {#if details.audio_bitrate !== null}
                                 <div class="flex gap-2">
                                     <dt class="font-medium">Audio bitrate:</dt>
-                                    <dd>{Math.round(details.audioBitrate / 1000)} kbps</dd>
+                                    <dd>{Math.round(details.audio_bitrate / 1000)} kbps</dd>
                                 </div>
                             {/if}
                         {/if}
@@ -296,7 +297,7 @@ onDestroy(() => {
                             <dt class="font-medium">Type:</dt>
                             <dd>
                                 {details.kind}
-                                {#if details.canPlay}
+                                {#if details.can_play}
                                     <span class="ml-1 rounded bg-green-200 px-1.5 py-0.5 text-xs text-green-800"
                                         >plays in browser</span
                                     >
@@ -319,29 +320,29 @@ onDestroy(() => {
     {/if}
 
     <TimeInputs
-        startStr={clipV2State.startStr}
-        endStr={clipV2State.endStr}
-        hasSource={clipV2State.sourceFile !== null}
-        onChange={(start, end) => {
-            clipV2State.startStr = start
-            clipV2State.endStr = end
+        start_str={clip_v2_state.start_str}
+        end_str={clip_v2_state.end_str}
+        has_source={clip_v2_state.source_file !== null}
+        on_change={(start, end) => {
+            clip_v2_state.start_str = start
+            clip_v2_state.end_str = end
         }}
     />
 
     <div class="flex flex-row items-center justify-center gap-2 rounded-lg bg-gray-100 p-4">
         <button
             onclick={handle_extract}
-            disabled={!clipV2State.sourceFile || clipV2State.isProcessing || !times_valid}
+            disabled={!clip_v2_state.source_file || clip_v2_state.is_processing || !times_valid}
             class="btn btn-primary inline-flex flex-1 items-center justify-center gap-2"
         >
-            {#if clipV2State.isProcessing}
+            {#if clip_v2_state.is_processing}
                 <Spinner />
                 Extracting...
             {:else}
                 Extract Clip
             {/if}
         </button>
-        {#if clipV2State.isProcessing}
+        {#if clip_v2_state.is_processing}
             <button
                 onclick={() => aborter?.abort()}
                 class="rounded bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
@@ -351,12 +352,12 @@ onDestroy(() => {
         {/if}
     </div>
 
-    {#if clipV2State.message}
-        <div class="rounded-lg bg-green-100 p-3 text-green-800">{clipV2State.message}</div>
+    {#if clip_v2_state.message}
+        <div class="rounded-lg bg-green-100 p-3 text-green-800">{clip_v2_state.message}</div>
     {/if}
-    {#if clipV2State.error}
+    {#if clip_v2_state.error}
         <div class="rounded-lg bg-red-100 p-3 text-red-800">
-            {clipV2State.error}
+            {clip_v2_state.error}
             {#if is_unsupported}
                 <a
                     href="/clip"
@@ -367,12 +368,12 @@ onDestroy(() => {
         </div>
     {/if}
 
-    {#if clipV2State.resultUrl}
+    {#if clip_v2_state.result_url}
         <div class="rounded-lg bg-gray-100 p-4">
             <h2 class="mb-3 text-lg font-semibold">Extracted Clip</h2>
-            {#if (clipV2State.resultMime ?? "").startsWith("video")}
+            {#if (clip_v2_state.result_mime ?? "").startsWith("video")}
                 <video
-                    src={clipV2State.resultUrl}
+                    src={clip_v2_state.result_url}
                     controls
                     class="mb-4 w-full rounded"
                 >
@@ -380,17 +381,17 @@ onDestroy(() => {
                 </video>
             {:else}
                 <audio
-                    src={clipV2State.resultUrl}
+                    src={clip_v2_state.result_url}
                     controls
                     class="mb-4 w-full"
                 ></audio>
             {/if}
             <p class="mb-4 text-sm text-gray-600">
-                Duration {result_duration} · {result_size_mb} MB · {clipV2State.resultMime}
+                Duration {result_duration} · {result_size_mb} MB · {clip_v2_state.result_mime}
             </p>
             <a
-                href={clipV2State.resultUrl}
-                download={`clip-${sanitize_filename(clipV2State.startStr)}-${sanitize_filename(clipV2State.endStr)}.${result_ext}`}
+                href={clip_v2_state.result_url}
+                download={`clip-${sanitize_filename(clip_v2_state.start_str)}-${sanitize_filename(clip_v2_state.end_str)}.${result_ext}`}
                 class="block w-full rounded bg-green-600 px-6 py-3 text-center text-white transition-colors hover:bg-green-700"
             >
                 Download Clip
