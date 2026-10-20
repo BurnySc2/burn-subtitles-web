@@ -84,6 +84,29 @@ describe("render_transition guards", () => {
         ).rejects.toMatchObject({ code: "INVALID_RANGE" })
     })
 
+    it("rejects out-of-range CRF overrides with INVALID_RANGE", async () => {
+        for (const crf of [-1, 52, "abc"]) {
+            await expect(
+                render_transition({ ...base_options(), crf: crf as RenderTransitionOptions["crf"] }),
+            ).rejects.toMatchObject({ code: "INVALID_RANGE" })
+        }
+    })
+
+    it("rejects unknown audio quality values with INVALID_RANGE", async () => {
+        await expect(
+            render_transition({
+                ...base_options(),
+                audio_quality: "lossless" as RenderTransitionOptions["audio_quality"],
+            }),
+        ).rejects.toMatchObject({ code: "INVALID_RANGE" })
+    })
+
+    it("rejects non-positive explicit audio bitrates with INVALID_RANGE", async () => {
+        await expect(render_transition({ ...base_options(), audio_bitrate: 0 })).rejects.toMatchObject({
+            code: "INVALID_RANGE",
+        })
+    })
+
     it("rejects negative or non-finite start offsets with INVALID_RANGE", async () => {
         for (const start_a of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
             await expect(render_transition({ ...base_options(), start_a })).rejects.toMatchObject({

@@ -6,6 +6,8 @@ export type TransitionFpsMode = "a" | "b" | "24" | "30" | "60"
 
 export type TransitionQuality = "low" | "medium" | "high" | "very-high" | "ultra"
 
+export type TransitionAudioQuality = "96k" | "128k" | "192k" | "256k" | "320k" | "source-max"
+
 export type TransitionEasing = "linear" | "exponential"
 
 export type TransitionFn = (u: number) => number
@@ -26,7 +28,13 @@ export interface TransitionFpsProbe {
 
 export interface TransitionVideoConfig {
     bitrate: number
+    quantizer: number | null
     description: string
+}
+
+export interface TransitionAudioBitrateProbe {
+    audio_bitrate: number | null
+    overall_bitrate: number | null
 }
 
 export function resolve_output_dims(
@@ -133,14 +141,84 @@ const QUALITY_LABEL: Record<TransitionQuality, string> = {
     ultra: "Ultra (~50 Mbps, high-bitrate for further processing, not bit-exact)",
 }
 
+const QUALITY_QUANTIZER: Record<TransitionQuality, number | null> = {
+    low: 30,
+    medium: 26,
+    high: 22,
+    "very-high": 18,
+    ultra: null,
+}
+
+export const TRANSITION_AUDIO_BITRATE_DEFAULT = 128_000
+export const TRANSITION_AUDIO_BITRATE_MIN = 96_000
+export const TRANSITION_AUDIO_BITRATE_MAX = 320_000
+
+const AUDIO_BITRATE_PRESET: Record<Exclude<TransitionAudioQuality, "source-max">, number> = {
+    "96k": 96_000,
+    "128k": 128_000,
+    "192k": 192_000,
+    "256k": 256_000,
+    "320k": 320_000,
+}
+
+export function resolve_audio_bitrate(
+    probe_a: TransitionAudioBitrateProbe | null,
+    probe_b: TransitionAudioBitrateProbe | null,
+    choice: TransitionAudioQuality,
+): number {
+    if (choice !== "source-max") {
+        return AUDIO_BITRATE_PRESET[choice]
+    }
+    const audio_candidates = [probe_a?.audio_bitrate, probe_b?.audio_bitrate].filter(
+        (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0,
+    )
+    if (audio_candidates.length > 0) {
+        const peak = Math.max(...audio_candidates)
+        return Math.min(TRANSITION_AUDIO_BITRATE_MAX, Math.max(TRANSITION_AUDIO_BITRATE_MIN, Math.round(peak)))
+    }
+    const overall_candidates = [probe_a?.overall_bitrate, probe_b?.overall_bitrate].filter(
+        (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0,
+    )
+    const peak = overall_candidates.length > 0 ? Math.max(...overall_candidates) : TRANSITION_AUDIO_BITRATE_DEFAULT
+    return Math.min(TRANSITION_AUDIO_BITRATE_MAX, Math.max(TRANSITION_AUDIO_BITRATE_MIN, Math.round(peak)))
+}
+
+export function parse_crf_override(raw: number | string | null | undefined): number | null {
+    if (raw === null || raw === undefined) {
+        return null
+    }
+    if (typeof raw === "string" && raw.trim() === "") {
+        return null
+    }
+    const parsed = typeof raw === "number" ? raw : Number(String(raw).trim())
+    if (typeof raw !== "number" && !/^-?(\d+(\.\d*)?|\.\d+)$/.test(String(raw).trim())) {
+        throw new TimecodeError(`Invalid CRF "${raw}": expected a number from 0 to 51`)
+    }
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 51) {
+        throw new TimecodeError(`Invalid CRF "${raw}": expected a number from 0 to 51`)
+    }
+    return parsed
+}
+
 export function quality_to_video_config(
     quality: TransitionQuality,
     width: number,
     height: number,
     fps: number,
+    crf_override?: number | null,
 ): TransitionVideoConfig {
     const bitrate = QUALITY_BITRATE[quality]
-    return { bitrate, description: `${QUALITY_LABEL[quality]} ${width}x${height}@${fps}fps ${bitrate / 1_000_000}Mbps` }
+    const quantizer =
+        crf_override === null || crf_override === undefined
+            ? QUALITY_QUANTIZER[quality]
+            : Number.isFinite(crf_override)
+              ? crf_override
+              : QUALITY_QUANTIZER[quality]
+    return {
+        bitrate,
+        quantizer,
+        description: `${QUALITY_LABEL[quality]} ${width}x${height}@${fps}fps ${bitrate / 1_000_000}Mbps`,
+    }
 }
 
 export const FRAME_COUNT_WARNING_THRESHOLD = 1000

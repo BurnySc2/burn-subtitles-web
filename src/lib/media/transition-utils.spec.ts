@@ -4,8 +4,10 @@ import { transition_filename } from "./transition-filename"
 import {
     EASING_REGISTRY,
     estimate_frame_count,
+    parse_crf_override,
     phase_at,
     quality_to_video_config,
+    resolve_audio_bitrate,
     resolve_duration_seconds,
     resolve_output_dims,
     resolve_output_fps,
@@ -116,6 +118,74 @@ describe("quality_to_video_config", () => {
 
     it("labels ultra as high-bitrate rather than bit-exact", () => {
         expect(quality_to_video_config("ultra", 1920, 1080, 30).description).toContain("not bit-exact")
+    })
+
+    it("maps tiers to CRF quantizers with ultra bitrate-only", () => {
+        expect(quality_to_video_config("low", 1920, 1080, 30).quantizer).toBe(30)
+        expect(quality_to_video_config("medium", 1920, 1080, 30).quantizer).toBe(26)
+        expect(quality_to_video_config("high", 1920, 1080, 30).quantizer).toBe(22)
+        expect(quality_to_video_config("very-high", 1920, 1080, 30).quantizer).toBe(18)
+        expect(quality_to_video_config("ultra", 1920, 1080, 30).quantizer).toBeNull()
+    })
+
+    it("prefers an explicit CRF override with tier bitrate as fallback", () => {
+        const config = quality_to_video_config("ultra", 1920, 1080, 30, 22)
+        expect(config.quantizer).toBe(22)
+        expect(config.bitrate).toBe(50_000_000)
+    })
+})
+
+describe("resolve_audio_bitrate", () => {
+    it("returns numeric presets directly", () => {
+        expect(resolve_audio_bitrate(null, null, "96k")).toBe(96_000)
+        expect(resolve_audio_bitrate(null, null, "320k")).toBe(320_000)
+    })
+
+    it("resolves source-max from the louder probe and clamps to 96k..320k", () => {
+        const loud = { audio_bitrate: 500_000, overall_bitrate: null }
+        expect(resolve_audio_bitrate(loud, null, "source-max")).toBe(320_000)
+        const quiet = { audio_bitrate: 10_000, overall_bitrate: null }
+        expect(resolve_audio_bitrate(quiet, null, "source-max")).toBe(96_000)
+        expect(
+            resolve_audio_bitrate(
+                { audio_bitrate: 192_000, overall_bitrate: null },
+                { audio_bitrate: 128_000, overall_bitrate: null },
+                "source-max",
+            ),
+        ).toBe(192_000)
+    })
+
+    it("falls back to overall bitrate and then 128k when unknown", () => {
+        expect(
+            resolve_audio_bitrate(
+                { audio_bitrate: null, overall_bitrate: 200_000 },
+                { audio_bitrate: null, overall_bitrate: null },
+                "source-max",
+            ),
+        ).toBe(200_000)
+        expect(resolve_audio_bitrate(null, null, "source-max")).toBe(128_000)
+    })
+})
+
+describe("parse_crf_override", () => {
+    it("returns null for empty input", () => {
+        expect(parse_crf_override(null)).toBeNull()
+        expect(parse_crf_override(undefined)).toBeNull()
+        expect(parse_crf_override("")).toBeNull()
+    })
+
+    it("accepts numbers from 0 to 51", () => {
+        expect(parse_crf_override("22")).toBe(22)
+        expect(parse_crf_override(0)).toBe(0)
+        expect(parse_crf_override(51)).toBe(51)
+    })
+
+    it("rejects out-of-range or malformed CRF values", () => {
+        for (const raw of ["-1", "52", "abc"]) {
+            expect(() => parse_crf_override(raw)).toThrow(TimecodeError)
+        }
+        expect(() => parse_crf_override(-1)).toThrow(TimecodeError)
+        expect(() => parse_crf_override(99)).toThrow(TimecodeError)
     })
 })
 

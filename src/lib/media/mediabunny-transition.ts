@@ -2,17 +2,21 @@ import type { AudioBufferSink, Output } from "mediabunny"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import { premix_transition_audio } from "./transition-audio"
-import type { TransitionEasing, TransitionQuality } from "./transition-utils"
+import type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
 import {
+    parse_crf_override,
     phase_at,
     quality_to_video_config,
+    resolve_audio_bitrate,
+    TRANSITION_AUDIO_BITRATE_MAX,
+    TRANSITION_AUDIO_BITRATE_MIN,
     total_transition_duration,
     total_transition_frames,
 } from "./transition-utils"
 
 export type { ProbeResult } from "./mediabunny-clip"
 export { ClipError } from "./mediabunny-clip"
-export type { TransitionEasing, TransitionQuality } from "./transition-utils"
+export type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
 
 export interface RenderTransitionOptions {
     file_a: File
@@ -27,6 +31,9 @@ export interface RenderTransitionOptions {
     height: number
     fps: number
     quality: TransitionQuality
+    crf?: number | string | null
+    audio_quality?: TransitionAudioQuality
+    audio_bitrate?: number
     easing: TransitionEasing
     on_progress?: (progress: number) => void
     signal?: AbortSignal
@@ -41,7 +48,31 @@ export interface RenderTransitionResult {
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser transitions."
 
-const TRANSITION_AUDIO_BITRATE = 128_000
+function resolve_render_audio_bitrate(options: RenderTransitionOptions): number {
+    if (
+        typeof options.audio_bitrate === "number" &&
+        Number.isFinite(options.audio_bitrate) &&
+        options.audio_bitrate > 0
+    ) {
+        return Math.min(
+            TRANSITION_AUDIO_BITRATE_MAX,
+            Math.max(TRANSITION_AUDIO_BITRATE_MIN, Math.round(options.audio_bitrate)),
+        )
+    }
+    return resolve_audio_bitrate(
+        options.probe_a ?? null,
+        options.probe_b ?? null,
+        options.audio_quality ?? "source-max",
+    )
+}
+
+function resolve_render_crf(options: RenderTransitionOptions): number | null {
+    try {
+        return parse_crf_override(options.crf ?? null)
+    } catch {
+        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+    }
+}
 
 function validate_transition_options(options: RenderTransitionOptions): void {
     const { file_a, file_b, duration, width, height, fps, quality, easing, total_duration } = options
@@ -72,6 +103,24 @@ function validate_transition_options(options: RenderTransitionOptions): void {
     }
     if (easing !== "linear" && easing !== "exponential") {
         throw new ClipError("INVALID_RANGE", "Unknown transition easing.")
+    }
+    resolve_render_crf(options)
+    if (options.audio_bitrate !== undefined) {
+        if (!Number.isFinite(options.audio_bitrate) || options.audio_bitrate <= 0) {
+            throw new ClipError("INVALID_RANGE", "Audio bitrate must be greater than 0.")
+        }
+    }
+    if (options.audio_quality !== undefined) {
+        if (
+            options.audio_quality !== "96k" &&
+            options.audio_quality !== "128k" &&
+            options.audio_quality !== "192k" &&
+            options.audio_quality !== "256k" &&
+            options.audio_quality !== "320k" &&
+            options.audio_quality !== "source-max"
+        ) {
+            throw new ClipError("INVALID_RANGE", "Unknown transition audio quality.")
+        }
     }
     const frame_count = Math.round(duration * fps)
     if (frame_count < 1) {
@@ -255,16 +304,34 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         const canvas = document.createElement("canvas")
         canvas.width = width
         canvas.height = height
+        const crf = resolve_render_crf(options)
+        const video_config = quality_to_video_config(quality, width, height, fps, crf)
+        const video_quality =
+            video_config.quantizer !== null
+                ? new mb.Quality({
+                      quantizer: video_config.quantizer,
+                      bitrate: video_config.bitrate,
+                      bitrateMode: "variable",
+                  })
+                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
         const video_source = new mb.CanvasSource(canvas, {
             codec: "avc",
-            bitrate: quality_to_video_config(quality, width, height, fps).bitrate,
+            quality: video_quality,
+            latencyMode: "quality",
+            hardwareAcceleration: "no-preference",
+            bitrateMode: "variable",
         })
         output.addVideoTrack(video_source)
         const [audio_tracks_a, audio_tracks_b] = await Promise.all([input_a.getAudioTracks(), input_b.getAudioTracks()])
         const audio_a = resolved_a.has_audio ? (audio_tracks_a[0] ?? null) : null
         const audio_b = resolved_b.has_audio ? (audio_tracks_b[0] ?? null) : null
         const audio_source =
-            audio_a || audio_b ? new mb.AudioBufferSource({ codec: "aac", bitrate: TRANSITION_AUDIO_BITRATE }) : null
+            audio_a || audio_b
+                ? new mb.AudioBufferSource({
+                      codec: "aac",
+                      bitrate: resolve_render_audio_bitrate({ ...options, probe_a: resolved_a, probe_b: resolved_b }),
+                  })
+                : null
         if (audio_source) {
             output.addAudioTrack(audio_source)
         }
