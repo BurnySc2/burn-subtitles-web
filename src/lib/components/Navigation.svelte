@@ -10,18 +10,21 @@ const is_active = (path: string) => {
 <nav class="bg-gray-300 p-4 text-black">
     <div class="container mx-auto flex justify-center space-x-8">
         <a
-            href={resolve('/')}
-            class="transition-colors hover:text-gray-800 {is_active('/') ? 'font-bold' : ''}"
+            href={resolve("/")}
+            class="transition-colors hover:text-gray-800"
+            class:font-bold={is_active("/")}
             >Subtitles Burner</a
         >
         <a
-            href={resolve('/download-srt')}
-            class="transition-colors hover:text-gray-800 {is_active('/download-srt') ? 'font-bold' : ''}"
+            href={resolve("/download-srt")}
+            class="transition-colors hover:text-gray-800"
+            class:font-bold={is_active("/download-srt")}
             >Download SRT</a
         >
         <a
-            href={resolve('/clip')}
-            class="transition-colors hover:text-gray-800 {is_active('/clip') ? 'font-bold' : ''}"
+            href={resolve("/clip")}
+            class="transition-colors hover:text-gray-800"
+            class:font-bold={is_active("/clip")}
             >Clip Extractor</a
         >
     </div>
