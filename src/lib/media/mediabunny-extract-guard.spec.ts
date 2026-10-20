@@ -9,7 +9,7 @@ describe("extract_clip guards", () => {
             name: "ClipError",
             code: "INVALID_RANGE",
         })
-        await expect(extract_clip({ file: test_file(), start: 8, end: 2, output_kind: "wav" })).rejects.toMatchObject({
+        await expect(extract_clip({ file: test_file(), start: 8, end: 2, output_kind: "flac" })).rejects.toMatchObject({
             code: "INVALID_RANGE",
         })
     })

@@ -55,3 +55,31 @@ export function clamp_timecode(start: number, end: number, duration: number | nu
     }
     return { start: clamped_start, end: clamped_end }
 }
+
+export interface RangeValidation {
+    start_error: string | null
+    end_error: string | null
+    range_error: string | null
+}
+
+export function validate_range(start_str: string, end_str: string): RangeValidation {
+    let start_error: string | null = null
+    let end_error: string | null = null
+    try {
+        parse_timecode(start_str)
+    } catch (error) {
+        start_error = (error as Error).message
+    }
+    try {
+        parse_timecode(end_str)
+    } catch (error) {
+        end_error = (error as Error).message
+    }
+    const range_error =
+        start_error || end_error
+            ? null
+            : parse_timecode(end_str) <= parse_timecode(start_str)
+              ? "End time must be greater than start time"
+              : null
+    return { start_error, end_error, range_error }
+}

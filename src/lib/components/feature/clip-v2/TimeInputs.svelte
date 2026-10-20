@@ -1,40 +1,38 @@
 <script lang="ts">
-import { parse_timecode } from "$lib/media/timecode"
+import { validate_range } from "$lib/media/timecode"
 
 let {
     start_str,
     end_str,
     has_source = false,
     on_change,
+    on_use_current,
+    current_time_str = null,
+    can_use_current = false,
 }: {
     start_str: string
     end_str: string
     has_source?: boolean
     on_change?: (start: string, end: string) => void
+    on_use_current?: (target: "start" | "end") => void
+    current_time_str?: string | null
+    can_use_current?: boolean
 } = $props()
 
 let start_touched = $state(false)
 let end_touched = $state(false)
 
-function validate_one(value: string): string | null {
-    try {
-        parse_timecode(value)
-        return null
-    } catch (error) {
-        return (error as Error).message
-    }
-}
-
-let start_error = $derived(start_touched || has_source ? validate_one(start_str) : null)
-let end_error = $derived(end_touched || has_source ? validate_one(end_str) : null)
+let validation = $derived(validate_range(start_str, end_str))
+let start_error = $derived(start_touched || has_source ? validation.start_error : null)
+let end_error = $derived(end_touched || has_source ? validation.end_error : null)
 let range_error = $derived.by(() => {
     if (!(start_touched || end_touched || has_source)) {
         return null
     }
-    if (start_error || end_error) {
+    if (validation.start_error || validation.end_error) {
         return null
     }
-    return parse_timecode(end_str) <= parse_timecode(start_str) ? "End time must be greater than start time" : null
+    return validation.range_error
 })
 </script>
 
@@ -45,20 +43,34 @@ let range_error = $derived.by(() => {
             class="text-sm font-medium"
             >Start Time (HH:MM:SS.mmm)</label
         >
-        <input
-            id="clip-v2-start"
-            type="text"
-            value={start_str}
-            oninput={(e) => {
-                start_touched = true
-                on_change?.(e.currentTarget.value, end_str)
-            }}
-            onchange={() => {
-                start_touched = true
-            }}
-            placeholder="00:00.000 or 00:00:00.000"
-            class="rounded border border-gray-300 px-3 py-2"
-        >
+        <div class="flex items-center gap-2">
+            <input
+                id="clip-v2-start"
+                type="text"
+                value={start_str}
+                oninput={(e) => {
+                    start_touched = true
+                    on_change?.(e.currentTarget.value, end_str)
+                }}
+                placeholder="00:00.000 or 00:00:00.000"
+                class="rounded border border-gray-300 px-3 py-2"
+            >
+            <button
+                type="button"
+                onclick={() => {
+                    start_touched = true
+                    on_use_current?.("start")
+                }}
+                disabled={!can_use_current}
+                title={current_time_str
+                    ? `Copy current playback position ${current_time_str} to start`
+                    : "Play the preview first to capture its position."}
+                aria-label="Use current playback position as start time"
+                class="btn btn-secondary btn-sm whitespace-nowrap px-2 py-2 text-xs"
+            >
+                ◉ Now
+            </button>
+        </div>
         {#if start_error}
             <p class="text-sm text-red-700">{start_error}</p>
         {/if}
@@ -69,20 +81,34 @@ let range_error = $derived.by(() => {
             class="text-sm font-medium"
             >End Time (HH:MM:SS.mmm)</label
         >
-        <input
-            id="clip-v2-end"
-            type="text"
-            value={end_str}
-            oninput={(e) => {
-                end_touched = true
-                on_change?.(start_str, e.currentTarget.value)
-            }}
-            onchange={() => {
-                end_touched = true
-            }}
-            placeholder="00:00.000 or 00:00:00.000"
-            class="rounded border border-gray-300 px-3 py-2"
-        >
+        <div class="flex items-center gap-2">
+            <input
+                id="clip-v2-end"
+                type="text"
+                value={end_str}
+                oninput={(e) => {
+                    end_touched = true
+                    on_change?.(start_str, e.currentTarget.value)
+                }}
+                placeholder="00:00.000 or 00:00:00.000"
+                class="rounded border border-gray-300 px-3 py-2"
+            >
+            <button
+                type="button"
+                onclick={() => {
+                    end_touched = true
+                    on_use_current?.("end")
+                }}
+                disabled={!can_use_current}
+                title={current_time_str
+                    ? `Copy current playback position ${current_time_str} to end`
+                    : "Play the preview first to capture its position."}
+                aria-label="Use current playback position as end time"
+                class="btn btn-secondary btn-sm whitespace-nowrap px-2 py-2 text-xs"
+            >
+                ◉ Now
+            </button>
+        </div>
         {#if end_error}
             <p class="text-sm text-red-700">{end_error}</p>
         {/if}

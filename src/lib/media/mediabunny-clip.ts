@@ -28,7 +28,7 @@ export interface ProbeResult {
     can_play: boolean
 }
 
-export type ClipOutputKind = "mp4" | "wav" | "mp3" | "flac"
+export type ClipOutputKind = "mp4" | "mp3" | "flac"
 
 export type ClipErrorCode = "UNSUPPORTED" | "CANCELLED" | "INVALID_RANGE" | "FAILED"
 
@@ -69,27 +69,151 @@ export function default_output_kind(
     if (haystack.includes("mp3")) {
         return "mp3"
     }
-    if (haystack.includes("flac")) {
-        return "flac"
-    }
     return "flac"
 }
 
-let audio_encoders_ready = false
+async function try_probe<T>(fn: () => Promise<T>): Promise<T | null> {
+    try {
+        return await fn()
+    } catch {
+        return null
+    }
+}
+
+let audio_encoders_promise: Promise<void> | null = null
 
 async function ensure_audio_encoders(mb: typeof import("mediabunny")): Promise<void> {
-    if (audio_encoders_ready) {
-        return
+    audio_encoders_promise ??= (async () => {
+        if (!(await mb.canEncodeAudio("mp3"))) {
+            const { registerMp3Encoder } = await import("@mediabunny/mp3-encoder")
+            registerMp3Encoder()
+        }
+        if (!(await mb.canEncodeAudio("flac"))) {
+            const { registerFlacEncoder } = await import("@mediabunny/flac-encoder")
+            registerFlacEncoder()
+        }
+    })()
+    return audio_encoders_promise
+}
+
+type ProbeInput = InstanceType<typeof import("mediabunny").Input>
+type VideoTrackLike = Awaited<ReturnType<ProbeInput["getVideoTracks"]>>[number]
+type AudioTrackLike = Awaited<ReturnType<ProbeInput["getAudioTracks"]>>[number]
+
+interface VideoProbe {
+    video_codec: string | null
+    video_codec_param: string | null
+    display_width: number | null
+    display_height: number | null
+    coded_width: number | null
+    coded_height: number | null
+    frame_rate: number | null
+    video_bitrate: number | null
+}
+
+interface AudioProbe {
+    audio_codec: string | null
+    audio_codec_param: string | null
+    audio_channels: number | null
+    audio_sample_rate: number | null
+    audio_bitrate: number | null
+}
+
+async function resolve_duration(input: ProbeInput): Promise<number | null> {
+    const from_metadata = await try_probe(() => input.getDurationFromMetadata())
+    if (from_metadata !== null) {
+        return from_metadata
     }
-    if (!(await mb.canEncodeAudio("mp3"))) {
-        const { registerMp3Encoder } = await import("@mediabunny/mp3-encoder")
-        registerMp3Encoder()
+    return try_probe(() => input.computeDuration())
+}
+
+async function probe_video_track(video: VideoTrackLike | null): Promise<VideoProbe> {
+    const fallback: VideoProbe = {
+        video_codec: null,
+        video_codec_param: null,
+        display_width: null,
+        display_height: null,
+        coded_width: null,
+        coded_height: null,
+        frame_rate: null,
+        video_bitrate: null,
     }
-    if (!(await mb.canEncodeAudio("flac"))) {
-        const { registerFlacEncoder } = await import("@mediabunny/flac-encoder")
-        registerFlacEncoder()
+    if (!video) {
+        return fallback
     }
-    audio_encoders_ready = true
+    const video_codec = await try_probe(() => video.getCodec())
+    let video_codec_param = await try_probe(() => video.getCodecParameterString())
+    if (video_codec_param === null) {
+        const internal = await try_probe(() => video.getInternalCodecId())
+        video_codec_param = typeof internal === "string" || typeof internal === "number" ? String(internal) : null
+    }
+    const display_width = await try_probe(() => video.getDisplayWidth())
+    const display_height = await try_probe(() => video.getDisplayHeight())
+    const coded_width = await try_probe(() => video.getCodedWidth())
+    const coded_height = await try_probe(() => video.getCodedHeight())
+    const video_bitrate =
+        (await try_probe(() => video.getAverageBitrate())) ?? (await try_probe(() => video.getBitrate()))
+    let frame_rate: number | null = null
+    try {
+        const metrics = await video.computeFrameRateMetrics()
+        frame_rate = typeof metrics.bestGuessFrameRate === "number" ? metrics.bestGuessFrameRate : null
+    } catch {
+        frame_rate = null
+    }
+    return {
+        video_codec,
+        video_codec_param,
+        display_width,
+        display_height,
+        coded_width,
+        coded_height,
+        frame_rate,
+        video_bitrate,
+    }
+}
+
+async function probe_audio_track(audio: AudioTrackLike | null): Promise<AudioProbe> {
+    const fallback: AudioProbe = {
+        audio_codec: null,
+        audio_codec_param: null,
+        audio_channels: null,
+        audio_sample_rate: null,
+        audio_bitrate: null,
+    }
+    if (!audio) {
+        return fallback
+    }
+    const audio_codec = await try_probe(() => audio.getCodec())
+    let audio_codec_param = await try_probe(() => audio.getCodecParameterString())
+    if (audio_codec_param === null) {
+        const internal = await try_probe(() => audio.getInternalCodecId())
+        audio_codec_param = typeof internal === "string" || typeof internal === "number" ? String(internal) : null
+    }
+    const audio_channels = await try_probe(() => audio.getNumberOfChannels())
+    const audio_sample_rate = await try_probe(() => audio.getSampleRate())
+    const audio_bitrate =
+        (await try_probe(() => audio.getAverageBitrate())) ?? (await try_probe(() => audio.getBitrate()))
+    return { audio_codec, audio_codec_param, audio_channels, audio_sample_rate, audio_bitrate }
+}
+
+async function probe_decodability(video: VideoTrackLike | null, audio: AudioTrackLike | null): Promise<boolean> {
+    try {
+        if (video) {
+            if (!(await video.canDecode())) {
+                return false
+            }
+            if (audio) {
+                return await audio.canDecode()
+            }
+            return true
+        }
+        if (audio) {
+            return await audio.canDecode()
+        }
+        return true
+    } catch {
+        return true
+    }
 }
 
 export async function probe_media(file: File): Promise<ProbeResult> {
@@ -104,85 +228,16 @@ export async function probe_media(file: File): Promise<ProbeResult> {
         const audio = audio_tracks[0] ?? null
         const has_video = video_tracks.length > 0
         const has_audio = audio_tracks.length > 0
-        let duration: number | null = null
-        try {
-            duration = await input.getDurationFromMetadata()
-        } catch {
-            duration = null
-        }
-        if (duration === null) {
-            try {
-                duration = await input.computeDuration()
-            } catch {
-                duration = null
-            }
-        }
-        const container = await nullable(() => input.getFormat().then((format) => format.name))
+        const duration = await resolve_duration(input)
+        const container = await try_probe(() => input.getFormat().then((format) => format.name))
         let mime_type = file.type
-        const probed_mime = await nullable(() => input.getMimeType())
+        const probed_mime = await try_probe(() => input.getMimeType())
         if (probed_mime) {
             mime_type = probed_mime
         }
-        let video_codec: string | null = null
-        let video_codec_param: string | null = null
-        let display_width: number | null = null
-        let display_height: number | null = null
-        let coded_width: number | null = null
-        let coded_height: number | null = null
-        let frame_rate: number | null = null
-        let video_bitrate: number | null = null
-        if (video) {
-            video_codec = await nullable(() => video.getCodec())
-            video_codec_param = await nullable(() => video.getCodecParameterString())
-            if (video_codec_param === null) {
-                const internal = await nullable(() => video.getInternalCodecId())
-                video_codec_param =
-                    typeof internal === "string" || typeof internal === "number" ? String(internal) : null
-            }
-            display_width = await nullable(() => video.getDisplayWidth())
-            display_height = await nullable(() => video.getDisplayHeight())
-            coded_width = await nullable(() => video.getCodedWidth())
-            coded_height = await nullable(() => video.getCodedHeight())
-            video_bitrate =
-                (await nullable(() => video.getAverageBitrate())) ?? (await nullable(() => video.getBitrate()))
-            try {
-                const metrics = await video.computeFrameRateMetrics()
-                frame_rate = typeof metrics.bestGuessFrameRate === "number" ? metrics.bestGuessFrameRate : null
-            } catch {
-                frame_rate = null
-            }
-        }
-        let audio_codec: string | null = null
-        let audio_codec_param: string | null = null
-        let audio_channels: number | null = null
-        let audio_sample_rate: number | null = null
-        let audio_bitrate: number | null = null
-        if (audio) {
-            audio_codec = await nullable(() => audio.getCodec())
-            audio_codec_param = await nullable(() => audio.getCodecParameterString())
-            if (audio_codec_param === null) {
-                const internal = await nullable(() => audio.getInternalCodecId())
-                audio_codec_param =
-                    typeof internal === "string" || typeof internal === "number" ? String(internal) : null
-            }
-            audio_channels = await nullable(() => audio.getNumberOfChannels())
-            audio_sample_rate = await nullable(() => audio.getSampleRate())
-            audio_bitrate =
-                (await nullable(() => audio.getAverageBitrate())) ?? (await nullable(() => audio.getBitrate()))
-        }
-        let can_play = true
-        try {
-            if (video) {
-                can_play = await video.canDecode()
-                if (can_play && audio) {
-                    can_play = await audio.canDecode()
-                }
-            } else if (audio) {
-                can_play = await audio.canDecode()
-            }
-        } catch {
-            can_play = true
-        }
+        const video_info = await probe_video_track(video)
+        const audio_info = await probe_audio_track(audio)
+        const can_play = await probe_decodability(video, audio)
         return {
             duration,
             has_video,
@@ -195,31 +250,12 @@ export async function probe_media(file: File): Promise<ProbeResult> {
             overall_bitrate: duration !== null && duration > 0 ? (file.size * 8) / duration : null,
             video_count: video_tracks.length,
             audio_count: audio_tracks.length,
-            video_codec,
-            video_codec_param,
-            display_width,
-            display_height,
-            coded_width,
-            coded_height,
-            frame_rate,
-            video_bitrate,
-            audio_codec,
-            audio_codec_param,
-            audio_channels,
-            audio_sample_rate,
-            audio_bitrate,
+            ...video_info,
+            ...audio_info,
             can_play,
         }
     } finally {
         input.dispose()
-    }
-}
-
-async function nullable<T>(fn: () => Promise<T>): Promise<T | null> {
-    try {
-        return await fn()
-    } catch {
-        return null
     }
 }
 
@@ -247,9 +283,7 @@ export async function extract_clip(options: ExtractClipOptions): Promise<Extract
                 ? new mb.Mp4OutputFormat()
                 : output_kind === "mp3"
                   ? new mb.Mp3OutputFormat()
-                  : output_kind === "flac"
-                    ? new mb.FlacOutputFormat()
-                    : new mb.WavOutputFormat()
+                  : new mb.FlacOutputFormat()
         const target = new mb.BufferTarget()
         const output = new mb.Output({ format, target })
         await ensure_audio_encoders(mb)

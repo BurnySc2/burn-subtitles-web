@@ -1,38 +1,38 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
+import { clip_filename } from "$lib/media/clip-filename"
 import { clip_v2_state, reset_output, revoke_all } from "$lib/media/clip-v2-state.svelte"
 import { ClipError, default_output_kind, extract_clip, probe_media } from "$lib/media/mediabunny-clip"
-import { clamp_timecode, format_timecode, parse_timecode, TimecodeError } from "$lib/media/timecode"
+import { clamp_timecode, format_timecode, parse_timecode, TimecodeError, validate_range } from "$lib/media/timecode"
+import ExtractResult from "./ExtractResult.svelte"
+import MediaDetails from "./MediaDetails.svelte"
 import MediaPreview from "./MediaPreview.svelte"
 import TimeInputs from "./TimeInputs.svelte"
 
 let aborter: AbortController | null = null
 let file_token = 0
-let result_ext = $state("mp4")
-let result_size_mb = $state("")
-let result_duration = $state("")
 
-function sanitize_filename(value: string): string {
-    const printable = [...value].filter((ch) => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127).join("")
-    return printable
-        .replaceAll(":", "-")
-        .replace(/[/\\?%*|"<>+]/g, "")
-        .trim()
-        .replace(/\s+/g, " ")
-        .slice(0, 60)
-        .trim()
+let duration = $derived(clip_v2_state.source?.probe?.duration ?? null)
+let has_video = $derived(clip_v2_state.source?.probe?.has_video ?? false)
+let current_time = $state<number | null>(null)
+let current_time_str = $derived(
+    current_time !== null && Number.isFinite(current_time) ? format_timecode(current_time) : null,
+)
+let can_use_current = $derived(clip_v2_state.source !== null && current_time_str !== null)
+
+function use_current(target: "start" | "end") {
+    if (current_time_str === null) {
+        return
+    }
+    if (target === "start") {
+        clip_v2_state.start_str = current_time_str
+    } else {
+        clip_v2_state.end_str = current_time_str
+    }
 }
 
-function clip_basename(): string {
-    const raw = clip_v2_state.source_file?.name ?? clip_v2_state.media_details?.file_name ?? ""
-    const dot = raw.lastIndexOf(".")
-    const stem = dot > 0 ? raw.slice(0, dot) : raw
-    return sanitize_filename(stem) || "clip"
-}
-
-function clip_filename(): string {
-    const ext = result_ext.replace(/^\./, "")
-    return `${clip_basename()}_${sanitize_filename(clip_v2_state.start_str)}-${sanitize_filename(clip_v2_state.end_str)}.${ext}`
+function source_name(): string {
+    return clip_v2_state.source?.file.name ?? clip_v2_state.source?.probe?.file_name ?? ""
 }
 
 async function handle_file(event: Event) {
@@ -44,31 +44,24 @@ async function handle_file(event: Event) {
     aborter?.abort()
     aborter = null
     const mine = ++file_token
-    if (clip_v2_state.source_url) {
-        URL.revokeObjectURL(clip_v2_state.source_url)
+    if (clip_v2_state.source) {
+        URL.revokeObjectURL(clip_v2_state.source.url)
     }
     reset_output()
-    clip_v2_state.source_file = file
-    clip_v2_state.source_url = URL.createObjectURL(file)
-    clip_v2_state.duration = null
-    clip_v2_state.has_video = false
-    clip_v2_state.has_audio = false
-    clip_v2_state.media_details = null
+    current_time = null
+    clip_v2_state.source = { file, url: URL.createObjectURL(file), probe: null }
     try {
         const probe = await probe_media(file)
-        if (mine !== file_token || clip_v2_state.source_file !== file) {
+        if (mine !== file_token || clip_v2_state.source?.file !== file) {
             return
         }
-        clip_v2_state.duration = probe.duration
-        clip_v2_state.has_video = probe.has_video
-        clip_v2_state.has_audio = probe.has_audio
-        clip_v2_state.media_details = probe
+        clip_v2_state.source.probe = probe
         if (probe.duration !== null) {
             clip_v2_state.start_str = format_timecode(0)
             clip_v2_state.end_str = format_timecode(probe.duration)
         }
     } catch (error) {
-        if (mine !== file_token || clip_v2_state.source_file !== file) {
+        if (mine !== file_token || clip_v2_state.source?.file !== file) {
             return
         }
         if (error instanceof ClipError) {
@@ -82,10 +75,11 @@ async function handle_file(event: Event) {
 }
 
 async function handle_extract() {
-    if (!clip_v2_state.source_file || clip_v2_state.is_processing) {
+    const source = clip_v2_state.source
+    if (!source || clip_v2_state.is_processing) {
         return
     }
-    const file = clip_v2_state.source_file
+    const file = source.file
     const mine = file_token
     reset_output()
     clip_v2_state.is_processing = true
@@ -93,30 +87,34 @@ async function handle_extract() {
         const { start, end } = clamp_timecode(
             parse_timecode(clip_v2_state.start_str),
             parse_timecode(clip_v2_state.end_str),
-            clip_v2_state.duration,
+            duration,
         )
         aborter = new AbortController()
-        const result = await extract_clip({
+        const extracted = await extract_clip({
             file,
             start,
             end,
             output_kind: default_output_kind({
-                has_video: clip_v2_state.has_video,
-                audio_codec: clip_v2_state.media_details?.audio_codec,
-                container: clip_v2_state.media_details?.container,
+                has_video,
+                audio_codec: source.probe?.audio_codec,
+                container: source.probe?.container,
             }),
             signal: aborter.signal,
         })
-        clip_v2_state.result_url = URL.createObjectURL(result.blob)
-        clip_v2_state.result_mime = result.mime
-        result_ext = result.extension.replace(/^\./, "")
-        result_size_mb = (result.blob.size / 1024 / 1024).toFixed(2)
-        result_duration = format_timecode(end - start)
+        const result_duration = format_timecode(end - start)
+        const result_size_mb = (extracted.blob.size / 1024 / 1024).toFixed(2)
+        clip_v2_state.result = {
+            url: URL.createObjectURL(extracted.blob),
+            mime: extracted.mime,
+            ext: extracted.extension.replace(/^\./, ""),
+            size_mb: result_size_mb,
+            duration: result_duration,
+        }
         clip_v2_state.message = `Clip ready: ${result_duration}, ${result_size_mb} MB`
     } catch (error) {
         if (error instanceof ClipError) {
             if (error.code === "CANCELLED") {
-                if (mine !== file_token || clip_v2_state.source_file !== file) {
+                if (mine !== file_token || clip_v2_state.source?.file !== file) {
                     return
                 }
                 clip_v2_state.message = "Cancelled."
@@ -135,18 +133,16 @@ async function handle_extract() {
 }
 
 function handle_preview_duration(value: number) {
-    if (clip_v2_state.duration === null) {
-        clip_v2_state.duration = value
+    const source = clip_v2_state.source
+    if (source?.probe && source.probe.duration === null) {
+        source.probe.duration = value
         clip_v2_state.end_str = format_timecode(value)
     }
 }
 
 let times_valid = $derived.by(() => {
-    try {
-        return parse_timecode(clip_v2_state.end_str) > parse_timecode(clip_v2_state.start_str)
-    } catch {
-        return false
-    }
+    const validation = validate_range(clip_v2_state.start_str, clip_v2_state.end_str)
+    return validation.start_error === null && validation.end_error === null && validation.range_error === null
 })
 
 onDestroy(() => {
@@ -190,141 +186,19 @@ onDestroy(() => {
         >
     </div>
 
-    {#if clip_v2_state.source_url}
+    {#if clip_v2_state.source}
         <div class="rounded-lg bg-gray-100 p-4">
             <h2 class="mb-3 text-lg font-semibold">Preview</h2>
             <MediaPreview
-                url={clip_v2_state.source_url}
-                has_video={clip_v2_state.has_video}
+                url={clip_v2_state.source.url}
+                {has_video}
                 on_duration={handle_preview_duration}
+                on_time={(value) => (current_time = value)}
                 on_error={() =>
                     (clip_v2_state.error = "Preview failed: this codec may not be supported by the browser.")}
             />
-            {#if clip_v2_state.media_details}
-                {@const details = clip_v2_state.media_details}
-                <details class="mt-3">
-                    <summary class="cursor-pointer text-sm font-medium text-gray-700">Media details</summary>
-                    <dl class="mt-2 space-y-1 text-sm text-gray-500">
-                        <div class="flex gap-2">
-                            <dt class="font-medium">File:</dt>
-                            <dd>{details.file_name}</dd>
-                        </div>
-                        <div class="flex gap-2">
-                            <dt class="font-medium">Size:</dt>
-                            <dd>{(details.file_size / 1024 / 1024).toFixed(2)} MB</dd>
-                        </div>
-                        {#if details.container}
-                            <div class="flex gap-2">
-                                <dt class="font-medium">Container:</dt>
-                                <dd>{details.container}</dd>
-                            </div>
-                        {/if}
-                        {#if details.mime_type}
-                            <div class="flex gap-2">
-                                <dt class="font-medium">MIME:</dt>
-                                <dd>{details.mime_type}</dd>
-                            </div>
-                        {/if}
-                        {#if details.duration !== null}
-                            <div class="flex gap-2">
-                                <dt class="font-medium">Duration:</dt>
-                                <dd>{format_timecode(details.duration)}</dd>
-                            </div>
-                        {/if}
-                        {#if details.overall_bitrate !== null}
-                            <div class="flex gap-2">
-                                <dt class="font-medium">Overall bitrate:</dt>
-                                <dd>{Math.round(details.overall_bitrate / 1000)} kbps</dd>
-                            </div>
-                        {/if}
-                        <div class="flex gap-2">
-                            <dt class="font-medium">Tracks:</dt>
-                            <dd>Video {details.video_count} · Audio {details.audio_count}</dd>
-                        </div>
-                        {#if details.has_video}
-                            {#if details.video_codec}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Video codec:</dt>
-                                    <dd>
-                                        {details.video_codec}
-                                        {details.video_codec_param ? ` (${details.video_codec_param})` : ""}
-                                    </dd>
-                                </div>
-                            {/if}
-                            {#if details.display_width !== null && details.display_height !== null}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Resolution:</dt>
-                                    <dd>{details.display_width}x{details.display_height}</dd>
-                                </div>
-                            {/if}
-                            {#if details.coded_width !== null &&
-                                details.coded_height !== null &&
-                                (details.coded_width !== details.display_width ||
-                                    details.coded_height !== details.display_height)}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Coded size:</dt>
-                                    <dd>{details.coded_width}x{details.coded_height}</dd>
-                                </div>
-                            {/if}
-                            {#if details.frame_rate !== null}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Frame rate:</dt>
-                                    <dd>{details.frame_rate.toFixed(2)} fps</dd>
-                                </div>
-                            {/if}
-                            {#if details.video_bitrate !== null}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Video bitrate:</dt>
-                                    <dd>{Math.round(details.video_bitrate / 1000)} kbps</dd>
-                                </div>
-                            {/if}
-                        {/if}
-                        {#if details.has_audio}
-                            {#if details.audio_codec}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Audio codec:</dt>
-                                    <dd>
-                                        {details.audio_codec}
-                                        {details.audio_codec_param ? ` (${details.audio_codec_param})` : ""}
-                                    </dd>
-                                </div>
-                            {/if}
-                            {#if details.audio_channels !== null}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Channels:</dt>
-                                    <dd>{details.audio_channels}</dd>
-                                </div>
-                            {/if}
-                            {#if details.audio_sample_rate !== null}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Sample rate:</dt>
-                                    <dd>{details.audio_sample_rate} Hz</dd>
-                                </div>
-                            {/if}
-                            {#if details.audio_bitrate !== null}
-                                <div class="flex gap-2">
-                                    <dt class="font-medium">Audio bitrate:</dt>
-                                    <dd>{Math.round(details.audio_bitrate / 1000)} kbps</dd>
-                                </div>
-                            {/if}
-                        {/if}
-                        <div class="flex gap-2">
-                            <dt class="font-medium">Type:</dt>
-                            <dd>
-                                {details.kind}
-                                {#if details.can_play}
-                                    <span class="ml-1 rounded bg-green-200 px-1.5 py-0.5 text-xs text-green-800"
-                                        >plays in browser</span
-                                    >
-                                {:else}
-                                    <span class="ml-1 rounded bg-yellow-200 px-1.5 py-0.5 text-xs text-yellow-800"
-                                        >may not play in browser</span
-                                    >
-                                {/if}
-                            </dd>
-                        </div>
-                    </dl>
-                </details>
+            {#if clip_v2_state.source.probe}
+                <MediaDetails details={clip_v2_state.source.probe} />
             {/if}
         </div>
     {/if}
@@ -332,17 +206,20 @@ onDestroy(() => {
     <TimeInputs
         start_str={clip_v2_state.start_str}
         end_str={clip_v2_state.end_str}
-        has_source={clip_v2_state.source_file !== null}
+        has_source={clip_v2_state.source !== null}
         on_change={(start, end) => {
             clip_v2_state.start_str = start
             clip_v2_state.end_str = end
         }}
+        on_use_current={use_current}
+        {current_time_str}
+        {can_use_current}
     />
 
     <div class="flex flex-row items-center justify-center gap-2 rounded-lg bg-gray-100 p-4">
         <button
             onclick={handle_extract}
-            disabled={!clip_v2_state.source_file || clip_v2_state.is_processing || !times_valid}
+            disabled={!clip_v2_state.source || clip_v2_state.is_processing || !times_valid}
             class="btn btn-primary inline-flex flex-1 items-center justify-center gap-2"
         >
             {#if clip_v2_state.is_processing}
@@ -373,36 +250,15 @@ onDestroy(() => {
         <div class="rounded-lg bg-red-100 p-3 text-red-800">{clip_v2_state.error}</div>
     {/if}
 
-    {#if clip_v2_state.result_url}
-        <div class="rounded-lg bg-gray-100 p-4">
-            <h2 class="mb-3 text-lg font-semibold">Extracted Clip</h2>
-            {#if (clip_v2_state.result_mime ?? "").startsWith("video")}
-                <video
-                    src={clip_v2_state.result_url}
-                    controls
-                    class="mb-4 w-full rounded"
-                >
-                    <track kind="captions">
-                </video>
-            {:else}
-                <audio
-                    src={clip_v2_state.result_url}
-                    controls
-                    class="mb-4 w-full"
-                >
-                    <track kind="captions">
-                </audio>
-            {/if}
-            <p class="mb-4 text-sm text-gray-600">
-                Duration {result_duration} · {result_size_mb} MB · {clip_v2_state.result_mime}
-            </p>
-            <a
-                href={clip_v2_state.result_url}
-                download={clip_filename()}
-                class="block w-full rounded bg-green-600 px-6 py-3 text-center text-white transition-colors hover:bg-green-700"
-            >
-                Download Clip
-            </a>
-        </div>
+    {#if clip_v2_state.result && clip_v2_state.source}
+        <ExtractResult
+            result={clip_v2_state.result}
+            filename={clip_filename(
+                source_name(),
+                clip_v2_state.start_str,
+                clip_v2_state.end_str,
+                clip_v2_state.result.ext,
+            )}
+        />
     {/if}
 </div>
