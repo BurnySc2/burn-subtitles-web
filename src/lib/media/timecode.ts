@@ -33,7 +33,7 @@ export function parseTimecode(raw: string): number {
         }
         return Number.parseInt(m, 10) * 60 + seconds + fraction_to_seconds(ms)
     }
-    throw new TimecodeError(`Invalid timecode "${raw}": expected mm:ss.xxx or hh:mm:ss.xxx`)
+    throw new TimecodeError(`Invalid timecode "${raw}": expected mm:ss.mmm or hh:mm:ss.mmm`)
 }
 
 export function formatTimecode(total_seconds: number): string {

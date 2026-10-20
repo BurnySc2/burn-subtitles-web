@@ -4,12 +4,17 @@ import { parseTimecode } from "$lib/media/timecode"
 let {
     startStr,
     endStr,
+    hasSource = false,
     onChange,
 }: {
     startStr: string
     endStr: string
+    hasSource?: boolean
     onChange?: (start: string, end: string) => void
 } = $props()
+
+let start_touched = $state(false)
+let end_touched = $state(false)
 
 function validate_one(value: string): string | null {
     try {
@@ -20,9 +25,12 @@ function validate_one(value: string): string | null {
     }
 }
 
-let start_error = $derived(validate_one(startStr))
-let end_error = $derived(validate_one(endStr))
+let start_error = $derived(start_touched || hasSource ? validate_one(startStr) : null)
+let end_error = $derived(end_touched || hasSource ? validate_one(endStr) : null)
 let range_error = $derived.by(() => {
+    if (!(start_touched || end_touched || hasSource)) {
+        return null
+    }
     if (start_error || end_error) {
         return null
     }
@@ -41,7 +49,13 @@ let range_error = $derived.by(() => {
             id="clip-v2-start"
             type="text"
             value={startStr}
-            oninput={(e) => onChange?.(e.currentTarget.value, endStr)}
+            oninput={(e) => {
+                start_touched = true
+                onChange?.(e.currentTarget.value, endStr)
+            }}
+            onchange={() => {
+                start_touched = true
+            }}
             placeholder="00:00.000 or 00:00:00.000"
             class="rounded border border-gray-300 px-3 py-2"
         >
@@ -59,7 +73,13 @@ let range_error = $derived.by(() => {
             id="clip-v2-end"
             type="text"
             value={endStr}
-            oninput={(e) => onChange?.(startStr, e.currentTarget.value)}
+            oninput={(e) => {
+                end_touched = true
+                onChange?.(startStr, e.currentTarget.value)
+            }}
+            onchange={() => {
+                end_touched = true
+            }}
             placeholder="00:00.000 or 00:00:00.000"
             class="rounded border border-gray-300 px-3 py-2"
         >

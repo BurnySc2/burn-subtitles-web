@@ -126,6 +126,14 @@ function handle_preview_duration(value: number) {
     }
 }
 
+let times_valid = $derived.by(() => {
+    try {
+        return parseTimecode(clipV2State.endStr) > parseTimecode(clipV2State.startStr)
+    } catch {
+        return false
+    }
+})
+
 onDestroy(() => {
     aborter?.abort()
     revokeAll()
@@ -313,25 +321,30 @@ onDestroy(() => {
     <TimeInputs
         startStr={clipV2State.startStr}
         endStr={clipV2State.endStr}
+        hasSource={clipV2State.sourceFile !== null}
         onChange={(start, end) => {
             clipV2State.startStr = start
             clipV2State.endStr = end
         }}
     />
 
-    <div class="flex flex-col items-center gap-3 rounded-lg bg-gray-100 p-4">
+    <div class="flex flex-row items-center justify-center gap-2 rounded-lg bg-gray-100 p-4">
         <button
             onclick={handle_extract}
-            disabled={!clipV2State.sourceFile || clipV2State.isProcessing}
-            class="btn btn-primary w-full"
+            disabled={!clipV2State.sourceFile || clipV2State.isProcessing || !times_valid}
+            class="btn btn-primary inline-flex flex-1 items-center justify-center gap-2"
         >
-            {clipV2State.isProcessing ? "Processing..." : "Extract Clip"}
+            {#if clipV2State.isProcessing}
+                <Spinner />
+                Extracting...
+            {:else}
+                Extract Clip
+            {/if}
         </button>
         {#if clipV2State.isProcessing}
-            <Spinner />
             <button
                 onclick={() => aborter?.abort()}
-                class="rounded bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700"
+                class="rounded bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
             >
                 Cancel
             </button>
