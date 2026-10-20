@@ -28,7 +28,7 @@ export interface ProbeResult {
     can_play: boolean
 }
 
-export type ClipOutputKind = "mp4" | "wav" | "mp3"
+export type ClipOutputKind = "mp4" | "wav" | "mp3" | "flac"
 
 export type ClipErrorCode = "UNSUPPORTED" | "CANCELLED" | "INVALID_RANGE" | "FAILED"
 
@@ -59,8 +59,37 @@ export interface ExtractClipResult {
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser trimming."
 
-export function default_output_kind(probe: Pick<ProbeResult, "has_video">): ClipOutputKind {
-    return probe.has_video ? "mp4" : "wav"
+export function default_output_kind(
+    probe: Pick<ProbeResult, "has_video"> & Partial<Pick<ProbeResult, "audio_codec" | "container">>,
+): ClipOutputKind {
+    if (probe.has_video) {
+        return "mp4"
+    }
+    const haystack = `${probe.audio_codec ?? ""} ${probe.container ?? ""}`.toLowerCase()
+    if (haystack.includes("mp3")) {
+        return "mp3"
+    }
+    if (haystack.includes("flac")) {
+        return "flac"
+    }
+    return "flac"
+}
+
+let audio_encoders_ready = false
+
+async function ensure_audio_encoders(mb: typeof import("mediabunny")): Promise<void> {
+    if (audio_encoders_ready) {
+        return
+    }
+    if (!(await mb.canEncodeAudio("mp3"))) {
+        const { registerMp3Encoder } = await import("@mediabunny/mp3-encoder")
+        registerMp3Encoder()
+    }
+    if (!(await mb.canEncodeAudio("flac"))) {
+        const { registerFlacEncoder } = await import("@mediabunny/flac-encoder")
+        registerFlacEncoder()
+    }
+    audio_encoders_ready = true
 }
 
 export async function probe_media(file: File): Promise<ProbeResult> {
@@ -218,9 +247,12 @@ export async function extract_clip(options: ExtractClipOptions): Promise<Extract
                 ? new mb.Mp4OutputFormat()
                 : output_kind === "mp3"
                   ? new mb.Mp3OutputFormat()
-                  : new mb.WavOutputFormat()
+                  : output_kind === "flac"
+                    ? new mb.FlacOutputFormat()
+                    : new mb.WavOutputFormat()
         const target = new mb.BufferTarget()
         const output = new mb.Output({ format, target })
+        await ensure_audio_encoders(mb)
         conversion = await mb.Conversion.init({ input, output, trim: { start, end } })
         if (signal?.aborted) {
             await conversion.cancel()

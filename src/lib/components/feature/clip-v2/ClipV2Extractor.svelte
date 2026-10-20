@@ -100,7 +100,11 @@ async function handle_extract() {
             file,
             start,
             end,
-            output_kind: default_output_kind({ has_video: clip_v2_state.has_video }),
+            output_kind: default_output_kind({
+                has_video: clip_v2_state.has_video,
+                audio_codec: clip_v2_state.media_details?.audio_codec,
+                container: clip_v2_state.media_details?.container,
+            }),
             signal: aborter.signal,
         })
         clip_v2_state.result_url = URL.createObjectURL(result.blob)
