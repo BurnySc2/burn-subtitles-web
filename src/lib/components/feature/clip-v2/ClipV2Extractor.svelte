@@ -145,6 +145,14 @@ let times_valid = $derived.by(() => {
     return validation.start_error === null && validation.end_error === null && validation.range_error === null
 })
 
+let file_size_mb = $derived(clip_v2_state.source ? (clip_v2_state.source.file.size / 1024 / 1024).toFixed(1) : null)
+let file_format = $derived(
+    clip_v2_state.source?.probe?.container?.toUpperCase() ??
+        clip_v2_state.source?.probe?.mime_type ??
+        clip_v2_state.source?.file.type ??
+        null,
+)
+
 onDestroy(() => {
     aborter?.abort()
     revoke_all()
@@ -182,8 +190,31 @@ onDestroy(() => {
             type="file"
             accept="video/*,audio/*"
             onchange={handle_file}
-            class="w-full rounded border border-gray-300 p-2"
+            aria-describedby="clip-file-status"
+            class="w-full rounded border border-gray-300 bg-white p-2 text-transparent file:mr-4 file:rounded file:border-0 file:bg-gray-700 file:px-3 file:py-1 file:text-white hover:file:bg-gray-800"
         >
+        {#if clip_v2_state.source}
+            <p
+                id="clip-file-status"
+                aria-live="polite"
+                class="mt-2 text-sm font-medium text-green-700"
+            >
+                ✓ Accepted: {source_name()} ({file_size_mb}
+                MB
+                {#if file_format}
+                    , {file_format}
+                {/if}
+                )
+            </p>
+        {:else}
+            <p
+                id="clip-file-status"
+                aria-live="polite"
+                class="mt-2 text-sm text-gray-500"
+            >
+                No file chosen — select video or audio
+            </p>
+        {/if}
     </div>
 
     {#if clip_v2_state.source}
