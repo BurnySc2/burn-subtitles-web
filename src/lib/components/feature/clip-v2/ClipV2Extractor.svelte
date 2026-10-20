@@ -14,7 +14,26 @@ let result_size_mb = $state("")
 let result_duration = $state("")
 
 function sanitize_filename(value: string): string {
-    return value.replaceAll(":", "-")
+    const printable = [...value].filter((ch) => ch.charCodeAt(0) >= 32 && ch.charCodeAt(0) !== 127).join("")
+    return printable
+        .replaceAll(":", "-")
+        .replace(/[/\\?%*|"<>+]/g, "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .slice(0, 60)
+        .trim()
+}
+
+function clip_basename(): string {
+    const raw = clip_v2_state.source_file?.name ?? clip_v2_state.media_details?.file_name ?? ""
+    const dot = raw.lastIndexOf(".")
+    const stem = dot > 0 ? raw.slice(0, dot) : raw
+    return sanitize_filename(stem) || "clip"
+}
+
+function clip_filename(): string {
+    const ext = result_ext.replace(/^\./, "")
+    return `${clip_basename()}_${sanitize_filename(clip_v2_state.start_str)}-${sanitize_filename(clip_v2_state.end_str)}.${ext}`
 }
 
 async function handle_file(event: Event) {
@@ -372,7 +391,7 @@ onDestroy(() => {
             </p>
             <a
                 href={clip_v2_state.result_url}
-                download={`clip-${sanitize_filename(clip_v2_state.start_str)}-${sanitize_filename(clip_v2_state.end_str)}.${result_ext}`}
+                download={clip_filename()}
                 class="block w-full rounded bg-green-600 px-6 py-3 text-center text-white transition-colors hover:bg-green-700"
             >
                 Download Clip
