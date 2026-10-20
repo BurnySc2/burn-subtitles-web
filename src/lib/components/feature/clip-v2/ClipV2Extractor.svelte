@@ -1,6 +1,5 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
-import Spinner from "$lib/components/ui/Spinner.svelte"
 import { clip_v2_state, reset_output, revoke_all } from "$lib/media/clip-v2-state.svelte"
 import { ClipError, default_output_kind, extract_clip, probe_media } from "$lib/media/mediabunny-clip"
 import { clamp_timecode, format_timecode, parse_timecode, TimecodeError } from "$lib/media/timecode"
@@ -343,16 +342,20 @@ onDestroy(() => {
             class="btn btn-primary inline-flex flex-1 items-center justify-center gap-2"
         >
             {#if clip_v2_state.is_processing}
-                <Spinner />
+                <div
+                    class="h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
+                    aria-hidden="true"
+                ></div>
                 Extracting...
             {:else}
                 Extract Clip
             {/if}
         </button>
         {#if clip_v2_state.is_processing}
+            <!-- WHY btn base: unlayered button:not(.btn) in app.css beats layered bg-red-600 -->
             <button
                 onclick={() => aborter?.abort()}
-                class="rounded bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
+                class="btn bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
             >
                 Cancel
             </button>
