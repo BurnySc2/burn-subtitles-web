@@ -1,0 +1,100 @@
+import { TimecodeError } from "./timecode"
+
+export type TransitionResSource = "a" | "b"
+
+export type TransitionFpsMode = "a" | "b" | "24" | "30" | "60"
+
+export type TransitionQuality = "low" | "medium" | "high" | "very-high" | "lossless"
+
+export type TransitionEasing = "linear" | "exponential"
+
+export type TransitionFn = (u: number) => number
+
+export const EASING_REGISTRY: Record<TransitionEasing, TransitionFn> = {
+    linear: (u) => u,
+    exponential: (u) => u * u,
+}
+
+export interface TransitionDimsProbe {
+    display_width: number | null
+    display_height: number | null
+}
+
+export interface TransitionFpsProbe {
+    frame_rate: number | null
+}
+
+export interface TransitionVideoConfig {
+    bitrate: number
+    description: string
+}
+
+export function resolve_output_dims(
+    probe_a: TransitionDimsProbe | null,
+    probe_b: TransitionDimsProbe | null,
+    res_source: TransitionResSource,
+): { width: number; height: number } | null {
+    const ordered = res_source === "a" ? [probe_a, probe_b] : [probe_b, probe_a]
+    for (const probe of ordered) {
+        if (probe?.display_width != null && probe?.display_height != null) {
+            return { width: probe.display_width, height: probe.display_height }
+        }
+    }
+    return null
+}
+
+const FALLBACK_FPS = 30
+
+export function resolve_output_fps(
+    probe_a: TransitionFpsProbe | null,
+    probe_b: TransitionFpsProbe | null,
+    fps_mode: TransitionFpsMode,
+): number {
+    if (fps_mode === "24" || fps_mode === "30" || fps_mode === "60") {
+        return Number(fps_mode)
+    }
+    const probe = fps_mode === "a" ? probe_a : probe_b
+    const fps = probe?.frame_rate
+    if (typeof fps === "number" && Number.isFinite(fps) && fps > 0) {
+        return fps
+    }
+    return FALLBACK_FPS
+}
+
+export function resolve_duration_seconds(
+    duration_str: string,
+    duration_a: number | null,
+    duration_b: number | null,
+): number {
+    const parsed = Number.parseFloat(duration_str.trim())
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new TimecodeError(`Invalid transition duration "${duration_str}": expected seconds greater than 0`)
+    }
+    const bounds = [duration_a, duration_b].filter(
+        (value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0,
+    )
+    if (bounds.length > 0 && parsed > Math.min(...bounds)) {
+        throw new TimecodeError(
+            `Invalid transition duration "${duration_str}": exceeds shortest source of ${Math.min(...bounds)}s`,
+        )
+    }
+    return parsed
+}
+
+const QUALITY_BITRATE: Record<TransitionQuality, number> = {
+    low: 2_000_000,
+    medium: 5_000_000,
+    high: 10_000_000,
+    "very-high": 16_000_000,
+    lossless: 50_000_000,
+}
+
+export function quality_to_video_config(
+    quality: TransitionQuality,
+    width: number,
+    height: number,
+    fps: number,
+): TransitionVideoConfig {
+    const bitrate = QUALITY_BITRATE[quality]
+    return { bitrate, description: `${quality} ${width}x${height}@${fps}fps ${bitrate / 1_000_000}Mbps` }
+}
