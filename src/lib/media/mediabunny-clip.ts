@@ -5,6 +5,27 @@ export interface ProbeResult {
     hasVideo: boolean
     hasAudio: boolean
     kind: "video" | "audio-only"
+    fileName: string
+    fileSize: number
+    container: string | null
+    mimeType: string
+    overallBitrate: number | null
+    videoCount: number
+    audioCount: number
+    videoCodec: string | null
+    videoCodecParam: string | null
+    displayWidth: number | null
+    displayHeight: number | null
+    codedWidth: number | null
+    codedHeight: number | null
+    frameRate: number | null
+    videoBitrate: number | null
+    audioCodec: string | null
+    audioCodecParam: string | null
+    audioChannels: number | null
+    audioSampleRate: number | null
+    audioBitrate: number | null
+    canPlay: boolean
 }
 
 export type ClipOutputKind = "mp4" | "wav" | "mp3"
@@ -38,7 +59,7 @@ export interface ExtractClipResult {
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported by MediaBunny in-browser. Try /clip v1."
 
-export function defaultOutputKind(probe: ProbeResult): ClipOutputKind {
+export function defaultOutputKind(probe: Pick<ProbeResult, "hasVideo">): ClipOutputKind {
     return probe.hasVideo ? "mp4" : "wav"
 }
 
@@ -50,6 +71,8 @@ export async function probeMedia(file: File): Promise<ProbeResult> {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
         }
         const [video_tracks, audio_tracks] = await Promise.all([input.getVideoTracks(), input.getAudioTracks()])
+        const video = video_tracks[0] ?? null
+        const audio = audio_tracks[0] ?? null
         const hasVideo = video_tracks.length > 0
         const hasAudio = audio_tracks.length > 0
         let duration: number | null = null
@@ -65,9 +88,107 @@ export async function probeMedia(file: File): Promise<ProbeResult> {
                 duration = null
             }
         }
-        return { duration, hasVideo, hasAudio, kind: hasVideo ? "video" : "audio-only" }
+        const container = await nullable(() => input.getFormat().then((format) => format.name))
+        let mimeType = file.type
+        const probed_mime = await nullable(() => input.getMimeType())
+        if (probed_mime) {
+            mimeType = probed_mime
+        }
+        let videoCodec: string | null = null
+        let videoCodecParam: string | null = null
+        let displayWidth: number | null = null
+        let displayHeight: number | null = null
+        let codedWidth: number | null = null
+        let codedHeight: number | null = null
+        let frameRate: number | null = null
+        let videoBitrate: number | null = null
+        if (video) {
+            videoCodec = await nullable(() => video.getCodec())
+            videoCodecParam = await nullable(() => video.getCodecParameterString())
+            if (videoCodecParam === null) {
+                const internal = await nullable(() => video.getInternalCodecId())
+                videoCodecParam = typeof internal === "string" || typeof internal === "number" ? String(internal) : null
+            }
+            displayWidth = await nullable(() => video.getDisplayWidth())
+            displayHeight = await nullable(() => video.getDisplayHeight())
+            codedWidth = await nullable(() => video.getCodedWidth())
+            codedHeight = await nullable(() => video.getCodedHeight())
+            videoBitrate =
+                (await nullable(() => video.getAverageBitrate())) ?? (await nullable(() => video.getBitrate()))
+            try {
+                const metrics = await video.computeFrameRateMetrics()
+                frameRate = typeof metrics.bestGuessFrameRate === "number" ? metrics.bestGuessFrameRate : null
+            } catch {
+                frameRate = null
+            }
+        }
+        let audioCodec: string | null = null
+        let audioCodecParam: string | null = null
+        let audioChannels: number | null = null
+        let audioSampleRate: number | null = null
+        let audioBitrate: number | null = null
+        if (audio) {
+            audioCodec = await nullable(() => audio.getCodec())
+            audioCodecParam = await nullable(() => audio.getCodecParameterString())
+            if (audioCodecParam === null) {
+                const internal = await nullable(() => audio.getInternalCodecId())
+                audioCodecParam = typeof internal === "string" || typeof internal === "number" ? String(internal) : null
+            }
+            audioChannels = await nullable(() => audio.getNumberOfChannels())
+            audioSampleRate = await nullable(() => audio.getSampleRate())
+            audioBitrate =
+                (await nullable(() => audio.getAverageBitrate())) ?? (await nullable(() => audio.getBitrate()))
+        }
+        let canPlay = true
+        try {
+            if (video) {
+                canPlay = await video.canDecode()
+                if (canPlay && audio) {
+                    canPlay = await audio.canDecode()
+                }
+            } else if (audio) {
+                canPlay = await audio.canDecode()
+            }
+        } catch {
+            canPlay = true
+        }
+        return {
+            duration,
+            hasVideo,
+            hasAudio,
+            kind: hasVideo ? "video" : "audio-only",
+            fileName: file.name,
+            fileSize: file.size,
+            container,
+            mimeType,
+            overallBitrate: duration !== null && duration > 0 ? (file.size * 8) / duration : null,
+            videoCount: video_tracks.length,
+            audioCount: audio_tracks.length,
+            videoCodec,
+            videoCodecParam,
+            displayWidth,
+            displayHeight,
+            codedWidth,
+            codedHeight,
+            frameRate,
+            videoBitrate,
+            audioCodec,
+            audioCodecParam,
+            audioChannels,
+            audioSampleRate,
+            audioBitrate,
+            canPlay,
+        }
     } finally {
         input.dispose()
+    }
+}
+
+async function nullable<T>(fn: () => Promise<T>): Promise<T | null> {
+    try {
+        return await fn()
+    } catch {
+        return null
     }
 }
 

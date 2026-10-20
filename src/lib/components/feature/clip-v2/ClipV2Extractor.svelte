@@ -37,6 +37,7 @@ async function handle_file(event: Event) {
     clipV2State.duration = null
     clipV2State.hasVideo = false
     clipV2State.hasAudio = false
+    clipV2State.mediaDetails = null
     try {
         const probe = await probeMedia(file)
         if (mine !== file_token || clipV2State.sourceFile !== file) {
@@ -45,6 +46,7 @@ async function handle_file(event: Event) {
         clipV2State.duration = probe.duration
         clipV2State.hasVideo = probe.hasVideo
         clipV2State.hasAudio = probe.hasAudio
+        clipV2State.mediaDetails = probe
         if (probe.duration !== null) {
             clipV2State.startStr = formatTimecode(0)
             clipV2State.endStr = formatTimecode(probe.duration)
@@ -84,12 +86,7 @@ async function handle_extract() {
             file,
             start,
             end,
-            outputKind: defaultOutputKind({
-                duration: clipV2State.duration,
-                hasVideo: clipV2State.hasVideo,
-                hasAudio: clipV2State.hasAudio,
-                kind: clipV2State.hasVideo ? "video" : "audio-only",
-            }),
+            outputKind: defaultOutputKind({ hasVideo: clipV2State.hasVideo }),
             signal: aborter.signal,
         })
         clipV2State.resultUrl = URL.createObjectURL(result.blob)
@@ -179,6 +176,137 @@ onDestroy(() => {
                 onDuration={handle_preview_duration}
                 onError={() => (clipV2State.error = "Preview failed: this codec may not be supported by the browser.")}
             />
+            {#if clipV2State.mediaDetails}
+                {@const details = clipV2State.mediaDetails}
+                <details class="mt-3">
+                    <summary class="cursor-pointer text-sm font-medium text-gray-700">Media details</summary>
+                    <dl class="mt-2 space-y-1 text-sm text-gray-500">
+                        <div class="flex gap-2">
+                            <dt class="font-medium">File:</dt>
+                            <dd>{details.fileName}</dd>
+                        </div>
+                        <div class="flex gap-2">
+                            <dt class="font-medium">Size:</dt>
+                            <dd>{(details.fileSize / 1024 / 1024).toFixed(2)} MB</dd>
+                        </div>
+                        {#if details.container}
+                            <div class="flex gap-2">
+                                <dt class="font-medium">Container:</dt>
+                                <dd>{details.container}</dd>
+                            </div>
+                        {/if}
+                        {#if details.mimeType}
+                            <div class="flex gap-2">
+                                <dt class="font-medium">MIME:</dt>
+                                <dd>{details.mimeType}</dd>
+                            </div>
+                        {/if}
+                        {#if details.duration !== null}
+                            <div class="flex gap-2">
+                                <dt class="font-medium">Duration:</dt>
+                                <dd>{formatTimecode(details.duration)}</dd>
+                            </div>
+                        {/if}
+                        {#if details.overallBitrate !== null}
+                            <div class="flex gap-2">
+                                <dt class="font-medium">Overall bitrate:</dt>
+                                <dd>{Math.round(details.overallBitrate / 1000)} kbps</dd>
+                            </div>
+                        {/if}
+                        <div class="flex gap-2">
+                            <dt class="font-medium">Tracks:</dt>
+                            <dd>Video {details.videoCount} · Audio {details.audioCount}</dd>
+                        </div>
+                        {#if details.hasVideo}
+                            {#if details.videoCodec}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Video codec:</dt>
+                                    <dd>
+                                        {details.videoCodec}
+                                        {details.videoCodecParam ? ` (${details.videoCodecParam})` : ""}
+                                    </dd>
+                                </div>
+                            {/if}
+                            {#if details.displayWidth !== null && details.displayHeight !== null}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Resolution:</dt>
+                                    <dd>{details.displayWidth}x{details.displayHeight}</dd>
+                                </div>
+                            {/if}
+                            {#if details.codedWidth !== null &&
+                                details.codedHeight !== null &&
+                                (details.codedWidth !== details.displayWidth ||
+                                    details.codedHeight !== details.displayHeight)}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Coded size:</dt>
+                                    <dd>{details.codedWidth}x{details.codedHeight}</dd>
+                                </div>
+                            {/if}
+                            {#if details.frameRate !== null}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Frame rate:</dt>
+                                    <dd>{details.frameRate.toFixed(2)} fps</dd>
+                                </div>
+                            {/if}
+                            {#if details.videoBitrate !== null}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Video bitrate:</dt>
+                                    <dd>{Math.round(details.videoBitrate / 1000)} kbps</dd>
+                                </div>
+                            {/if}
+                        {/if}
+                        {#if details.hasAudio}
+                            {#if details.audioCodec}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Audio codec:</dt>
+                                    <dd>
+                                        {details.audioCodec}
+                                        {details.audioCodecParam ? ` (${details.audioCodecParam})` : ""}
+                                    </dd>
+                                </div>
+                            {/if}
+                            {#if details.audioChannels !== null}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Channels:</dt>
+                                    <dd>{details.audioChannels}</dd>
+                                </div>
+                            {/if}
+                            {#if details.audioSampleRate !== null}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Sample rate:</dt>
+                                    <dd>{details.audioSampleRate} Hz</dd>
+                                </div>
+                            {/if}
+                            {#if details.audioBitrate !== null}
+                                <div class="flex gap-2">
+                                    <dt class="font-medium">Audio bitrate:</dt>
+                                    <dd>{Math.round(details.audioBitrate / 1000)} kbps</dd>
+                                </div>
+                            {/if}
+                        {/if}
+                        <div class="flex gap-2">
+                            <dt class="font-medium">Type:</dt>
+                            <dd>
+                                {details.kind}
+                                {#if details.canPlay}
+                                    <span class="ml-1 rounded bg-green-200 px-1.5 py-0.5 text-xs text-green-800"
+                                        >plays in browser</span
+                                    >
+                                {:else}
+                                    <span class="ml-1 rounded bg-yellow-200 px-1.5 py-0.5 text-xs text-yellow-800"
+                                        >may not play in browser —
+                                        <a
+                                            href="/clip"
+                                            class="underline"
+                                            >try /clip v1</a
+                                        ></span
+                                    >
+                                {/if}
+                            </dd>
+                        </div>
+                    </dl>
+                </details>
+            {/if}
         </div>
     {/if}
 

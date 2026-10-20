@@ -1,9 +1,12 @@
+import type { ProbeResult } from "./mediabunny-clip"
+
 export interface ClipV2State {
     sourceFile: File | null
     sourceUrl: string | null
     duration: number | null
     hasVideo: boolean
     hasAudio: boolean
+    mediaDetails: ProbeResult | null
     startStr: string
     endStr: string
     isProcessing: boolean
@@ -20,6 +23,7 @@ function initial_state(): ClipV2State {
         duration: null,
         hasVideo: false,
         hasAudio: false,
+        mediaDetails: null,
         startStr: "00:00:00.000",
         endStr: "",
         isProcessing: false,
@@ -55,6 +59,7 @@ export function revokeAll(): void {
     clipV2State.duration = fresh.duration
     clipV2State.hasVideo = fresh.hasVideo
     clipV2State.hasAudio = fresh.hasAudio
+    clipV2State.mediaDetails = fresh.mediaDetails
     clipV2State.startStr = fresh.startStr
     clipV2State.endStr = fresh.endStr
     clipV2State.isProcessing = fresh.isProcessing
