@@ -36,84 +36,86 @@ let range_error = $derived.by(() => {
 })
 </script>
 
-<div class="flex w-full flex-row gap-4 justify-between rounded-lg bg-gray-100 p-4">
-    <div class="flex flex-1 flex-col gap-1">
-        <label
-            for="clip-v2-start"
-            class="text-sm font-medium"
-            >Start Time (HH:MM:SS.mmm)</label
-        >
-        <div class="flex items-center gap-2">
-            <input
-                id="clip-v2-start"
-                type="text"
-                value={start_str}
-                oninput={(e) => {
-                    start_touched = true
-                    on_change?.(e.currentTarget.value, end_str)
-                }}
-                placeholder="00:00.000 or 00:00:00.000"
-                class="w-full flex-1 rounded border border-gray-300 px-3 py-2"
+<div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
+    <div class="flex w-full flex-row justify-between gap-4">
+        <div class="flex flex-1 flex-col gap-1">
+            <label
+                for="clip-v2-start"
+                class="text-sm font-medium"
+                >Start Time (HH:MM:SS.mmm)</label
             >
-            <button
-                type="button"
-                onclick={() => {
-                    start_touched = true
-                    on_use_current?.("start")
-                }}
-                disabled={!can_use_current}
-                title={current_time_str
-                    ? `Copy current playback position ${current_time_str} to start`
-                    : "Play the preview first to capture its position."}
-                aria-label="Use current playback position as start time"
-                class="btn btn-primary btn-sm shrink-0 whitespace-nowrap px-2 py-2 text-xs"
-            >
-                ◉ Now
-            </button>
+            <div class="flex items-center gap-2">
+                <input
+                    id="clip-v2-start"
+                    type="text"
+                    value={start_str}
+                    oninput={(e) => {
+                        start_touched = true
+                        on_change?.(e.currentTarget.value, end_str)
+                    }}
+                    placeholder="00:00.000 or 00:00:00.000"
+                    class="w-full flex-1 rounded border border-gray-300 px-3 py-2"
+                >
+                <button
+                    type="button"
+                    onclick={() => {
+                        start_touched = true
+                        on_use_current?.("start")
+                    }}
+                    disabled={!can_use_current}
+                    title={current_time_str
+                        ? `Copy current playback position ${current_time_str} to start`
+                        : "Play the preview first to capture its position."}
+                    aria-label="Use current playback position as start time"
+                    class="btn btn-primary btn-sm shrink-0 whitespace-nowrap px-2 py-2 text-xs"
+                >
+                    ◉ Now
+                </button>
+            </div>
+            {#if start_error}
+                <p class="text-sm text-red-700">{start_error}</p>
+            {/if}
         </div>
-        {#if start_error}
-            <p class="text-sm text-red-700">{start_error}</p>
-        {/if}
-    </div>
-    <div class="flex flex-1 flex-col gap-1">
-        <label
-            for="clip-v2-end"
-            class="text-sm font-medium"
-            >End Time (HH:MM:SS.mmm)</label
-        >
-        <div class="flex items-center gap-2">
-            <input
-                id="clip-v2-end"
-                type="text"
-                value={end_str}
-                oninput={(e) => {
-                    end_touched = true
-                    on_change?.(start_str, e.currentTarget.value)
-                }}
-                placeholder="00:00.000 or 00:00:00.000"
-                class="w-full flex-1 rounded border border-gray-300 px-3 py-2"
+        <div class="flex flex-1 flex-col gap-1">
+            <label
+                for="clip-v2-end"
+                class="text-sm font-medium"
+                >End Time (HH:MM:SS.mmm)</label
             >
-            <button
-                type="button"
-                onclick={() => {
-                    end_touched = true
-                    on_use_current?.("end")
-                }}
-                disabled={!can_use_current}
-                title={current_time_str
-                    ? `Copy current playback position ${current_time_str} to end`
-                    : "Play the preview first to capture its position."}
-                aria-label="Use current playback position as end time"
-                class="btn btn-primary btn-sm shrink-0 whitespace-nowrap px-2 py-2 text-xs"
-            >
-                ◉ Now
-            </button>
+            <div class="flex items-center gap-2">
+                <input
+                    id="clip-v2-end"
+                    type="text"
+                    value={end_str}
+                    oninput={(e) => {
+                        end_touched = true
+                        on_change?.(start_str, e.currentTarget.value)
+                    }}
+                    placeholder="00:00.000 or 00:00:00.000"
+                    class="w-full flex-1 rounded border border-gray-300 px-3 py-2"
+                >
+                <button
+                    type="button"
+                    onclick={() => {
+                        end_touched = true
+                        on_use_current?.("end")
+                    }}
+                    disabled={!can_use_current}
+                    title={current_time_str
+                        ? `Copy current playback position ${current_time_str} to end`
+                        : "Play the preview first to capture its position."}
+                    aria-label="Use current playback position as end time"
+                    class="btn btn-primary btn-sm shrink-0 whitespace-nowrap px-2 py-2 text-xs"
+                >
+                    ◉ Now
+                </button>
+            </div>
+            {#if end_error}
+                <p class="text-sm text-red-700">{end_error}</p>
+            {/if}
         </div>
-        {#if end_error}
-            <p class="text-sm text-red-700">{end_error}</p>
-        {/if}
     </div>
     {#if range_error}
-        <p class="w-full text-sm text-red-700">{range_error}</p>
+        <p class="w-full text-center text-sm text-red-600">{range_error}</p>
     {/if}
 </div>
