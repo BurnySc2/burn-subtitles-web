@@ -10,7 +10,7 @@ export interface ClipResult {
     url: string
     mime: string
     ext: string
-    size_mb: string
+    size_bytes: number
     duration: string
 }
 

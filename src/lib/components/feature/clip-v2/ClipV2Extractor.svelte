@@ -4,6 +4,7 @@ import { clip_filename } from "$lib/media/clip-filename"
 import { clip_v2_state, reset_output, revoke_all } from "$lib/media/clip-v2-state.svelte"
 import { ClipError, default_output_kind, extract_clip, probe_media } from "$lib/media/mediabunny-clip"
 import { clamp_timecode, format_timecode, parse_timecode, TimecodeError, validate_range } from "$lib/media/timecode"
+import { format_dual_size } from "$lib/utils/format_size"
 import ExtractResult from "./ExtractResult.svelte"
 import MediaDetails from "./MediaDetails.svelte"
 import MediaPreview from "./MediaPreview.svelte"
@@ -102,12 +103,11 @@ async function handle_extract() {
             signal: aborter.signal,
         })
         const result_duration = format_timecode(end - start)
-        const result_size_mb = (extracted.blob.size / 1024 / 1024).toFixed(2)
         clip_v2_state.result = {
             url: URL.createObjectURL(extracted.blob),
             mime: extracted.mime,
             ext: extracted.extension.replace(/^\./, ""),
-            size_mb: result_size_mb,
+            size_bytes: extracted.blob.size,
             duration: result_duration,
         }
     } catch (error) {
@@ -144,7 +144,7 @@ let times_valid = $derived.by(() => {
     return validation.start_error === null && validation.end_error === null && validation.range_error === null
 })
 
-let file_size_mb = $derived(clip_v2_state.source ? (clip_v2_state.source.file.size / 1024 / 1024).toFixed(1) : null)
+let file_size = $derived(clip_v2_state.source ? format_dual_size(clip_v2_state.source.file.size, 1) : null)
 let file_format = $derived(
     clip_v2_state.source?.probe?.container?.toUpperCase() ??
         clip_v2_state.source?.probe?.mime_type ??
@@ -198,8 +198,7 @@ onDestroy(() => {
                 aria-live="polite"
                 class="mt-2 text-sm font-medium text-green-700"
             >
-                ✓ Accepted: {source_name()} ({file_size_mb}
-                MB
+                ✓ Accepted: {source_name()} ({file_size}
                 {#if file_format}
                     , {file_format}
                 {/if}

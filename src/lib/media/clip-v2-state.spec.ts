@@ -17,7 +17,7 @@ describe("clip-v2-state", () => {
             url: "blob:result",
             mime: "video/mp4",
             ext: "mp4",
-            size_mb: "1.00",
+            size_bytes: 1_000_000,
             duration: "00:00:01.000",
         }
         clip_v2_state.error = "boom"
@@ -36,7 +36,7 @@ describe("clip-v2-state", () => {
             url: "blob:result",
             mime: "video/mp4",
             ext: "mp4",
-            size_mb: "1.00",
+            size_bytes: 1_000_000,
             duration: "00:00:01.000",
         }
         revoke_all()

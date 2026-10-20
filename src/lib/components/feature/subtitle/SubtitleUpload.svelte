@@ -58,13 +58,13 @@ async function handle_font_upload(event: Event) {
 }
 
 function format_bytes(bytes: number): string {
-    if (bytes < 1024) {
+    if (bytes < 1000) {
         return `${bytes} B`
     }
-    if (bytes < 1_048_576) {
-        return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1_000_000) {
+        return `${(bytes / 1000).toFixed(1)} KB`
     }
-    return `${(bytes / 1_048_576).toFixed(1)} MB`
+    return `${(bytes / 1_000_000).toFixed(1)} MB`
 }
 
 function remove_video(): void {
@@ -279,7 +279,8 @@ onDestroy(() => {
                             ✕
                         </button>
                     </div>
-                    {#if temp_state.ffmpeg.custom_font.tmp_filename.endsWith(".woff") || temp_state.ffmpeg.custom_font.tmp_filename.endsWith(".woff2")}
+                    {#if temp_state.ffmpeg.custom_font.tmp_filename.endsWith(".woff") ||
+                        temp_state.ffmpeg.custom_font.tmp_filename.endsWith(".woff2")}
                         <p class="mt-1 text-xs text-amber-600">
                             Warning: woff/woff2 may not be supported — use ttf/otf
                         </p>

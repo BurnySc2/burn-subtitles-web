@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { ClipResult } from "$lib/media/clip-v2-state.svelte"
+import { format_dual_size } from "$lib/utils/format_size"
 
 let { result, filename }: { result: ClipResult; filename: string } = $props()
 </script>
@@ -23,7 +24,9 @@ let { result, filename }: { result: ClipResult; filename: string } = $props()
             <track kind="captions">
         </audio>
     {/if}
-    <p class="mb-4 text-sm text-gray-600">Duration {result.duration} · {result.size_mb} MB · {result.mime}</p>
+    <p class="mb-4 text-sm text-gray-600">
+        Duration {result.duration} · {format_dual_size(result.size_bytes, 2)} · {result.mime}
+    </p>
     <a
         href={result.url}
         download={filename}

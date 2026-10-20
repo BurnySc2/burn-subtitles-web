@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { ProbeResult } from "$lib/media/mediabunny-clip"
 import { format_timecode } from "$lib/media/timecode"
+import { format_dual_size } from "$lib/utils/format_size"
 
 let { details }: { details: ProbeResult } = $props()
 </script>
@@ -14,7 +15,7 @@ let { details }: { details: ProbeResult } = $props()
         </div>
         <div class="flex gap-2">
             <dt class="font-medium">Size:</dt>
-            <dd>{(details.file_size / 1024 / 1024).toFixed(2)} MB</dd>
+            <dd>{format_dual_size(details.file_size, 2)}</dd>
         </div>
         {#if details.container}
             <div class="flex gap-2">
