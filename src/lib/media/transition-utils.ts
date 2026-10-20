@@ -4,7 +4,7 @@ export type TransitionResSource = "a" | "b"
 
 export type TransitionFpsMode = "a" | "b" | "24" | "30" | "60"
 
-export type TransitionQuality = "low" | "medium" | "high" | "very-high" | "lossless"
+export type TransitionQuality = "low" | "medium" | "high" | "very-high" | "ultra"
 
 export type TransitionEasing = "linear" | "exponential"
 
@@ -86,7 +86,15 @@ const QUALITY_BITRATE: Record<TransitionQuality, number> = {
     medium: 5_000_000,
     high: 10_000_000,
     "very-high": 16_000_000,
-    lossless: 50_000_000,
+    ultra: 50_000_000,
+}
+
+const QUALITY_LABEL: Record<TransitionQuality, string> = {
+    low: "low",
+    medium: "medium",
+    high: "high",
+    "very-high": "very-high",
+    ultra: "Ultra (~50 Mbps, high-bitrate for further processing, not bit-exact)",
 }
 
 export function quality_to_video_config(
@@ -96,5 +104,11 @@ export function quality_to_video_config(
     fps: number,
 ): TransitionVideoConfig {
     const bitrate = QUALITY_BITRATE[quality]
-    return { bitrate, description: `${quality} ${width}x${height}@${fps}fps ${bitrate / 1_000_000}Mbps` }
+    return { bitrate, description: `${QUALITY_LABEL[quality]} ${width}x${height}@${fps}fps ${bitrate / 1_000_000}Mbps` }
+}
+
+export const FRAME_COUNT_WARNING_THRESHOLD = 1000
+
+export function estimate_frame_count(duration: number, fps: number): number {
+    return Math.round(duration * fps)
 }

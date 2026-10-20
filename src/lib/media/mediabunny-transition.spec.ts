@@ -48,7 +48,7 @@ describe("render_transition guards", () => {
 
     it("rejects unknown quality or easing values with INVALID_RANGE", async () => {
         await expect(
-            render_transition({ ...base_options(), quality: "ultra" as RenderTransitionOptions["quality"] }),
+            render_transition({ ...base_options(), quality: "extreme" as RenderTransitionOptions["quality"] }),
         ).rejects.toMatchObject({ code: "INVALID_RANGE" })
         await expect(
             render_transition({ ...base_options(), easing: "smooth" as RenderTransitionOptions["easing"] }),

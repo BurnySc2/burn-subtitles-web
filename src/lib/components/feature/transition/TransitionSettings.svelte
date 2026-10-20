@@ -104,7 +104,12 @@ let {
             <option value="medium">Medium</option>
             <option value="high">High</option>
             <option value="very-high">Very High</option>
-            <option value="lossless">Lossless</option>
+            <option
+                value="ultra"
+                title="Ultra: high-bitrate, not bit-exact"
+            >
+                Ultra
+            </option>
         </select>
     </div>
     <div>

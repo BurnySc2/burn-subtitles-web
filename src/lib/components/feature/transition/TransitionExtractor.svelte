@@ -5,7 +5,13 @@ import { render_transition } from "$lib/media/mediabunny-transition"
 import { TimecodeError } from "$lib/media/timecode"
 import { transition_filename } from "$lib/media/transition-filename"
 import { reset_output_transition, revoke_all_transition, transition_state } from "$lib/media/transition-state.svelte"
-import { resolve_duration_seconds, resolve_output_dims, resolve_output_fps } from "$lib/media/transition-utils"
+import {
+    estimate_frame_count,
+    FRAME_COUNT_WARNING_THRESHOLD,
+    resolve_duration_seconds,
+    resolve_output_dims,
+    resolve_output_fps,
+} from "$lib/media/transition-utils"
 import DualUpload from "./DualUpload.svelte"
 import TransitionPreview from "./TransitionPreview.svelte"
 import TransitionResult from "./TransitionResult.svelte"
@@ -23,6 +29,14 @@ let preview_duration = $derived.by(() => {
 let can_render = $derived(
     transition_state.source_a !== null && transition_state.source_b !== null && !transition_state.is_processing,
 )
+let resolved_fps = $derived(
+    resolve_output_fps(
+        transition_state.source_a?.probe ?? null,
+        transition_state.source_b?.probe ?? null,
+        transition_state.fps_mode,
+    ),
+)
+let estimated_frames = $derived(estimate_frame_count(preview_duration, resolved_fps))
 
 function apply_patch(patch: TransitionSettingsPatch) {
     if (patch.duration !== undefined) {
@@ -210,6 +224,16 @@ onDestroy(() => {
         easing={transition_state.easing}
         on_change={apply_patch}
     />
+
+    {#if estimated_frames > FRAME_COUNT_WARNING_THRESHOLD}
+        <div
+            class="rounded-lg bg-yellow-100 p-3 text-yellow-800"
+            role="alert"
+        >
+            High frame count ({estimated_frames}
+            frames: {preview_duration}s x {resolved_fps}fps) may OOM tab — proceed anyway?
+        </div>
+    {/if}
 
     <div class="flex flex-row items-center justify-center gap-2 rounded-lg bg-gray-100 p-4">
         <button

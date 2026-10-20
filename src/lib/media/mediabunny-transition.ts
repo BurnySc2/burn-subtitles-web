@@ -53,7 +53,7 @@ function validate_transition_options(options: RenderTransitionOptions): number {
         quality !== "medium" &&
         quality !== "high" &&
         quality !== "very-high" &&
-        quality !== "lossless"
+        quality !== "ultra"
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown transition quality.")
     }

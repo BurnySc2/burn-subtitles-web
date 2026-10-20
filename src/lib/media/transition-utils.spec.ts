@@ -3,6 +3,7 @@ import { TimecodeError } from "./timecode"
 import { transition_filename } from "./transition-filename"
 import {
     EASING_REGISTRY,
+    estimate_frame_count,
     quality_to_video_config,
     resolve_duration_seconds,
     resolve_output_dims,
@@ -75,7 +76,19 @@ describe("quality_to_video_config", () => {
         expect(quality_to_video_config("medium", 1920, 1080, 30).bitrate).toBe(5_000_000)
         expect(quality_to_video_config("high", 1920, 1080, 30).bitrate).toBe(10_000_000)
         expect(quality_to_video_config("very-high", 1920, 1080, 30).bitrate).toBe(16_000_000)
-        expect(quality_to_video_config("lossless", 1920, 1080, 30).bitrate).toBe(50_000_000)
+        expect(quality_to_video_config("ultra", 1920, 1080, 30).bitrate).toBe(50_000_000)
+    })
+
+    it("labels ultra as high-bitrate rather than bit-exact", () => {
+        expect(quality_to_video_config("ultra", 1920, 1080, 30).description).toContain("not bit-exact")
+    })
+})
+
+describe("estimate_frame_count", () => {
+    it("rounds duration times fps", () => {
+        expect(estimate_frame_count(1, 30)).toBe(30)
+        expect(estimate_frame_count(2.5, 60)).toBe(150)
+        expect(estimate_frame_count(0.001, 1)).toBe(0)
     })
 })
 
