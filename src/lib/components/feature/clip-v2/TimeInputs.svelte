@@ -36,8 +36,8 @@ let range_error = $derived.by(() => {
 })
 </script>
 
-<div class="flex flex-wrap items-center gap-4 rounded-lg bg-gray-100 p-4">
-    <div class="flex flex-col gap-1">
+<div class="flex w-full flex-row gap-4 justify-between rounded-lg bg-gray-100 p-4">
+    <div class="flex flex-1 flex-col gap-1">
         <label
             for="clip-v2-start"
             class="text-sm font-medium"
@@ -53,7 +53,7 @@ let range_error = $derived.by(() => {
                     on_change?.(e.currentTarget.value, end_str)
                 }}
                 placeholder="00:00.000 or 00:00:00.000"
-                class="rounded border border-gray-300 px-3 py-2"
+                class="w-full flex-1 rounded border border-gray-300 px-3 py-2"
             >
             <button
                 type="button"
@@ -66,7 +66,7 @@ let range_error = $derived.by(() => {
                     ? `Copy current playback position ${current_time_str} to start`
                     : "Play the preview first to capture its position."}
                 aria-label="Use current playback position as start time"
-                class="btn btn-secondary btn-sm whitespace-nowrap px-2 py-2 text-xs"
+                class="btn btn-primary btn-sm shrink-0 whitespace-nowrap px-2 py-2 text-xs"
             >
                 ◉ Now
             </button>
@@ -75,7 +75,7 @@ let range_error = $derived.by(() => {
             <p class="text-sm text-red-700">{start_error}</p>
         {/if}
     </div>
-    <div class="flex flex-col gap-1">
+    <div class="flex flex-1 flex-col gap-1">
         <label
             for="clip-v2-end"
             class="text-sm font-medium"
@@ -91,7 +91,7 @@ let range_error = $derived.by(() => {
                     on_change?.(start_str, e.currentTarget.value)
                 }}
                 placeholder="00:00.000 or 00:00:00.000"
-                class="rounded border border-gray-300 px-3 py-2"
+                class="w-full flex-1 rounded border border-gray-300 px-3 py-2"
             >
             <button
                 type="button"
@@ -104,7 +104,7 @@ let range_error = $derived.by(() => {
                     ? `Copy current playback position ${current_time_str} to end`
                     : "Play the preview first to capture its position."}
                 aria-label="Use current playback position as end time"
-                class="btn btn-secondary btn-sm whitespace-nowrap px-2 py-2 text-xs"
+                class="btn btn-primary btn-sm shrink-0 whitespace-nowrap px-2 py-2 text-xs"
             >
                 ◉ Now
             </button>
