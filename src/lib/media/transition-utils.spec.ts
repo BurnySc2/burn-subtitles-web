@@ -4,11 +4,14 @@ import { transition_filename } from "./transition-filename"
 import {
     EASING_REGISTRY,
     estimate_frame_count,
+    phase_at,
     quality_to_video_config,
     resolve_duration_seconds,
     resolve_output_dims,
     resolve_output_fps,
     resolve_start_seconds,
+    total_transition_duration,
+    total_transition_frames,
     validate_transition_range,
 } from "./transition-utils"
 
@@ -132,5 +135,40 @@ describe("transition_filename", () => {
 
     it("sanitizes illegal chars from both names", () => {
         expect(transition_filename("my: video.mp4", "clip?2.mkv", 2, "mp4")).toBe("my- video_x_clip2_2s.mp4")
+    })
+})
+
+describe("phase_at", () => {
+    it("returns solo-a before the blend start and solo-b at or past total", () => {
+        expect(phase_at(-1, 20, 10, 60)).toEqual({ phase: "solo-a", alpha: 0 })
+        expect(phase_at(0, 20, 10, 60)).toEqual({ phase: "solo-a", alpha: 0 })
+        expect(phase_at(19.999, 20, 10, 60)).toEqual({ phase: "solo-a", alpha: 0 })
+        expect(phase_at(60, 20, 10, 60)).toEqual({ phase: "solo-b", alpha: 1 })
+        expect(phase_at(100, 20, 10, 60)).toEqual({ phase: "solo-b", alpha: 1 })
+    })
+
+    it("blends from alpha 0 to 1 across the overlap with easing", () => {
+        expect(phase_at(20, 20, 10, 60)).toEqual({ phase: "blend", alpha: 0 })
+        expect(phase_at(25, 20, 10, 60)).toEqual({ phase: "blend", alpha: 0.5 })
+        expect(phase_at(25, 20, 10, 60, "exponential")).toEqual({ phase: "blend", alpha: 0.25 })
+        expect(phase_at(30, 20, 10, 60)).toEqual({ phase: "solo-b", alpha: 1 })
+        expect(phase_at(45, 20, 10, 60)).toEqual({ phase: "solo-b", alpha: 1 })
+    })
+})
+
+describe("total_transition_duration", () => {
+    it("sums start offset and source B length", () => {
+        expect(total_transition_duration(20, 40)).toBe(60)
+    })
+
+    it("returns null while source B length is unknown", () => {
+        expect(total_transition_duration(20, null)).toBeNull()
+    })
+})
+
+describe("total_transition_frames", () => {
+    it("rounds total duration times fps", () => {
+        expect(total_transition_frames(60, 30)).toBe(1800)
+        expect(total_transition_frames(0.001, 1)).toBe(0)
     })
 })

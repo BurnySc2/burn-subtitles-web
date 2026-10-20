@@ -10,10 +10,10 @@ function format_duration_label(duration_sec: number): string {
 export function transition_filename(
     source_a_name: string,
     source_b_name: string,
-    duration_sec: number,
+    total_sec: number,
     extension: string,
 ): string {
     const ext = extension.replace(/^\./, "") || "mp4"
-    const label = format_duration_label(duration_sec)
+    const label = format_duration_label(total_sec)
     return `${clip_basename(source_a_name)}_x_${clip_basename(source_b_name)}_${label}s.${ext}`
 }

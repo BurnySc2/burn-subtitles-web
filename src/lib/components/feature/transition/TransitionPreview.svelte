@@ -1,39 +1,48 @@
 <script lang="ts">
-import { EASING_REGISTRY, type TransitionEasing } from "$lib/media/transition-utils"
+import { phase_at, type TransitionEasing } from "$lib/media/transition-utils"
 
 let {
     url_a,
     url_b,
-    duration,
+    total_duration,
+    start_a,
+    blend_duration,
     easing,
-    start_a = 0,
 }: {
     url_a: string
     url_b: string
-    duration: number
+    total_duration: number
+    start_a: number
+    blend_duration: number
     easing: TransitionEasing
-    start_a?: number
 } = $props()
 
 let time = $state(0)
 let video_a: HTMLVideoElement | null = $state(null)
 let video_b: HTMLVideoElement | null = $state(null)
-let progress = $derived(duration > 0 ? Math.min(Math.max(time / duration, 0), 1) : 0)
-let opacity_b = $derived(EASING_REGISTRY[easing](progress))
+let phase = $derived(phase_at(time, start_a, blend_duration, total_duration, easing))
+let opacity_b = $derived(phase.alpha)
+let phase_label = $derived(
+    phase.phase === "solo-a"
+        ? "Pre-roll — source A"
+        : phase.phase === "blend"
+          ? "Overlap — crossfade"
+          : "Post-roll — source B",
+)
 
 function handle_scrub(value: number) {
     time = value
     if (video_a) {
-        video_a.currentTime = start_a + value
+        video_a.currentTime = value
     }
     if (video_b) {
-        video_b.currentTime = value
+        video_b.currentTime = Math.max(0, value - start_a)
     }
 }
 
 $effect(() => {
-    if (time > duration) {
-        time = duration
+    if (time > total_duration) {
+        time = total_duration
     }
 })
 </script>
@@ -63,20 +72,21 @@ $effect(() => {
             <track kind="captions">
         </video>
     </div>
+    <p class="text-sm text-gray-500">{phase_label}</p>
     <label
         for="transition-scrub"
         class="form-label"
     >
-        Scrub crossfade ({time.toFixed(2)}s / {duration.toFixed(2)}s)
+        Scrub timeline ({time.toFixed(2)}s / {total_duration.toFixed(2)}s)
     </label>
     <input
         id="transition-scrub"
         type="range"
         min={0}
-        max={duration}
+        max={total_duration}
         step={0.01}
         value={time}
         oninput={(event) => handle_scrub(event.currentTarget.valueAsNumber)}
-        aria-valuetext={`${time.toFixed(2)} seconds of ${duration.toFixed(2)}`}
+        aria-valuetext={`${time.toFixed(2)} seconds of ${total_duration.toFixed(2)}`}
     >
 </div>

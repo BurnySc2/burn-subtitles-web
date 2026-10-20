@@ -148,3 +148,39 @@ export const FRAME_COUNT_WARNING_THRESHOLD = 1000
 export function estimate_frame_count(duration: number, fps: number): number {
     return Math.round(duration * fps)
 }
+
+export type TransitionPhase = "solo-a" | "blend" | "solo-b"
+
+export function phase_at(
+    t_global: number,
+    start_a: number,
+    blend_duration: number,
+    total_duration: number,
+    easing: TransitionEasing = "linear",
+): { phase: TransitionPhase; alpha: number } {
+    if (t_global < 0 || t_global < start_a) {
+        return { phase: "solo-a", alpha: 0 }
+    }
+    if (t_global >= total_duration) {
+        return { phase: "solo-b", alpha: 1 }
+    }
+    if (!Number.isFinite(blend_duration) || blend_duration <= 0) {
+        return { phase: "solo-b", alpha: 1 }
+    }
+    if (t_global < start_a + blend_duration) {
+        const u = Math.min(1, Math.max(0, (t_global - start_a) / blend_duration))
+        return { phase: "blend", alpha: EASING_REGISTRY[easing](u) }
+    }
+    return { phase: "solo-b", alpha: 1 }
+}
+
+export function total_transition_duration(start_a: number, duration_b: number | null): number | null {
+    if (duration_b === null) {
+        return null
+    }
+    return start_a + duration_b
+}
+
+export function total_transition_frames(total_duration: number, fps: number): number {
+    return Math.round(total_duration * fps)
+}

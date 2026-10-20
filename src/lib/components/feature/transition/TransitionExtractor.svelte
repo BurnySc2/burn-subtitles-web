@@ -12,6 +12,7 @@ import {
     resolve_output_dims,
     resolve_output_fps,
     resolve_start_seconds,
+    total_transition_duration,
     validate_transition_range,
 } from "$lib/media/transition-utils"
 import DualUpload from "./DualUpload.svelte"
@@ -32,6 +33,9 @@ let preview_start = $derived.by(() => {
     const parsed = Number.parseFloat(transition_state.start_str.trim())
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 })
+let preview_total = $derived(
+    total_transition_duration(preview_start, transition_state.source_b?.probe?.duration ?? null),
+)
 let can_render = $derived(
     transition_state.source_a !== null && transition_state.source_b !== null && !transition_state.is_processing,
 )
@@ -42,7 +46,7 @@ let resolved_fps = $derived(
         transition_state.fps_mode,
     ),
 )
-let estimated_frames = $derived(estimate_frame_count(preview_duration, resolved_fps))
+let estimated_frames = $derived(preview_total === null ? 0 : estimate_frame_count(preview_total, resolved_fps))
 
 function apply_patch(patch: TransitionSettingsPatch) {
     if (patch.duration !== undefined) {
@@ -113,6 +117,10 @@ async function handle_render() {
         const duration = resolve_duration_seconds(transition_state.duration_str, len_a, len_b)
         const start = resolve_start_seconds(transition_state.start_str, len_a, duration)
         validate_transition_range(start, duration, len_a, len_b)
+        const total = total_transition_duration(start, len_b)
+        if (total === null) {
+            throw new ClipError("INVALID_RANGE", "Source durations are unknown — wait for probing to finish.")
+        }
         const dims = resolve_output_dims(source_a.probe, source_b.probe, transition_state.res_source)
         if (!dims) {
             throw new ClipError("INVALID_RANGE", "No source has resolution metadata yet — wait for probing to finish.")
@@ -126,6 +134,7 @@ async function handle_render() {
             probe_b: source_b.probe,
             duration,
             start_a: start,
+            total_duration: total,
             width: dims.width,
             height: dims.height,
             fps,
@@ -141,7 +150,7 @@ async function handle_render() {
             mime: rendered.mime,
             ext: rendered.extension.replace(/^\./, ""),
             size_bytes: rendered.blob.size,
-            duration: `${duration.toFixed(2)}s`,
+            duration: `${total.toFixed(2)}s`,
         }
         transition_state.message = "Transition ready."
     } catch (error) {
@@ -177,7 +186,7 @@ let result_filename = $derived.by(() => {
     return transition_filename(
         transition_state.source_a.file.name,
         transition_state.source_b.file.name,
-        preview_duration,
+        preview_total ?? preview_duration,
         result.ext,
     )
 })
@@ -224,9 +233,10 @@ onDestroy(() => {
         <TransitionPreview
             url_a={transition_state.source_a.url}
             url_b={transition_state.source_b.url}
-            duration={preview_duration}
-            easing={transition_state.easing}
+            total_duration={preview_total ?? preview_start + preview_duration}
             start_a={preview_start}
+            blend_duration={preview_duration}
+            easing={transition_state.easing}
         />
     {/if}
 
@@ -246,7 +256,7 @@ onDestroy(() => {
             role="alert"
         >
             High frame count ({estimated_frames}
-            frames: {preview_duration}s x {resolved_fps}fps) may OOM tab — proceed anyway?
+            frames: {(preview_total ?? preview_duration).toFixed(2)}s x {resolved_fps}fps) may OOM tab — proceed anyway?
         </div>
     {/if}
 

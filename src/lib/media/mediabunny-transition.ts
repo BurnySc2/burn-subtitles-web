@@ -1,8 +1,14 @@
-import type { Output } from "mediabunny"
+import type { AudioBufferSink, Output } from "mediabunny"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
+import { premix_transition_audio } from "./transition-audio"
 import type { TransitionEasing, TransitionQuality } from "./transition-utils"
-import { EASING_REGISTRY, quality_to_video_config } from "./transition-utils"
+import {
+    phase_at,
+    quality_to_video_config,
+    total_transition_duration,
+    total_transition_frames,
+} from "./transition-utils"
 
 export type { ProbeResult } from "./mediabunny-clip"
 export { ClipError } from "./mediabunny-clip"
@@ -15,6 +21,8 @@ export interface RenderTransitionOptions {
     probe_b?: ProbeResult | null
     duration: number
     start_a?: number
+    total_duration?: number
+    premixed_audio?: AudioBuffer | null
     width: number
     height: number
     fps: number
@@ -35,8 +43,8 @@ const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser transitio
 
 const TRANSITION_AUDIO_BITRATE = 128_000
 
-function validate_transition_options(options: RenderTransitionOptions): number {
-    const { file_a, file_b, duration, width, height, fps, quality, easing } = options
+function validate_transition_options(options: RenderTransitionOptions): void {
+    const { file_a, file_b, duration, width, height, fps, quality, easing, total_duration } = options
     const start_a = options.start_a ?? 0
     if (!(file_a instanceof File) || !(file_b instanceof File)) {
         throw new ClipError("INVALID_RANGE", "Two source files are required to render a transition.")
@@ -69,7 +77,47 @@ function validate_transition_options(options: RenderTransitionOptions): number {
     if (frame_count < 1) {
         throw new ClipError("INVALID_RANGE", "Transition duration and frame rate must yield at least one frame.")
     }
-    return frame_count
+    if (total_duration !== undefined) {
+        if (!Number.isFinite(total_duration) || total_duration <= 0) {
+            throw new ClipError("INVALID_RANGE", "Total duration must be greater than 0 seconds.")
+        }
+        if (total_duration < duration) {
+            throw new ClipError("INVALID_RANGE", "Total duration must be at least the transition duration.")
+        }
+        if (Math.round(total_duration * fps) < 1) {
+            throw new ClipError("INVALID_RANGE", "Total duration and frame rate must yield at least one frame.")
+        }
+    }
+}
+
+export interface ResolvedTransitionTimeline {
+    total: number
+    total_frames: number
+    frame_duration: number
+}
+
+export function resolve_transition_timeline(
+    start_a: number,
+    blend_duration: number,
+    duration_b: number | null,
+    total_override: number | undefined,
+    fps: number,
+): ResolvedTransitionTimeline {
+    const total = total_override ?? total_transition_duration(start_a, duration_b)
+    if (total === null) {
+        throw new ClipError("INVALID_RANGE", "Source B duration is unknown — wait for probing to finish.")
+    }
+    if (!Number.isFinite(total) || total <= 0) {
+        throw new ClipError("INVALID_RANGE", "Total duration must be greater than 0 seconds.")
+    }
+    if (total < blend_duration) {
+        throw new ClipError("INVALID_RANGE", "Total duration must be at least the transition duration.")
+    }
+    const total_frames = total_transition_frames(total, fps)
+    if (total_frames < 1) {
+        throw new ClipError("INVALID_RANGE", "Total duration and frame rate must yield at least one frame.")
+    }
+    return { total, total_frames, frame_duration: 1 / fps }
 }
 
 let aac_encoder_promise: Promise<void> | null = null
@@ -122,38 +170,41 @@ function draw_transition_frame(
     }
 }
 
-function mix_transition_audio(
-    buffer_a: AudioBuffer | null,
-    buffer_b: AudioBuffer | null,
-    alpha: number,
-    frame_duration: number,
-): AudioBuffer | null {
-    const reference = buffer_a ?? buffer_b
-    if (!reference) {
+async function decode_full_audio(sink: AudioBufferSink): Promise<AudioBuffer | null> {
+    const chunks: AudioBuffer[] = []
+    for await (const wrapped of sink.buffers()) {
+        chunks.push(wrapped.buffer)
+    }
+    const first = chunks[0]
+    if (!first) {
         return null
     }
-    const gain_a = 1 - alpha
-    const length = Math.max(1, Math.round(reference.sampleRate * frame_duration))
-    const mixed = new AudioBuffer({
-        numberOfChannels: reference.numberOfChannels,
-        length,
-        sampleRate: reference.sampleRate,
-    })
-    for (let channel = 0; channel < mixed.numberOfChannels; channel += 1) {
-        const out = mixed.getChannelData(channel)
-        const data_a = buffer_a && channel < buffer_a.numberOfChannels ? buffer_a.getChannelData(channel) : null
-        const data_b = buffer_b && channel < buffer_b.numberOfChannels ? buffer_b.getChannelData(channel) : null
-        for (let i = 0; i < length; i += 1) {
-            out[i] = (data_a?.[i] ?? 0) * gain_a + (data_b?.[i] ?? 0) * alpha
-        }
+    if (chunks.length === 1) {
+        return first
     }
-    return mixed
+    const channels = first.numberOfChannels
+    let length = 0
+    for (const chunk of chunks) {
+        length += chunk.length
+    }
+    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
+    let offset = 0
+    for (const chunk of chunks) {
+        for (let channel = 0; channel < channels; channel += 1) {
+            full.getChannelData(channel).set(
+                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
+                offset,
+            )
+        }
+        offset += chunk.length
+    }
+    return full
 }
 
 export async function render_transition(options: RenderTransitionOptions): Promise<RenderTransitionResult> {
     const { file_a, file_b, duration, width, height, fps, quality, easing, on_progress, signal } = options
     const start_a = options.start_a ?? 0
-    const frame_count = validate_transition_options(options)
+    validate_transition_options(options)
     if (signal?.aborted) {
         throw new ClipError("CANCELLED", "Cancelled.")
     }
@@ -182,6 +233,13 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         if (len_a !== null && start_a + duration > len_a) {
             throw new ClipError("INVALID_RANGE", "Transition start plus duration exceeds source A duration.")
         }
+        const { total, total_frames, frame_duration } = resolve_transition_timeline(
+            start_a,
+            duration,
+            resolved_b.duration,
+            options.total_duration,
+            fps,
+        )
         const [video_tracks_a, video_tracks_b] = await Promise.all([input_a.getVideoTracks(), input_b.getVideoTracks()])
         const video_a = video_tracks_a[0] ?? null
         const video_b = video_tracks_b[0] ?? null
@@ -210,10 +268,30 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         if (audio_source) {
             output.addAudioTrack(audio_source)
         }
+        const sink_audio_a = audio_a ? new mb.AudioBufferSink(audio_a) : null
+        const sink_audio_b = audio_b ? new mb.AudioBufferSink(audio_b) : null
+        const [full_a, full_b] = await Promise.all([
+            sink_audio_a ? decode_full_audio(sink_audio_a) : null,
+            sink_audio_b ? decode_full_audio(sink_audio_b) : null,
+        ])
+        const premixed =
+            options.premixed_audio !== undefined
+                ? options.premixed_audio
+                : await premix_transition_audio({
+                      full_a,
+                      full_b,
+                      start_a,
+                      blend_duration: duration,
+                      total_duration: total,
+                      easing,
+                  })
         await output.start()
         if (signal?.aborted) {
             await output.cancel()
             throw new ClipError("CANCELLED", "Cancelled.")
+        }
+        if (audio_source && premixed) {
+            await audio_source.add(premixed)
         }
         const ctx = canvas.getContext("2d")
         if (!ctx) {
@@ -221,44 +299,33 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         }
         const sink_a = new mb.CanvasSink(video_a, { poolSize: 1 })
         const sink_b = new mb.CanvasSink(video_b, { poolSize: 1 })
+        // S full timeline output=total: solo-a from A only, blend A+B, solo-b from B only
         const timestamps_a: number[] = []
         const timestamps_b: number[] = []
-        for (let i = 0; i < frame_count; i += 1) {
-            timestamps_a.push(start_a + i / fps)
-            timestamps_b.push(i / fps)
+        for (let i = 0; i < total_frames; i += 1) {
+            const output_t = i / fps
+            const { phase } = phase_at(output_t, start_a, duration, total, easing)
+            if (phase !== "solo-b") {
+                timestamps_a.push(output_t)
+            }
+            if (phase !== "solo-a") {
+                timestamps_b.push(output_t - start_a)
+            }
         }
-        // S v1 overlap clip output=D sampling A at start_a+t B at t
         const frames_a = sink_a.canvasesAtTimestamps(timestamps_a)[Symbol.asyncIterator]()
         const frames_b = sink_b.canvasesAtTimestamps(timestamps_b)[Symbol.asyncIterator]()
-        const sink_audio_a = audio_a ? new mb.AudioBufferSink(audio_a) : null
-        const sink_audio_b = audio_b ? new mb.AudioBufferSink(audio_b) : null
-        const audios_a = sink_audio_a ? sink_audio_a.buffersAtTimestamps(timestamps_a)[Symbol.asyncIterator]() : null
-        const audios_b = sink_audio_b ? sink_audio_b.buffersAtTimestamps(timestamps_b)[Symbol.asyncIterator]() : null
-        const frame_duration = 1 / fps
-        for (let i = 0; i < frame_count; i += 1) {
+        for (let i = 0; i < total_frames; i += 1) {
             if (signal?.aborted) {
                 await output.cancel()
                 throw new ClipError("CANCELLED", "Cancelled.")
             }
-            const timestamp = i / fps
-            const normalized = frame_count <= 1 ? 1 : i / (frame_count - 1)
-            const alpha = EASING_REGISTRY[easing](normalized)
-            const [{ value: wrapped_a }, { value: wrapped_b }] = await Promise.all([frames_a.next(), frames_b.next()])
+            const output_t = i / fps
+            const { phase, alpha } = phase_at(output_t, start_a, duration, total, easing)
+            const wrapped_a = phase === "solo-b" ? null : (await frames_a.next()).value
+            const wrapped_b = phase === "solo-a" ? null : (await frames_b.next()).value
             draw_transition_frame(ctx, wrapped_a?.canvas ?? null, wrapped_b?.canvas ?? null, width, height, alpha)
-            await video_source.add(timestamp, frame_duration)
-            if (audio_source && (audios_a || audios_b)) {
-                const [next_a, next_b] = await Promise.all([audios_a?.next(), audios_b?.next()])
-                const mixed = mix_transition_audio(
-                    next_a?.value?.buffer ?? null,
-                    next_b?.value?.buffer ?? null,
-                    alpha,
-                    frame_duration,
-                )
-                if (mixed) {
-                    await audio_source.add(mixed)
-                }
-            }
-            on_progress?.(frame_count <= 1 ? 1 : i / (frame_count - 1))
+            await video_source.add(output_t, frame_duration)
+            on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
         }
         try {
             await output.finalize()
