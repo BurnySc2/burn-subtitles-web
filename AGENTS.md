@@ -1,8 +1,8 @@
 # AGENTS.md — AI Agent Quick Overview
 
 Static, client-only SvelteKit frontend. No backend, no server routes, no database.
-All media work (subtitle burn-in, clip trim, SRT extract) runs in-browser via
-FFmpeg WASM (v1 paths) or MediaBunny + WebCodecs (v2 path).
+All media work (subtitle burn-in, SRT extract) runs in-browser via
+FFmpeg WASM, and clip trimming via MediaBunny + WebCodecs.
 
 ## Stack
 
@@ -16,8 +16,7 @@ FFmpeg WASM (v1 paths) or MediaBunny + WebCodecs (v2 path).
 | Route | File | Purpose |
 |---|---|---|
 | `/` | `src/routes/+page.svelte` | Subtitle burn-in (FFmpeg), preview + render |
-| `/clip` | `src/routes/clip/+page.svelte` | v1 clip trim via FFmpeg (`-ss -i -t -c copy`) |
-| `/clip-v2` | `src/routes/clip-v2/+page.svelte` | v2 clip/probe via MediaBunny, no FFmpeg |
+| `/clip` | `src/routes/clip/+page.svelte` | Clip Extractor via MediaBunny, no FFmpeg |
 | `/ass` | `src/routes/ass/+page.svelte` | ASS subtitle tooling |
 | `/download-srt` | `src/routes/download-srt/+page.svelte` | SRT download helper |
 | `/dev` | `src/routes/dev/+page.svelte` | Dev-only scratch page |
@@ -29,13 +28,11 @@ FFmpeg WASM (v1 paths) or MediaBunny + WebCodecs (v2 path).
 | `src/lib/media/mediabunny-clip.ts` | `probe_media()` + `extract_clip()` (mp4/mp3/wav), `ClipError` codes |
 | `src/lib/media/clip-v2-state.svelte.ts` | `$state` singleton for v2, `reset_output()` / `revoke_all()` |
 | `src/lib/media/timecode.ts` | `parse_timecode` (`mm:ss.mmm`, `hh:mm:ss.mmm`), `format_timecode`, `clamp_timecode` |
-| `src/lib/temporary-storage.svelte.ts` | `$state` singleton for FFmpeg/clip/extract flows |
+| `src/lib/temporary-storage.svelte.ts` | `$state` singleton for FFmpeg/extract flows |
 | `src/lib/persistent-storage.svelte.ts` | Persisted settings store |
-| `src/lib/utils/clip-processing.ts` | v1 FFmpeg trim; revokes old `output_url`, deletes MEMFS files after read |
-| `src/lib/utils/format_time.ts` | Legacy `hh:mm:ss` / clip timestamp helpers (v1 pages) |
+| `src/lib/utils/format_time.ts` | Legacy `hh:mm:ss` helpers |
 | `src/lib/utils/video-processing.ts`, `video-metadata.ts`, `subtitle-processing.ts` | Burn-in render, metadata, SRT parse |
-| `src/lib/components/feature/clip/ClipExtractor.svelte` | v1 UI |
-| `src/lib/components/feature/clip-v2/{ClipV2Extractor,MediaPreview,TimeInputs}.svelte` | v2 UI |
+| `src/lib/components/feature/clip-v2/{ClipV2Extractor,MediaPreview,TimeInputs}.svelte` | Clip Extractor UI |
 | `src/lib/components/feature/subtitle/*` | Upload/extract/output subtitle components |
 | `svelte.config.js` / `src/routes/+layout.ts` | `adapter-static` + global `prerender = true` |
 
@@ -47,7 +44,7 @@ FFmpeg WASM (v1 paths) or MediaBunny + WebCodecs (v2 path).
 - Code, identifiers, comments in English.
 - `await import("mediabunny")` dynamically (never top-level) — SSR/prerender safety; v2 path must never import `@ffmpeg`.
 - Object URLs: `URL.revokeObjectURL()` old URL before replacing; `onDestroy` revokes previews/sources (`SubtitleUpload`, `ClipV2Extractor`, root page).
-- FFmpeg MEMFS: `writeFile` → `exec` → `readFile` → `deleteFile` input+output (see `clip-processing.ts:91-123`).
+- FFmpeg MEMFS: `writeFile` → `exec` → `readFile` → `deleteFile` input+output.
 - Biome: 4-space indent, 120 cols, `semicolons: asNeeded`, `useBlockStatements: error`.
 
 ## Commands

@@ -57,7 +57,7 @@ export interface ExtractClipResult {
     cancel: () => Promise<void>
 }
 
-const UNSUPPORTED_MESSAGE = "This codec isn't supported by MediaBunny in-browser. Try /clip v1."
+const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser trimming."
 
 export function default_output_kind(probe: Pick<ProbeResult, "has_video">): ClipOutputKind {
     return probe.has_video ? "mp4" : "wav"

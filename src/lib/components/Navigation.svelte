@@ -27,11 +27,5 @@ const is_active = (path: string) => {
             class:font-bold={is_active("/clip")}
             >Clip Extractor</a
         >
-        <a
-            href={resolve("/clip-v2")}
-            class="transition-colors hover:text-gray-800"
-            class:font-bold={is_active("/clip-v2")}
-            >Clip (v2)</a
-        >
     </div>
 </nav>

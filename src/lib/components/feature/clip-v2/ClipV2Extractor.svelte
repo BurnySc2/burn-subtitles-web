@@ -9,7 +9,6 @@ import TimeInputs from "./TimeInputs.svelte"
 
 let aborter: AbortController | null = null
 let file_token = 0
-let is_unsupported = $state(false)
 let result_ext = $state("mp4")
 let result_size_mb = $state("")
 let result_duration = $state("")
@@ -31,7 +30,6 @@ async function handle_file(event: Event) {
         URL.revokeObjectURL(clip_v2_state.source_url)
     }
     reset_output()
-    is_unsupported = false
     clip_v2_state.source_file = file
     clip_v2_state.source_url = URL.createObjectURL(file)
     clip_v2_state.duration = null
@@ -55,9 +53,8 @@ async function handle_file(event: Event) {
         if (mine !== file_token || clip_v2_state.source_file !== file) {
             return
         }
-        if (error instanceof ClipError && error.code === "UNSUPPORTED") {
+        if (error instanceof ClipError) {
             clip_v2_state.error = error.message
-            is_unsupported = true
         } else {
             clip_v2_state.error = `Failed to read media: ${(error as Error).message}`
         }
@@ -73,7 +70,6 @@ async function handle_extract() {
     const file = clip_v2_state.source_file
     const mine = file_token
     reset_output()
-    is_unsupported = false
     clip_v2_state.is_processing = true
     try {
         const { start, end } = clamp_timecode(
@@ -102,9 +98,6 @@ async function handle_extract() {
                     return
                 }
                 clip_v2_state.message = "Cancelled."
-            } else if (error.code === "UNSUPPORTED") {
-                clip_v2_state.error = error.message
-                is_unsupported = true
             } else {
                 clip_v2_state.error = error.message
             }
@@ -303,12 +296,7 @@ onDestroy(() => {
                                     >
                                 {:else}
                                     <span class="ml-1 rounded bg-yellow-200 px-1.5 py-0.5 text-xs text-yellow-800"
-                                        >may not play in browser —
-                                        <a
-                                            href="/clip"
-                                            class="underline"
-                                            >try /clip v1</a
-                                        ></span
+                                        >may not play in browser</span
                                     >
                                 {/if}
                             </dd>
@@ -356,16 +344,7 @@ onDestroy(() => {
         <div class="rounded-lg bg-green-100 p-3 text-green-800">{clip_v2_state.message}</div>
     {/if}
     {#if clip_v2_state.error}
-        <div class="rounded-lg bg-red-100 p-3 text-red-800">
-            {clip_v2_state.error}
-            {#if is_unsupported}
-                <a
-                    href="/clip"
-                    class="ml-2 underline"
-                    >Try /clip v1.</a
-                >
-            {/if}
-        </div>
+        <div class="rounded-lg bg-red-100 p-3 text-red-800">{clip_v2_state.error}</div>
     {/if}
 
     {#if clip_v2_state.result_url}
