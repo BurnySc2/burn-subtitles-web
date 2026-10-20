@@ -1,15 +1,13 @@
 <script lang="ts">
-import { formatTimecode, parseTimecode } from "$lib/media/timecode"
+import { parseTimecode } from "$lib/media/timecode"
 
 let {
     startStr,
     endStr,
-    duration,
     onChange,
 }: {
     startStr: string
     endStr: string
-    duration: number | null
     onChange?: (start: string, end: string) => void
 } = $props()
 
@@ -30,13 +28,6 @@ let range_error = $derived.by(() => {
     }
     return parseTimecode(endStr) <= parseTimecode(startStr) ? "End time must be greater than start time" : null
 })
-
-function handle_use_full() {
-    if (duration === null) {
-        return
-    }
-    onChange?.(formatTimecode(0), formatTimecode(duration))
-}
 </script>
 
 <div class="flex flex-wrap items-center gap-4 rounded-lg bg-gray-100 p-4">
@@ -79,11 +70,4 @@ function handle_use_full() {
     {#if range_error}
         <p class="w-full text-sm text-red-700">{range_error}</p>
     {/if}
-    <button
-        onclick={handle_use_full}
-        disabled={duration === null}
-        class="rounded bg-gray-600 px-4 py-2 text-white transition-colors hover:bg-gray-700 disabled:opacity-50"
-    >
-        Use full
-    </button>
 </div>
