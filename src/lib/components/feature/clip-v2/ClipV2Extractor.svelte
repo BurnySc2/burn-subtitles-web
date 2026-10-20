@@ -110,7 +110,6 @@ async function handle_extract() {
             size_mb: result_size_mb,
             duration: result_duration,
         }
-        clip_v2_state.message = `Clip ready: ${result_duration}, ${result_size_mb} MB`
     } catch (error) {
         if (error instanceof ClipError) {
             if (error.code === "CANCELLED") {

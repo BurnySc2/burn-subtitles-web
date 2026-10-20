@@ -5,7 +5,7 @@ let { result, filename }: { result: ClipResult; filename: string } = $props()
 </script>
 
 <div class="rounded-lg bg-gray-100 p-4">
-    <h2 class="mb-3 text-lg font-semibold">Extracted Clip</h2>
+    <h2 class="mb-3 text-lg font-semibold">Clip ready</h2>
     {#if result.mime.startsWith("video")}
         <video
             src={result.url}
