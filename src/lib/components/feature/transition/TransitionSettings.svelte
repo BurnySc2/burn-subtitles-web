@@ -12,6 +12,7 @@ export type { TransitionEasing, TransitionQuality }
 
 export interface TransitionSettingsPatch {
     duration?: string
+    start?: string
     resolution?: TransitionResolution
     fps?: TransitionFps
     quality?: TransitionQuality
@@ -20,6 +21,7 @@ export interface TransitionSettingsPatch {
 
 let {
     duration,
+    start,
     resolution,
     fps,
     quality,
@@ -27,6 +29,7 @@ let {
     on_change,
 }: {
     duration: string
+    start: string
     resolution: TransitionResolution
     fps: TransitionFps
     quality: TransitionQuality
@@ -50,6 +53,22 @@ let {
             value={duration}
             oninput={(event) => on_change?.({ duration: event.currentTarget.value })}
             placeholder="1.0"
+            inputmode="decimal"
+        >
+    </div>
+    <div>
+        <label
+            for="transition-start"
+            class="form-label"
+        >
+            Start on A (seconds)
+        </label>
+        <input
+            id="transition-start"
+            type="text"
+            value={start}
+            oninput={(event) => on_change?.({ start: event.currentTarget.value })}
+            placeholder="0"
             inputmode="decimal"
         >
     </div>

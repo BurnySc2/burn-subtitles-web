@@ -8,6 +8,8 @@ import {
     resolve_duration_seconds,
     resolve_output_dims,
     resolve_output_fps,
+    resolve_start_seconds,
+    validate_transition_range,
 } from "./transition-utils"
 
 describe("EASING_REGISTRY", () => {
@@ -67,6 +69,36 @@ describe("resolve_duration_seconds", () => {
         }
         expect(() => resolve_duration_seconds("9", 10, 8)).toThrow(TimecodeError)
         expect(() => resolve_duration_seconds("11", 10, null)).toThrow(TimecodeError)
+    })
+})
+
+describe("resolve_start_seconds", () => {
+    it("accepts a start offset fitting inside source A", () => {
+        expect(resolve_start_seconds("0", 10, 1)).toBe(0)
+        expect(resolve_start_seconds(" 2.5 ", 10, 1)).toBe(2.5)
+        expect(resolve_start_seconds("9", 10, 1)).toBe(9)
+    })
+
+    it("rejects negative, malformed, unknown-length, or overflowing starts", () => {
+        for (const raw of ["-1", "abc", "", "  "]) {
+            expect(() => resolve_start_seconds(raw, 10, 1)).toThrow(TimecodeError)
+        }
+        expect(() => resolve_start_seconds("1", null, 1)).toThrow(TimecodeError)
+        expect(() => resolve_start_seconds("9.5", 10, 1)).toThrow(TimecodeError)
+    })
+})
+
+describe("validate_transition_range", () => {
+    it("passes when start plus duration fits A and duration fits B", () => {
+        expect(() => validate_transition_range(2, 1, 10, 8)).not.toThrow()
+        expect(() => validate_transition_range(0, 2.5, null, null)).not.toThrow()
+    })
+
+    it("rejects overflow beyond either source", () => {
+        expect(() => validate_transition_range(9.5, 1, 10, 8)).toThrow(TimecodeError)
+        expect(() => validate_transition_range(0, 9, 10, 8)).toThrow(TimecodeError)
+        expect(() => validate_transition_range(-1, 1, 10, 8)).toThrow(TimecodeError)
+        expect(() => validate_transition_range(0, 0, 10, 8)).toThrow(TimecodeError)
     })
 })
 

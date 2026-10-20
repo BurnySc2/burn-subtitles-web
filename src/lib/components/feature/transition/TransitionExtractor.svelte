@@ -11,6 +11,8 @@ import {
     resolve_duration_seconds,
     resolve_output_dims,
     resolve_output_fps,
+    resolve_start_seconds,
+    validate_transition_range,
 } from "$lib/media/transition-utils"
 import DualUpload from "./DualUpload.svelte"
 import TransitionPreview from "./TransitionPreview.svelte"
@@ -25,6 +27,10 @@ let slot_b = $derived({ file: transition_state.source_b?.file ?? null, url: tran
 let preview_duration = $derived.by(() => {
     const parsed = Number.parseFloat(transition_state.duration_str.trim())
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+})
+let preview_start = $derived.by(() => {
+    const parsed = Number.parseFloat(transition_state.start_str.trim())
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 })
 let can_render = $derived(
     transition_state.source_a !== null && transition_state.source_b !== null && !transition_state.is_processing,
@@ -41,6 +47,9 @@ let estimated_frames = $derived(estimate_frame_count(preview_duration, resolved_
 function apply_patch(patch: TransitionSettingsPatch) {
     if (patch.duration !== undefined) {
         transition_state.duration_str = patch.duration
+    }
+    if (patch.start !== undefined) {
+        transition_state.start_str = patch.start
     }
     if (patch.resolution !== undefined) {
         transition_state.res_source = patch.resolution
@@ -96,11 +105,14 @@ async function handle_render() {
     reset_output_transition()
     transition_state.is_processing = true
     try {
-        const duration = resolve_duration_seconds(
-            transition_state.duration_str,
-            source_a.probe?.duration ?? null,
-            source_b.probe?.duration ?? null,
-        )
+        const len_a = source_a.probe?.duration ?? null
+        const len_b = source_b.probe?.duration ?? null
+        if (len_a === null || len_b === null) {
+            throw new ClipError("INVALID_RANGE", "Source durations are unknown — wait for probing to finish.")
+        }
+        const duration = resolve_duration_seconds(transition_state.duration_str, len_a, len_b)
+        const start = resolve_start_seconds(transition_state.start_str, len_a, duration)
+        validate_transition_range(start, duration, len_a, len_b)
         const dims = resolve_output_dims(source_a.probe, source_b.probe, transition_state.res_source)
         if (!dims) {
             throw new ClipError("INVALID_RANGE", "No source has resolution metadata yet — wait for probing to finish.")
@@ -113,6 +125,7 @@ async function handle_render() {
             probe_a: source_a.probe,
             probe_b: source_b.probe,
             duration,
+            start_a: start,
             width: dims.width,
             height: dims.height,
             fps,
@@ -213,11 +226,13 @@ onDestroy(() => {
             url_b={transition_state.source_b.url}
             duration={preview_duration}
             easing={transition_state.easing}
+            start_a={preview_start}
         />
     {/if}
 
     <TransitionSettings
         duration={transition_state.duration_str}
+        start={transition_state.start_str}
         resolution={transition_state.res_source}
         fps={transition_state.fps_mode}
         quality={transition_state.quality}

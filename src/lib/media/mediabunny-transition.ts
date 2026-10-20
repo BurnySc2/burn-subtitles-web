@@ -14,6 +14,7 @@ export interface RenderTransitionOptions {
     probe_a?: ProbeResult | null
     probe_b?: ProbeResult | null
     duration: number
+    start_a?: number
     width: number
     height: number
     fps: number
@@ -36,11 +37,15 @@ const TRANSITION_AUDIO_BITRATE = 128_000
 
 function validate_transition_options(options: RenderTransitionOptions): number {
     const { file_a, file_b, duration, width, height, fps, quality, easing } = options
+    const start_a = options.start_a ?? 0
     if (!(file_a instanceof File) || !(file_b instanceof File)) {
         throw new ClipError("INVALID_RANGE", "Two source files are required to render a transition.")
     }
     if (!Number.isFinite(duration) || duration <= 0) {
         throw new ClipError("INVALID_RANGE", "Transition duration must be greater than 0 seconds.")
+    }
+    if (!Number.isFinite(start_a) || start_a < 0) {
+        throw new ClipError("INVALID_RANGE", "Transition start offset must be at or after 0 seconds.")
     }
     if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
         throw new ClipError("INVALID_RANGE", "Output width and height must be positive integers.")
@@ -146,7 +151,8 @@ function mix_transition_audio(
 }
 
 export async function render_transition(options: RenderTransitionOptions): Promise<RenderTransitionResult> {
-    const { file_a, file_b, width, height, fps, quality, easing, on_progress, signal } = options
+    const { file_a, file_b, duration, width, height, fps, quality, easing, on_progress, signal } = options
+    const start_a = options.start_a ?? 0
     const frame_count = validate_transition_options(options)
     if (signal?.aborted) {
         throw new ClipError("CANCELLED", "Cancelled.")
@@ -171,6 +177,10 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             if (!probe || !probe.has_video || !probe.can_play) {
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
             }
+        }
+        const len_a = resolved_a.duration
+        if (len_a !== null && start_a + duration > len_a) {
+            throw new ClipError("INVALID_RANGE", "Transition start plus duration exceeds source A duration.")
         }
         const [video_tracks_a, video_tracks_b] = await Promise.all([input_a.getVideoTracks(), input_b.getVideoTracks()])
         const video_a = video_tracks_a[0] ?? null
@@ -211,17 +221,19 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         }
         const sink_a = new mb.CanvasSink(video_a, { poolSize: 1 })
         const sink_b = new mb.CanvasSink(video_b, { poolSize: 1 })
-        const timestamps: number[] = []
+        const timestamps_a: number[] = []
+        const timestamps_b: number[] = []
         for (let i = 0; i < frame_count; i += 1) {
-            timestamps.push(i / fps)
+            timestamps_a.push(start_a + i / fps)
+            timestamps_b.push(i / fps)
         }
-        // v1 output duration=D sampling A at t B at t, tail/head deferred
-        const frames_a = sink_a.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
-        const frames_b = sink_b.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
+        // S v1 overlap clip output=D sampling A at start_a+t B at t
+        const frames_a = sink_a.canvasesAtTimestamps(timestamps_a)[Symbol.asyncIterator]()
+        const frames_b = sink_b.canvasesAtTimestamps(timestamps_b)[Symbol.asyncIterator]()
         const sink_audio_a = audio_a ? new mb.AudioBufferSink(audio_a) : null
         const sink_audio_b = audio_b ? new mb.AudioBufferSink(audio_b) : null
-        const audios_a = sink_audio_a ? sink_audio_a.buffersAtTimestamps(timestamps)[Symbol.asyncIterator]() : null
-        const audios_b = sink_audio_b ? sink_audio_b.buffersAtTimestamps(timestamps)[Symbol.asyncIterator]() : null
+        const audios_a = sink_audio_a ? sink_audio_a.buffersAtTimestamps(timestamps_a)[Symbol.asyncIterator]() : null
+        const audios_b = sink_audio_b ? sink_audio_b.buffersAtTimestamps(timestamps_b)[Symbol.asyncIterator]() : null
         const frame_duration = 1 / fps
         for (let i = 0; i < frame_count; i += 1) {
             if (signal?.aborted) {

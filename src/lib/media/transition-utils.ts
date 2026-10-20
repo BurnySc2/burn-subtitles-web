@@ -81,6 +81,42 @@ export function resolve_duration_seconds(
     return parsed
 }
 
+export function resolve_start_seconds(start_str: string, duration_a: number | null, duration: number): number {
+    const parsed = Number.parseFloat(start_str.trim())
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new TimecodeError(`Invalid transition start "${start_str}": expected seconds at or after 0`)
+    }
+    if (duration_a === null || !Number.isFinite(duration_a)) {
+        throw new TimecodeError("Source A duration is unknown — wait for probing to finish.")
+    }
+    if (parsed + duration > duration_a) {
+        throw new TimecodeError(
+            `Invalid transition start "${start_str}": start plus duration exceeds source A of ${duration_a}s`,
+        )
+    }
+    return parsed
+}
+
+export function validate_transition_range(
+    start: number,
+    duration: number,
+    duration_a: number | null,
+    duration_b: number | null,
+): void {
+    if (!Number.isFinite(start) || start < 0) {
+        throw new TimecodeError(`Invalid transition start "${start}": expected seconds at or after 0`)
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+        throw new TimecodeError(`Invalid transition duration "${duration}": expected seconds greater than 0`)
+    }
+    if (duration_a !== null && start + duration > duration_a) {
+        throw new TimecodeError(`Invalid transition range: start plus duration exceeds source A of ${duration_a}s`)
+    }
+    if (duration_b !== null && duration > duration_b) {
+        throw new TimecodeError(`Invalid transition range: duration exceeds source B of ${duration_b}s`)
+    }
+}
+
 const QUALITY_BITRATE: Record<TransitionQuality, number> = {
     low: 2_000_000,
     medium: 5_000_000,

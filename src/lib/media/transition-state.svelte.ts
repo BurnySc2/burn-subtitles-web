@@ -12,6 +12,7 @@ export interface TransitionState {
     source_a: TransitionSource | null
     source_b: TransitionSource | null
     duration_str: string
+    start_str: string
     res_source: TransitionResSource
     fps_mode: TransitionFpsMode
     quality: TransitionQuality
@@ -28,6 +29,7 @@ function initial_state(): TransitionState {
         source_a: null,
         source_b: null,
         duration_str: "1.0",
+        start_str: "0",
         res_source: "a",
         fps_mode: "a",
         quality: "high",
@@ -66,6 +68,7 @@ export function revoke_all_transition(): void {
     transition_state.source_a = fresh.source_a
     transition_state.source_b = fresh.source_b
     transition_state.duration_str = fresh.duration_str
+    transition_state.start_str = fresh.start_str
     transition_state.res_source = fresh.res_source
     transition_state.fps_mode = fresh.fps_mode
     transition_state.quality = fresh.quality
