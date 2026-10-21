@@ -4,6 +4,22 @@ Master branch deployment: https://subtitles.burnysc2.xyz
 
 Develop branch deployment: https://burn-subtitles-dev.netlify.app
 
+## Features
+
+- Subtitles Burner (`/`): burns styled subtitles into video in the browser.
+- Download SRT (`/download-srt`): builds an SRT file from subtitle lines in an ODS sheet.
+- Clip Extractor (`/clip`): trims video/audio in the browser, no upload.
+
+> No uploads, no servers — your media stays on this device.
+
+### Clip Extractor usage
+
+1. Open `/clip` and choose a `video/*,audio/*` file.
+2. Enter start/end as `mm:ss.mmm` or `hh:mm:ss.mmm`, or press ◉ Now to copy the preview position.
+3. Expand the Media details `<details>` block to inspect codecs and format.
+4. Press Extract Clip, then Download Clip to save `{base}_{start}-{end}.{ext}`.
+5. Output: video → `mp4`; audio with mp3 source → `mp3`, otherwise `flac`. Sizes show dual `MiB · MB`.
+
 ## Fonts & Licensing
 
 This project burns subtitles with FFmpeg and supports 16 bundled fonts in `static/fonts/`.
@@ -23,23 +39,17 @@ To try out fonts locally, you can save the fonts to `~/.fonts/` and they will be
 Once you've created a project and installed dependencies with `npm install`, start a development server:
 
 ```sh
-npm run dev
+npm run dev # vite dev on :8000 --host 0.0.0.0
 
 # or start the server and open the app in a new browser tab
 npm run dev -- --open
+
+npm run check # svelte-kit sync + svelte-check
+npm run lint # biome check
+npm run test:unit # vitest run (browser/chromium)
+npm run test:integration # playwright test
+npm run build # production build
 ```
-
-### Update typescript types
-
-There may be a problem keeping the types up to date with the backend api.
-
-While backend is running under, you can run
-
-```sh
-npx openapi-typescript http://localhost:8000/schema/openapi.json --output src/lib/types/api.ts
-```
-
-to update the types of the endpoints.
 
 ## Building
 
