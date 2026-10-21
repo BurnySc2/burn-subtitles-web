@@ -1,10 +1,12 @@
 <script lang="ts">
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type {
+    ColorNodeData,
     ComposeNode,
     MergeNodeData,
     OutputNodeData,
     OverlayNodeData,
+    RescaleNodeData,
     SubtitlesNodeData,
     TransitionNodeData,
     TrimNodeData,
@@ -124,6 +126,20 @@ function patch_overlay(patch: Partial<OverlayNodeData>): void {
     }
 }
 
+function patch_color(patch: Partial<ColorNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "color") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function patch_rescale(patch: Partial<RescaleNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "rescale") {
+        Object.assign(node.data, patch)
+    }
+}
+
 function patch_label(label: string): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node) {
@@ -159,6 +175,14 @@ function on_show_end_input(raw: string): void {
         return
     }
     on_number_input(raw, (value) => patch_overlay({ show_end: value }))
+}
+
+function on_rescale_fps_input(raw: string): void {
+    if (raw.trim() === "") {
+        patch_rescale({ fps: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_rescale({ fps: value }))
 }
 
 function delete_selected_edge(): void {
@@ -517,6 +541,92 @@ function probe_summary(node: ComposeNode): string {
                     >
                 </label>
             </div>
+        {:else if selected.type === "color"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Color
+                <span class="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={selected.data.color}
+                        oninput={(e) => patch_color({ color: e.currentTarget.value })}
+                        class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                    >
+                    <input
+                        type="text"
+                        value={selected.data.color}
+                        oninput={(e) => patch_color({ color: e.currentTarget.value })}
+                        placeholder="#000000"
+                        spellcheck={false}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                    >
+                </span>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Duration (s)
+                <input
+                    type="number"
+                    min="0"
+                    max="3600"
+                    step="0.001"
+                    value={selected.data.duration}
+                    oninput={(e) => on_number_input(e.currentTarget.value, (value) => patch_color({ duration: value }))}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <p class="text-xs text-gray-500">Duration must be above 0, max 3600s.</p>
+        {:else if selected.type === "rescale"}
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Width
+                    <input
+                        type="number"
+                        min="2"
+                        step="2"
+                        value={selected.data.width}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_rescale({ width: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Height
+                    <input
+                        type="number"
+                        min="2"
+                        step="2"
+                        value={selected.data.height}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_rescale({ height: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+            </div>
+            <p class="text-xs text-gray-500">Width and height must be even numbers.</p>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                FPS (empty = keep source)
+                <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    step="1"
+                    value={selected.data.fps ?? ""}
+                    oninput={(e) => on_rescale_fps_input(e.currentTarget.value)}
+                    placeholder="source"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <p class="text-xs text-gray-500">FPS must be 1-120 when set.</p>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Fit
+                <select
+                    value={selected.data.fit}
+                    disabled
+                    class="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 font-normal text-gray-500"
+                >
+                    <option value="contain">contain</option>
+                </select>
+            </label>
+            <p class="text-xs text-gray-500">v1 supports contain only.</p>
         {:else if selected.type === "output"}
             <label class="flex flex-col gap-1 text-sm font-medium">
                 File name

@@ -5,6 +5,8 @@ import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
+import { render_rescale } from "./mediabunny-rescale"
+import { render_solid_color } from "./mediabunny-solid"
 import { render_transition } from "./mediabunny-transition"
 
 export interface ExecuteComposeGraphOptions {
@@ -278,6 +280,37 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     signal,
                 })
                 memo.set(node.id, result.blob)
+                break
+            }
+            case "color": {
+                const result = await render_solid_color({
+                    color: node.data.color,
+                    duration: node.data.duration,
+                    width: output_node?.data.width ?? 1280,
+                    height: output_node?.data.height ?? 720,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
+                    signal,
+                })
+                memo.set(node.id, result)
+                break
+            }
+            case "rescale": {
+                const input = single_input(node.id, incoming, memo)
+                const result = await render_rescale(input, {
+                    width: node.data.width,
+                    height: node.data.height,
+                    fps: node.data.fps,
+                    fit: node.data.fit,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
+                    signal,
+                })
+                memo.set(node.id, result)
                 break
             }
             case "subtitles": {

@@ -59,6 +59,17 @@ function handle_add(kind: ComposeNodeKind): void {
                 },
             }
             break
+        case "color":
+            node = { id, type: "color", position, data: { color: "#000000", duration: 20, label: null } }
+            break
+        case "rescale":
+            node = {
+                id,
+                type: "rescale",
+                position,
+                data: { width: 1920, height: 1080, fps: null, fit: "contain", label: null },
+            }
+            break
         case "output":
             node = {
                 id,

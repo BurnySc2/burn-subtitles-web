@@ -3,6 +3,8 @@ import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
+import { render_rescale } from "./mediabunny-rescale"
+import { render_solid_color } from "./mediabunny-solid"
 import { render_transition } from "./mediabunny-transition"
 
 export interface NodePreviewOptions {
@@ -45,6 +47,19 @@ function serialize_node(node: ComposeNode): string {
             node.data.show_end ?? "null",
         ].join(":")
     }
+    if (node.type === "color") {
+        return [node.id, node.type, node.data.color, String(node.data.duration)].join(":")
+    }
+    if (node.type === "rescale") {
+        return [
+            node.id,
+            node.type,
+            String(node.data.width),
+            String(node.data.height),
+            node.data.fps === null ? "null" : String(node.data.fps),
+            node.data.fit,
+        ].join(":")
+    }
     return [node.id, node.type, JSON.stringify(node.data)].join(":")
 }
 
@@ -56,7 +71,18 @@ function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: Co
         .filter((edge) => relevant.has(edge.source) && relevant.has(edge.target))
         .map((edge) => [edge.id, edge.source, edge.target, edge.targetHandle ?? ""].join(":"))
         .sort()
-    return JSON.stringify([serial_nodes, serial_edges])
+    const output = find_output_node(nodes)
+    const output_settings = output
+        ? [
+              output.data.width,
+              output.data.height,
+              output.data.fps,
+              output.data.quality,
+              output.data.crf ?? "null",
+              output.data.audio_quality,
+          ].join(":")
+        : "no-output"
+    return JSON.stringify([serial_nodes, serial_edges, output_settings])
 }
 
 export function clear_node_preview_cache(): void {
@@ -367,6 +393,37 @@ export async function get_node_preview_blob(
                     signal,
                 })
                 store(node.id, result.blob)
+                break
+            }
+            case "color": {
+                const result = await render_solid_color({
+                    color: node.data.color,
+                    duration: node.data.duration,
+                    width: output_node?.data.width ?? 1280,
+                    height: output_node?.data.height ?? 720,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
+                    signal,
+                })
+                store(node.id, result)
+                break
+            }
+            case "rescale": {
+                const input = single_input(node.id, incoming, blobs)
+                const result = await render_rescale(input, {
+                    width: node.data.width,
+                    height: node.data.height,
+                    fps: node.data.fps,
+                    fit: node.data.fit,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
+                    signal,
+                })
+                store(node.id, result)
                 break
             }
             case "output": {

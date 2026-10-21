@@ -38,6 +38,14 @@ export function find_output_node(nodes: ComposeNode[]): ComposeOutputNode | null
     return (nodes.find((node) => node.type === "output") as ComposeOutputNode | undefined) ?? null
 }
 
+export function is_compose_root(node: ComposeNode): boolean {
+    return node.type === "source" || node.type === "color"
+}
+
+export function is_single_upstream_passthrough(node: ComposeNode): boolean {
+    return node.type === "trim" || node.type === "rescale" || node.type === "subtitles" || node.type === "overlay"
+}
+
 function merge_handle_index(handle: string | null): number {
     if (typeof handle !== "string") {
         return Number.MAX_SAFE_INTEGER

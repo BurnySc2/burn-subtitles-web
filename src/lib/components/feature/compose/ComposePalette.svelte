@@ -16,6 +16,8 @@ function is_addable(value: string): value is ComposeNodeKind {
         value === "merge" ||
         value === "subtitles" ||
         value === "overlay" ||
+        value === "color" ||
+        value === "rescale" ||
         value === "output"
     )
 }
@@ -43,12 +45,8 @@ function handle_click(): void {
             <option value="trim">Trim</option>
             <option value="transition">Transition</option>
             <option value="merge">Merge</option>
-            <option
-                value="resize"
-                disabled
-            >
-                Resize (future)
-            </option>
+            <option value="color">Color</option>
+            <option value="rescale">Rescale</option>
             <option
                 value="canvas"
                 disabled

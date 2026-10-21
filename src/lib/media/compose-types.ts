@@ -1,7 +1,16 @@
 import type { ProbeResult } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
 
-export type ComposeNodeKind = "source" | "trim" | "transition" | "merge" | "subtitles" | "overlay" | "output"
+export type ComposeNodeKind =
+    | "source"
+    | "trim"
+    | "transition"
+    | "merge"
+    | "subtitles"
+    | "overlay"
+    | "color"
+    | "rescale"
+    | "output"
 
 export interface SourceNodeData {
     file: File | null
@@ -70,6 +79,20 @@ export interface OverlayNodeData {
     label?: string | null
 }
 
+export interface ColorNodeData {
+    color: string
+    duration: number
+    label?: string | null
+}
+
+export interface RescaleNodeData {
+    width: number
+    height: number
+    fps: number | null
+    fit: "contain"
+    label?: string | null
+}
+
 export type ComposeNodeData =
     | SourceNodeData
     | TrimNodeData
@@ -77,6 +100,8 @@ export type ComposeNodeData =
     | MergeNodeData
     | SubtitlesNodeData
     | OverlayNodeData
+    | ColorNodeData
+    | RescaleNodeData
     | OutputNodeData
 
 export interface ComposePosition {
@@ -91,6 +116,8 @@ export type ComposeNode =
     | { id: string; type: "merge"; position: ComposePosition; data: MergeNodeData }
     | { id: string; type: "subtitles"; position: ComposePosition; data: SubtitlesNodeData }
     | { id: string; type: "overlay"; position: ComposePosition; data: OverlayNodeData }
+    | { id: string; type: "color"; position: ComposePosition; data: ColorNodeData }
+    | { id: string; type: "rescale"; position: ComposePosition; data: RescaleNodeData }
     | { id: string; type: "output"; position: ComposePosition; data: OutputNodeData }
 
 export interface ComposeEdge {

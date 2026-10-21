@@ -181,7 +181,10 @@ export function add_compose_edge(connection: ComposeConnection): { ok: boolean; 
     switch (target_node.type) {
         case "source":
             return { ok: false, error: "Source nodes accept no inputs." }
+        case "color":
+            return { ok: false, error: "Color nodes accept no inputs." }
         case "trim":
+        case "rescale":
         case "subtitles":
         case "overlay":
         case "output": {
@@ -192,11 +195,13 @@ export function add_compose_edge(connection: ComposeConnection): { ok: boolean; 
                 const label =
                     target_node.type === "trim"
                         ? "Trim"
-                        : target_node.type === "subtitles"
-                          ? "Subtitles"
-                          : target_node.type === "overlay"
-                            ? "Overlay"
-                            : "Output"
+                        : target_node.type === "rescale"
+                          ? "Rescale"
+                          : target_node.type === "subtitles"
+                            ? "Subtitles"
+                            : target_node.type === "overlay"
+                              ? "Overlay"
+                              : "Output"
                 return { ok: false, error: `${label} nodes accept 1 input — remove the existing connection first.` }
             }
             break
@@ -500,6 +505,49 @@ function parse_node(raw: unknown): ComposeNode {
                     offset_y: raw.data.offset_y,
                     show_start: raw.data.show_start,
                     show_end: raw.data.show_end,
+                    label: parse_label(raw.data.label, raw.id),
+                },
+            }
+        }
+        case "color": {
+            const color = raw.data.color === undefined ? "#000000" : raw.data.color
+            if (typeof color !== "string") {
+                throw new Error(`Node "${raw.id}": color needs a string color`)
+            }
+            const duration = raw.data.duration === undefined ? 20 : raw.data.duration
+            if (typeof duration !== "number") {
+                throw new Error(`Node "${raw.id}": color needs numeric duration`)
+            }
+            return {
+                id: raw.id,
+                type: "color",
+                position,
+                data: { color, duration, label: parse_label(raw.data.label, raw.id) },
+            }
+        }
+        case "rescale": {
+            const width = raw.data.width === undefined ? 1920 : raw.data.width
+            const height = raw.data.height === undefined ? 1080 : raw.data.height
+            if (typeof width !== "number" || typeof height !== "number") {
+                throw new Error(`Node "${raw.id}": rescale needs numeric width and height`)
+            }
+            const fps = raw.data.fps === undefined ? null : raw.data.fps
+            if (fps !== null && typeof fps !== "number") {
+                throw new Error(`Node "${raw.id}": invalid rescale fps`)
+            }
+            const fit = raw.data.fit === undefined ? "contain" : raw.data.fit
+            if (fit !== "contain") {
+                throw new Error(`Node "${raw.id}": rescale fit must be "contain"`)
+            }
+            return {
+                id: raw.id,
+                type: "rescale",
+                position,
+                data: {
+                    width,
+                    height,
+                    fps,
+                    fit: fit as "contain",
                     label: parse_label(raw.data.label, raw.id),
                 },
             }
