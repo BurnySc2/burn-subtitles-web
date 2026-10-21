@@ -148,4 +148,21 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
     background: transparent;
     text-align: left;
 }
+.compose-canvas :global(.svelte-flow__handle) {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    border-width: 2px;
+}
+.compose-canvas :global(.svelte-flow__handle::after) {
+    content: "";
+    position: absolute;
+    inset: -6px;
+}
+.compose-canvas :global(.svelte-flow__handle:hover),
+.compose-canvas :global(.svelte-flow__handle.connectingfrom),
+.compose-canvas :global(.svelte-flow__handle.connectionindicator) {
+    box-shadow: 0 0 0 3px rgb(147 197 253 / 0.7);
+}
 </style>
