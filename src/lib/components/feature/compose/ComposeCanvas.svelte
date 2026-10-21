@@ -71,6 +71,58 @@ function handle_connect(connection: Connection): void {
     }
 }
 
+function is_valid_preview(connection: Connection): boolean {
+    const source = connection.source ?? null
+    const target = connection.target ?? null
+    if (!source || !target || source === target) {
+        return false
+    }
+    const source_handle = connection.sourceHandle ?? null
+    const target_handle = connection.targetHandle ?? null
+    const by_id = new Map(compose_state.nodes.map((node) => [node.id, node]))
+    const target_node = by_id.get(target)
+    if (!by_id.has(source) || !target_node) {
+        return false
+    }
+    const duplicate = compose_state.edges.some(
+        (edge) =>
+            edge.source === source &&
+            (edge.sourceHandle ?? null) === source_handle &&
+            edge.target === target &&
+            (edge.targetHandle ?? null) === target_handle,
+    )
+    if (duplicate) {
+        return false
+    }
+    const incoming = compose_state.edges.filter((edge) => edge.target === target)
+    switch (target_node.type) {
+        case "source":
+            return false
+        case "trim":
+        case "subtitles":
+        case "output":
+            return incoming.length < 1
+        case "transition":
+            if (target_handle !== "a" && target_handle !== "b") {
+                return false
+            }
+            if (incoming.some((edge) => (edge.targetHandle ?? null) === target_handle)) {
+                return false
+            }
+            return incoming.length < 2
+        case "merge": {
+            if (target_handle === null || !/^in\d+$/.test(target_handle)) {
+                return false
+            }
+            if (incoming.some((edge) => (edge.targetHandle ?? null) === target_handle)) {
+                return false
+            }
+            const index = Number(target_handle.slice(2))
+            return Number.isInteger(index) && index >= 0 && index < target_node.data.input_count
+        }
+    }
+}
+
 function handle_selection_change(selection: Parameters<OnSelectionChange>[0]): void {
     if (selection.edges.length > 0) {
         compose_state.selected_edge_id = selection.edges[0].id
@@ -127,6 +179,8 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
             fitView
             snapGrid={[15, 15]}
             deleteKey={["Backspace", "Delete"]}
+            connectionRadius={28}
+            isValidConnection={is_valid_preview}
             onconnect={handle_connect}
             onselectionchange={handle_selection_change}
             ondelete={handle_delete}
@@ -147,5 +201,28 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
     border: none;
     background: transparent;
     text-align: left;
+}
+.compose-canvas :global(.svelte-flow__handle) {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    min-height: 12px;
+    border-width: 2px;
+}
+.compose-canvas :global(.svelte-flow__handle::after) {
+    content: "";
+    position: absolute;
+    inset: -6px;
+}
+.compose-canvas :global(.svelte-flow__handle:hover),
+.compose-canvas :global(.svelte-flow__handle.connectingfrom),
+.compose-canvas :global(.svelte-flow__handle.connectionindicator) {
+    box-shadow: 0 0 0 3px rgb(147 197 253 / 0.7);
+}
+.compose-canvas :global(.svelte-flow__handle.connectingto.valid) {
+    box-shadow: 0 0 0 3px rgb(74 222 128 / 0.8);
+}
+.compose-canvas :global(.svelte-flow__handle.connectingto:not(.valid)) {
+    box-shadow: 0 0 0 3px rgb(248 113 113 / 0.8);
 }
 </style>
