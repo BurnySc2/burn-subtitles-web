@@ -115,6 +115,13 @@ function patch_output(patch: Partial<OutputNodeData>): void {
     }
 }
 
+function patch_label(label: string): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node) {
+        node.data.label = label === "" ? null : label
+    }
+}
+
 function patch_output_name(file_name: string): void {
     patch_output({ file_name: file_name === "" ? null : file_name })
 }
@@ -228,6 +235,16 @@ function probe_summary(node: ComposeNode): string {
         >
             Delete node
         </button>
+        <label class="flex flex-col gap-1 text-sm font-medium">
+            Name (optional)
+            <input
+                type="text"
+                value={selected.data.label ?? ""}
+                oninput={(e) => patch_label(e.currentTarget.value)}
+                placeholder={selected.type.charAt(0).toUpperCase() + selected.type.slice(1)}
+                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+            >
+        </label>
         {#if selected.type === "source"}
             <p class="text-sm text-gray-700">{probe_summary(selected)}</p>
             <ComposeSourcePicker node_id={selected.id} />

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
 import { set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
-import type { SourceNodeData } from "$lib/media/compose-types"
+import { compose_node_title, type SourceNodeData } from "$lib/media/compose-types"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
 let {
@@ -18,6 +18,10 @@ let file_input = $state<HTMLInputElement | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
 let token = 0
+let editing_label = $state(false)
+let label_draft = $state("")
+
+let title = $derived(compose_node_title("source", data.label))
 
 let probe_line = $derived.by(() => {
     const probe = data.probe
@@ -71,7 +75,40 @@ async function handle_file(file: File | null): Promise<void> {
         type="source"
         position={Position.Right}
     />
-    <p class="text-sm font-medium">Source</p>
+    <p
+        class="text-sm font-medium"
+        ondblclick={() => {
+            label_draft = data.label ?? ""
+            editing_label = true
+        }}
+        title="Double-click to rename"
+    >
+        {title}
+    </p>
+    {#if editing_label}
+        <input
+            type="text"
+            value={label_draft}
+            placeholder="Name (optional)"
+            aria-label="Node name (optional)"
+            oninput={(e) => {
+                label_draft = e.currentTarget.value
+            }}
+            onblur={() => {
+                update_data({ label: label_draft.trim() === "" ? null : label_draft.trim() })
+                editing_label = false
+            }}
+            onkeydown={(e) => {
+                if (e.key === "Enter") {
+                    update_data({ label: label_draft.trim() === "" ? null : label_draft.trim() })
+                    editing_label = false
+                } else if (e.key === "Escape") {
+                    editing_label = false
+                }
+            }}
+            class="nodrag mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+        >
+    {/if}
     <p class="mt-1 text-xs text-gray-600">{probe_line}</p>
     {#if probing}
         <p class="mt-1 text-xs text-gray-500">Reading media…</p>

@@ -6,21 +6,25 @@ export type ComposeNodeKind = "source" | "trim" | "transition" | "merge" | "subt
 export interface SourceNodeData {
     file: File | null
     probe: ProbeResult | null
+    label?: string | null
 }
 
 export interface TrimNodeData {
     start: number
     end: number
+    label?: string | null
 }
 
 export interface TransitionNodeData {
     start: number
     duration: number
     easing: TransitionEasing
+    label?: string | null
 }
 
 export interface MergeNodeData {
     input_count: number
+    label?: string | null
 }
 
 export type SubtitleRenderMode = "mux" | "burn" | "sidecar"
@@ -29,6 +33,7 @@ export interface SubtitlesNodeData {
     file: File | null
     content: string | null
     mode: SubtitleRenderMode
+    label?: string | null
 }
 
 export interface OutputNodeData {
@@ -39,6 +44,7 @@ export interface OutputNodeData {
     quality: TransitionQuality
     audio_quality?: TransitionAudioQuality
     crf?: number | null
+    label?: string | null
 }
 
 export type ComposeNodeData =
@@ -74,6 +80,14 @@ export interface ValidationIssue {
     node_id: string | null
     field: string | null
     message: string
+}
+
+export function compose_node_title(type: ComposeNodeKind, label: string | null | undefined): string {
+    const trimmed = label?.trim() ?? ""
+    if (trimmed !== "") {
+        return trimmed
+    }
+    return type.charAt(0).toUpperCase() + type.slice(1)
 }
 
 export interface ComposeRunOutput {

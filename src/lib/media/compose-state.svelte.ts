@@ -273,17 +273,27 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                     id: node.id,
                     type: node.type,
                     position: node.position,
-                    data: { file: file_stub(node.data.file), probe: node.data.probe },
+                    data: { file: file_stub(node.data.file), probe: node.data.probe, label: node.data.label ?? null },
                 }
             case "subtitles":
                 return {
                     id: node.id,
                     type: node.type,
                     position: node.position,
-                    data: { file: file_stub(node.data.file), content: node.data.content, mode: node.data.mode },
+                    data: {
+                        file: file_stub(node.data.file),
+                        content: node.data.content,
+                        mode: node.data.mode,
+                        label: node.data.label ?? null,
+                    },
                 }
             default:
-                return { id: node.id, type: node.type, position: node.position, data: node.data }
+                return {
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    data: { ...node.data, label: node.data.label ?? null },
+                }
         }
     })
     return JSON.stringify({ version: 1, nodes: serial_nodes, edges }, null, 2)
@@ -306,6 +316,16 @@ function parse_stub(value: unknown, node_id: string): ComposeFileStub | null {
         throw new Error(`Node "${node_id}": invalid file stub`)
     }
     return { name: value.name, size: value.size, type: value.type }
+}
+
+function parse_label(value: unknown, node_id: string): string | null {
+    if (value === undefined || value === null) {
+        return null
+    }
+    if (typeof value === "string") {
+        return value
+    }
+    throw new Error(`Node "${node_id}": invalid label`)
 }
 
 const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-max"])
@@ -331,13 +351,22 @@ function parse_node(raw: unknown): ComposeNode {
                 id: raw.id,
                 type: "source",
                 position,
-                data: { file: null, probe: (raw.data.probe ?? null) as ProbeResult | null },
+                data: {
+                    file: null,
+                    probe: (raw.data.probe ?? null) as ProbeResult | null,
+                    label: parse_label(raw.data.label, raw.id),
+                },
             }
         case "trim": {
             if (typeof raw.data.start !== "number" || typeof raw.data.end !== "number") {
                 throw new Error(`Node "${raw.id}": trim needs numeric start and end`)
             }
-            return { id: raw.id, type: "trim", position, data: { start: raw.data.start, end: raw.data.end } }
+            return {
+                id: raw.id,
+                type: "trim",
+                position,
+                data: { start: raw.data.start, end: raw.data.end, label: parse_label(raw.data.label, raw.id) },
+            }
         }
         case "transition": {
             if (typeof raw.data.start !== "number" || typeof raw.data.duration !== "number") {
@@ -354,6 +383,7 @@ function parse_node(raw: unknown): ComposeNode {
                     start: raw.data.start,
                     duration: raw.data.duration,
                     easing: raw.data.easing as "linear" | "exponential",
+                    label: parse_label(raw.data.label, raw.id),
                 },
             }
         }
@@ -366,7 +396,12 @@ function parse_node(raw: unknown): ComposeNode {
             ) {
                 throw new Error(`Node "${raw.id}": merge needs input_count from 2 to 8`)
             }
-            return { id: raw.id, type: "merge", position, data: { input_count: raw.data.input_count } }
+            return {
+                id: raw.id,
+                type: "merge",
+                position,
+                data: { input_count: raw.data.input_count, label: parse_label(raw.data.label, raw.id) },
+            }
         }
         case "subtitles": {
             parse_stub(raw.data.file, raw.id)
@@ -380,7 +415,12 @@ function parse_node(raw: unknown): ComposeNode {
                 id: raw.id,
                 type: "subtitles",
                 position,
-                data: { file: null, content: raw.data.content, mode: raw.data.mode as "mux" | "burn" | "sidecar" },
+                data: {
+                    file: null,
+                    content: raw.data.content,
+                    mode: raw.data.mode as "mux" | "burn" | "sidecar",
+                    label: parse_label(raw.data.label, raw.id),
+                },
             }
         }
         case "output": {
@@ -417,6 +457,7 @@ function parse_node(raw: unknown): ComposeNode {
                     quality: raw.data.quality as "low" | "medium" | "high" | "very-high" | "ultra",
                     audio_quality: audio_quality as "96k" | "128k" | "192k" | "256k" | "320k" | "source-max",
                     crf,
+                    label: parse_label(raw.data.label, raw.id),
                 },
             }
         }
