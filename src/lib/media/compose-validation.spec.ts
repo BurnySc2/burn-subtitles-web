@@ -54,6 +54,10 @@ function transition(id: string, start = 0, duration = 1): ComposeNode {
     return { id, type: "transition", position: { x: 0, y: 0 }, data: { start, duration, easing: "linear" } }
 }
 
+function merge(id: string, input_count = 2): ComposeNode {
+    return { id, type: "merge", position: { x: 0, y: 0 }, data: { input_count } }
+}
+
 function output(id = "out"): ComposeNode {
     return {
         id,
@@ -181,5 +185,75 @@ describe("validate_compose", () => {
         const idle_issues = validate_compose(idle, idle_edges)
         expect(idle_issues.some((issue) => issue.field === "content")).toBe(false)
         expect(idle_issues.length).toBeGreaterThan(0)
+    })
+
+    it("flags duplicate connections on the same handles", () => {
+        const nodes = [source("src"), trim("trim"), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "src", "trim"), edge("e3", "trim", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "connection",
+            message: 'Duplicate connection from "src" — remove the extra edge',
+        })
+    })
+
+    it("flags merge handle misuse: wrong pattern, duplicates, and outside input_count", () => {
+        const bad_pattern = [source("a"), source("b"), merge("m"), output()]
+        const bad_pattern_edges = [edge("e1", "a", "m", "a"), edge("e2", "b", "m", "in1"), edge("e3", "m", "out")]
+        expect(validate_compose(bad_pattern, bad_pattern_edges)).toContainEqual({
+            node_id: "m",
+            field: "input",
+            message: 'Merge node inputs must be "in0", "in1", ...',
+        })
+
+        const dup = [source("a"), source("b"), merge("m"), output()]
+        const dup_edges = [edge("e1", "a", "m", "in0"), edge("e2", "b", "m", "in0"), edge("e3", "m", "out")]
+        expect(validate_compose(dup, dup_edges)).toContainEqual({
+            node_id: "m",
+            field: "input",
+            message: "Merge node inputs must use distinct handles",
+        })
+
+        const outside = [source("a"), source("b"), merge("m", 2), output()]
+        const outside_edges = [edge("e1", "a", "m", "in0"), edge("e2", "b", "m", "in5"), edge("e3", "m", "out")]
+        expect(
+            validate_compose(outside, outside_edges).some((issue) => issue.message.includes("outside input_count")),
+        ).toBe(true)
+    })
+
+    it("flags invalid output CRF and unknown audio quality", () => {
+        const bad_crf: ComposeNode = {
+            id: "out",
+            type: "output",
+            position: { x: 0, y: 0 },
+            data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium", crf: 99 },
+        }
+        const crf_nodes = [source("src"), trim("trim"), bad_crf]
+        const crf_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(crf_nodes, crf_edges)).toContainEqual({
+            node_id: "out",
+            field: "crf",
+            message: "CRF must be a number from 0 to 51.",
+        })
+
+        const bad_quality: ComposeNode = {
+            id: "out",
+            type: "output",
+            position: { x: 0, y: 0 },
+            data: {
+                file_name: null,
+                width: 1280,
+                height: 720,
+                fps: 30,
+                quality: "medium",
+                audio_quality: "999k" as never,
+            },
+        }
+        const quality_nodes = [source("src"), trim("trim"), bad_quality]
+        expect(validate_compose(quality_nodes, crf_edges)).toContainEqual({
+            node_id: "out",
+            field: "audio_quality",
+            message: "Unknown output audio quality.",
+        })
     })
 })

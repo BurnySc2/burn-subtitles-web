@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
+import { find_output_node, ordered_merge_inputs, topo_sort_compose, upstream_of } from "./compose-graph"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError } from "./mediabunny-clip"
 
@@ -28,6 +28,10 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
 
 function edge(id: string, source: string, target: string): ComposeEdge {
     return { id, source, sourceHandle: null, target, targetHandle: null }
+}
+
+function handle_edge(id: string, source: string, target: string, targetHandle: string | null): ComposeEdge {
+    return { id, source, sourceHandle: null, target, targetHandle }
 }
 
 describe("topo_sort_compose", () => {
@@ -96,5 +100,27 @@ describe("upstream_of", () => {
         expect(upstream_of("a", nodes, edges)).toEqual([])
         expect(upstream_of("ghost", nodes, edges)).toEqual([])
         expect(upstream_of("b", nodes, edges)).toEqual(["a"])
+    })
+})
+
+describe("ordered_merge_inputs", () => {
+    it("orders by in-handle, not insertion order", () => {
+        const edges = [
+            handle_edge("e1", "b", "m", "in1"),
+            handle_edge("e2", "a", "m", "in0"),
+            handle_edge("e3", "c", "m", "in2"),
+        ]
+        expect(ordered_merge_inputs("m", edges)).toEqual(["a", "b", "c"])
+    })
+
+    it("keeps duplicate handles with a source-id tie-break and sorts unknown handles last", () => {
+        const edges = [
+            handle_edge("e1", "b", "m", "in0"),
+            handle_edge("e2", "a", "m", "in0"),
+            handle_edge("e3", "c", "m", null),
+        ]
+        expect(ordered_merge_inputs("m", edges)).toEqual(["a", "b", "c"])
+        const other_target = [handle_edge("e1", "a", "m", "in0"), handle_edge("e2", "b", "other", "in0")]
+        expect(ordered_merge_inputs("m", other_target)).toEqual(["a"])
     })
 })

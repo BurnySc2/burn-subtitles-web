@@ -71,4 +71,32 @@ describe("premix_compose_audio", () => {
         expect(out?.numberOfChannels).toBe(2)
         expect(out?.length).toBe(48000)
     })
+
+    it("renders single-sided input and returns null for non-positive totals", async () => {
+        const solo_a = await premix_compose_audio({
+            full_a: constant_buffer(0.5),
+            full_b: null,
+            start_a: 0,
+            blend_duration: 1,
+            total_duration: 1,
+        })
+        expect(solo_a?.length).toBe(48000)
+        const solo_b = await premix_compose_audio({
+            full_a: null,
+            full_b: constant_buffer(0.25),
+            start_a: 0,
+            blend_duration: 1,
+            total_duration: 1,
+        })
+        expect(solo_b?.length).toBe(48000)
+        await expect(
+            premix_compose_audio({
+                full_a: constant_buffer(0.5),
+                full_b: null,
+                start_a: 0,
+                blend_duration: 1,
+                total_duration: 0,
+            }),
+        ).resolves.toBeNull()
+    })
 })

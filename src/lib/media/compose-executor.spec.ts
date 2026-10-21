@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { execute_compose_graph } from "./compose-executor"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
-import { extract_clip } from "./mediabunny-clip"
+import { ClipError, extract_clip, probe_media } from "./mediabunny-clip"
+import { render_merge } from "./mediabunny-merge"
 import { render_transition } from "./mediabunny-transition"
 
 vi.mock("./mediabunny-clip", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./mediabunny-clip")>()
-    return { ...actual, extract_clip: vi.fn() }
+    return { ...actual, extract_clip: vi.fn(), probe_media: vi.fn() }
 })
+
+vi.mock("./mediabunny-merge", () => ({ render_merge: vi.fn() }))
 
 vi.mock("./mediabunny-transition", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./mediabunny-transition")>()
@@ -48,6 +51,10 @@ function output(id = "out"): ComposeNode {
     }
 }
 
+function merge(id: string, input_count = 2): ComposeNode {
+    return { id, type: "merge", position: { x: 0, y: 0 }, data: { input_count } }
+}
+
 function edge(id: string, from: string, to: string, targetHandle: string | null = null): ComposeEdge {
     return { id, source: from, sourceHandle: null, target: to, targetHandle }
 }
@@ -55,6 +62,8 @@ function edge(id: string, from: string, to: string, targetHandle: string | null 
 beforeEach(() => {
     vi.mocked(extract_clip).mockReset()
     vi.mocked(render_transition).mockReset()
+    vi.mocked(render_merge).mockReset()
+    vi.mocked(probe_media).mockReset()
     vi.mocked(extract_clip).mockImplementation(async (options) => ({
         blob: mp4_blob(`trim-${options.start}-${options.end}`),
         extension: "mp4",
@@ -63,6 +72,12 @@ beforeEach(() => {
     }))
     vi.mocked(render_transition).mockImplementation(async () => ({
         blob: mp4_blob("transition"),
+        extension: "mp4",
+        mime: "video/mp4",
+        cancel: () => Promise.resolve(),
+    }))
+    vi.mocked(render_merge).mockImplementation(async () => ({
+        blob: mp4_blob("merged"),
         extension: "mp4",
         mime: "video/mp4",
         cancel: () => Promise.resolve(),
@@ -190,6 +205,101 @@ describe("execute_compose_graph abort and cycles", () => {
             message: "Composition graph contains a cycle",
         })
         expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
+        expect(vi.mocked(render_transition)).not.toHaveBeenCalled()
+    })
+})
+
+describe("execute_compose_graph fan-out memo", () => {
+    it("reuses one source blob across fan-out and probes at most once", async () => {
+        const result = await execute_compose_graph({
+            nodes: [source("s"), trim("t1"), trim("t2"), merge("m"), output()],
+            edges: [
+                edge("e1", "s", "t1"),
+                edge("e2", "s", "t2"),
+                edge("e3", "t1", "m", "in0"),
+                edge("e4", "t2", "m", "in1"),
+                edge("e5", "m", "out"),
+            ],
+        })
+        expect(result.ok).toBe(true)
+        expect(vi.mocked(extract_clip)).toHaveBeenCalledTimes(2)
+        const first = vi.mocked(extract_clip).mock.calls[0]?.[0]
+        const second = vi.mocked(extract_clip).mock.calls[1]?.[0]
+        expect(first?.file).toBe(second?.file)
+        expect(vi.mocked(probe_media).mock.calls.length).toBeLessThanOrEqual(1)
+        if (result.output) {
+            URL.revokeObjectURL(result.output.url)
+        }
+    })
+
+    it("runs fan-out in topo order with merge inputs sorted by handle", async () => {
+        const order: string[] = []
+        vi.mocked(extract_clip).mockImplementation(async (options) => {
+            order.push(`trim-${options.start}-${options.end}`)
+            return {
+                blob: mp4_blob(`trim-${options.start}-${options.end}`),
+                extension: "mp4",
+                mime: "video/mp4",
+                cancel: () => Promise.resolve(),
+            }
+        })
+        vi.mocked(render_merge).mockImplementation(async () => {
+            order.push("merge")
+            return {
+                blob: mp4_blob("merged"),
+                extension: "mp4",
+                mime: "video/mp4",
+                cancel: () => Promise.resolve(),
+            }
+        })
+        const t1: ComposeNode = { id: "t1", type: "trim", position: { x: 0, y: 0 }, data: { start: 1, end: 2 } }
+        const t2: ComposeNode = { id: "t2", type: "trim", position: { x: 0, y: 0 }, data: { start: 3, end: 4 } }
+        const result = await execute_compose_graph({
+            nodes: [source("s"), t1, t2, merge("m"), output()],
+            edges: [
+                edge("e1", "s", "t1"),
+                edge("e2", "s", "t2"),
+                edge("e4", "t2", "m", "in1"),
+                edge("e3", "t1", "m", "in0"),
+                edge("e5", "m", "out"),
+            ],
+        })
+        expect(result.ok).toBe(true)
+        expect(order).toEqual(["trim-1-2", "trim-3-4", "merge"])
+        const call = vi.mocked(render_merge).mock.calls[0]?.[0]
+        expect(call?.files.map((file) => file.name)).toEqual(["merge-in0.mp4", "merge-in1.mp4"])
+        if (result.output) {
+            URL.revokeObjectURL(result.output.url)
+        }
+    })
+
+    it("aborts mid-pipeline with CANCELLED and makes no further calls", async () => {
+        const controller = new AbortController()
+        vi.mocked(extract_clip).mockImplementationOnce(async () => {
+            controller.abort()
+            throw new ClipError("CANCELLED", "Cancelled.")
+        })
+        await expect(
+            execute_compose_graph({
+                nodes: [source("s"), trim("t1"), trim("t2"), output()],
+                edges: [edge("e1", "s", "t1"), edge("e2", "t1", "t2"), edge("e3", "t2", "out")],
+                signal: controller.signal,
+            }),
+        ).rejects.toMatchObject({ name: "ClipError", code: "CANCELLED" })
+        expect(vi.mocked(extract_clip)).toHaveBeenCalledTimes(1)
+        expect(vi.mocked(render_merge)).not.toHaveBeenCalled()
+        expect(vi.mocked(render_transition)).not.toHaveBeenCalled()
+    })
+
+    it("short-circuits invalid graphs with zero executor calls", async () => {
+        const result = await execute_compose_graph({
+            nodes: [source("a"), merge("m"), output()],
+            edges: [edge("e1", "a", "m", "in0"), edge("e2", "m", "out")],
+        })
+        expect(result.ok).toBe(false)
+        expect(result.output).toBeNull()
+        expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
+        expect(vi.mocked(render_merge)).not.toHaveBeenCalled()
         expect(vi.mocked(render_transition)).not.toHaveBeenCalled()
     })
 })
