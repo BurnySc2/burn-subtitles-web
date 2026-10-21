@@ -273,7 +273,7 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                     id: node.id,
                     type: node.type,
                     position: node.position,
-                    data: { file: file_stub(node.data.file), probe: node.data.probe, label: node.data.label ?? null },
+                    data: { file: file_stub(node.data.file), label: node.data.label ?? null },
                 }
             case "subtitles":
                 return {
@@ -353,7 +353,7 @@ function parse_node(raw: unknown): ComposeNode {
                 position,
                 data: {
                     file: null,
-                    probe: (raw.data.probe ?? null) as ProbeResult | null,
+                    probe: null,
                     label: parse_label(raw.data.label, raw.id),
                 },
             }
