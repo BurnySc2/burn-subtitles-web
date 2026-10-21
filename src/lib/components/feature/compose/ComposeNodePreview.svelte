@@ -123,7 +123,7 @@ let is_audio = $derived((blob?.type ?? "").startsWith("audio/"))
                 <button
                     type="button"
                     onclick={cancel_preview}
-                    class="btn btn-secondary btn-sm"
+                    class="btn btn-sm bg-red-600 text-white transition-colors hover:bg-red-700"
                 >
                     Cancel
                 </button>

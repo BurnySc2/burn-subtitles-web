@@ -199,7 +199,7 @@ function probe_summary(node: ComposeNode): string {
         <button
             type="button"
             onclick={delete_selected_edge}
-            class="btn btn-secondary btn-sm self-start"
+            class="btn btn-sm self-start bg-red-600 text-white transition-colors hover:bg-red-700"
         >
             Delete edge
         </button>
@@ -221,7 +221,7 @@ function probe_summary(node: ComposeNode): string {
         <button
             type="button"
             onclick={delete_selected_node}
-            class="btn btn-secondary btn-sm self-start"
+            class="btn btn-sm self-start bg-red-600 text-white transition-colors hover:bg-red-700"
         >
             Delete node
         </button>
