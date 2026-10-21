@@ -73,8 +73,13 @@ function handle_connect(connection: Connection): void {
 }
 
 function handle_selection_change(selection: Parameters<OnSelectionChange>[0]): void {
-    compose_state.selected_id = selection.nodes.length > 0 ? selection.nodes[0].id : null
-    compose_state.selected_edge_id = selection.edges.length > 0 ? selection.edges[0].id : null
+    if (selection.edges.length > 0) {
+        compose_state.selected_edge_id = selection.edges[0].id
+        compose_state.selected_id = null
+    } else {
+        compose_state.selected_id = selection.nodes.length > 0 ? selection.nodes[0].id : null
+        compose_state.selected_edge_id = null
+    }
 }
 
 function handle_delete(deleted: Parameters<OnDelete>[0]): void {
@@ -109,7 +114,7 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 </script>
 
 <div
-    class="h-[420px] w-full"
+    class="compose-canvas h-[420px] w-full rounded-lg border border-gray-300 bg-gray-50"
     bind:clientWidth={compose_view.width}
     bind:clientHeight={compose_view.height}
 >
@@ -135,3 +140,13 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
         <p class="py-8 text-center text-sm text-gray-500">Loading canvas...</p>
     {/if}
 </div>
+
+<style>
+.compose-canvas :global(.svelte-flow__node.svelte-flow__node-output) {
+    width: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    text-align: left;
+}
+</style>

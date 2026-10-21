@@ -135,16 +135,27 @@ function on_crf_input(raw: string): void {
     }
 }
 
-function delete_selected(): void {
-    if (selected !== null) {
-        remove_compose_nodes([selected.id])
+function delete_selected_edge(): void {
+    if (selected_edge_id === null) {
         return
     }
-    if (selected_edge_id !== null) {
-        const edge_id = selected_edge_id
-        compose_state.edges = compose_state.edges.filter((edge) => edge.id !== edge_id)
-        compose_state.selected_edge_id = null
+    const edge_id = selected_edge_id
+    compose_state.edges = compose_state.edges.filter((edge) => edge.id !== edge_id)
+    compose_state.selected_edge_id = null
+}
+
+function delete_selected_node(): void {
+    if (selected !== null) {
+        remove_compose_nodes([selected.id])
     }
+}
+
+function delete_selected(): void {
+    if (selected_edge_id !== null) {
+        delete_selected_edge()
+        return
+    }
+    delete_selected_node()
 }
 
 function on_inspector_keydown(event: KeyboardEvent): void {
@@ -180,20 +191,22 @@ function probe_summary(node: ComposeNode): string {
 <svelte:window onkeydown={on_inspector_keydown} />
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Inspector</h2>
+    {#if selected_edge_id}
+        <p class="text-sm text-gray-600">
+            <span class="font-medium">Edge</span>
+            <span class="font-mono text-xs"> · {selected_edge_id}</span>
+        </p>
+        <button
+            type="button"
+            onclick={delete_selected_edge}
+            class="btn btn-secondary btn-sm self-start"
+        >
+            Delete edge
+        </button>
+        <p class="text-xs text-gray-500">Tip: click canvas before pressing Del, or use the button.</p>
+    {/if}
     {#if !selected}
-        {#if selected_edge_id}
-            <p class="text-sm text-gray-600">
-                <span class="font-medium">Edge</span>
-                <span class="font-mono text-xs"> · {selected_edge_id}</span>
-            </p>
-            <button
-                type="button"
-                onclick={delete_selected}
-                class="btn btn-secondary btn-sm self-start"
-            >
-                Delete edge
-            </button>
-        {:else}
+        {#if !selected_edge_id}
             <p class="text-sm text-gray-500">No node selected — click a node on the canvas.</p>
         {/if}
         <ComposeNodePreview
@@ -207,7 +220,7 @@ function probe_summary(node: ComposeNode): string {
         </p>
         <button
             type="button"
-            onclick={delete_selected}
+            onclick={delete_selected_node}
             class="btn btn-secondary btn-sm self-start"
         >
             Delete node

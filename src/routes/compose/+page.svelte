@@ -6,7 +6,6 @@ import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPan
 import ComposeJsonBar from "$lib/components/feature/compose/ComposeJsonBar.svelte"
 import ComposePalette from "$lib/components/feature/compose/ComposePalette.svelte"
 import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.svelte"
-import ComposeToolbar from "$lib/components/feature/compose/ComposeToolbar.svelte"
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
 import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
@@ -164,7 +163,6 @@ onDestroy(() => {
 
 <div class="flex w-full flex-col gap-4 p-4">
     <h1 class="text-2xl font-bold">Compose</h1>
-    <ComposeToolbar on_add={handle_add} />
     <ComposeJsonBar />
     <div class="flex w-full gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
