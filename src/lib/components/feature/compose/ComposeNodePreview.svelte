@@ -6,9 +6,11 @@ import { compose_state } from "$lib/media/compose-state.svelte"
 let {
     node_id,
     on_preview,
+    hide_output = false,
 }: {
     node_id: string | null
     on_preview?: (preview: { url: string | null; blob: Blob | null }) => void
+    hide_output?: boolean
 } = $props()
 
 let url = $state<string | null>(null)
@@ -144,6 +146,8 @@ let is_audio = $derived((blob?.type ?? "").startsWith("audio/"))
         <p class="text-sm text-gray-500">Rendering preview… {Math.round(progress * 100)}%</p>
     {:else if error}
         <p class="text-sm text-red-700">{error}</p>
+    {:else if url && hide_output}
+        <p class="text-sm text-gray-500">Preview ready — see below canvas.</p>
     {:else if url}
         {#if is_audio}
             <audio

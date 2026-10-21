@@ -123,6 +123,30 @@ function handle_cancel(): void {
     aborter?.abort()
 }
 
+let preview_node_id = $state<string | null>(null)
+let preview_node_type = $state<string | null>(null)
+let preview_url = $state<string | null>(null)
+let preview_blob = $state<Blob | null>(null)
+
+function handle_node_preview(preview: {
+    node_id: string | null
+    node_type: string | null
+    url: string | null
+    blob: Blob | null
+}): void {
+    preview_node_id = preview.node_id
+    preview_node_type = preview.node_type
+    preview_url = preview.url
+    preview_blob = preview.blob
+}
+
+let preview_name = $derived.by(() => {
+    const ext = preview_blob?.type.split("/")[1]?.split(";")[0] ?? "mp4"
+    return compose_filename(`${preview_node_type ?? "node"}-preview`, ext || "mp4")
+})
+
+let preview_is_audio = $derived((preview_blob?.type ?? "").startsWith("audio/"))
+
 let download_name = $derived.by(() => {
     if (!compose_state.result) {
         return compose_filename("composition", "mp4")
@@ -161,14 +185,42 @@ onDestroy(() => {
 })
 </script>
 
-<div class="flex w-full flex-col gap-4 p-4">
-    <h1 class="text-2xl font-bold">Compose</h1>
+<div class="flex w-full flex-col gap-2 p-3">
     <ComposeJsonBar />
     <div class="flex w-full gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
         <div class="min-w-0 flex-1 rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
-        <div class="w-80 shrink-0"><ComposeInspector /></div>
+        <div class="w-80 shrink-0"><ComposeInspector on_preview={handle_node_preview} /></div>
     </div>
+    {#if preview_url && preview_blob}
+        <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
+            <h2 class="text-lg font-semibold">Node preview · {preview_node_type ?? "node"}</h2>
+            {#if preview_is_audio}
+                <audio
+                    src={preview_url}
+                    controls
+                    class="w-full"
+                >
+                    <track kind="captions">
+                </audio>
+            {:else}
+                <video
+                    src={preview_url}
+                    controls
+                    class="max-h-[60vh] w-full rounded bg-black"
+                >
+                    <track kind="captions">
+                </video>
+            {/if}
+            <a
+                href={preview_url}
+                download={preview_name}
+                class="btn btn-secondary inline-flex items-center justify-center"
+            >
+                Download {preview_name}
+            </a>
+        </div>
+    {/if}
     <ComposeIssuesPanel />
     <ComposeRenderBar
         on_render={() => void handle_render()}

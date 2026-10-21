@@ -114,7 +114,7 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 </script>
 
 <div
-    class="compose-canvas h-[420px] w-full rounded-lg border border-gray-300 bg-gray-50"
+    class="compose-canvas h-[calc(100vh-320px)] min-h-[420px] w-full rounded-lg border border-gray-300 bg-gray-50"
     bind:clientWidth={compose_view.width}
     bind:clientHeight={compose_view.height}
 >

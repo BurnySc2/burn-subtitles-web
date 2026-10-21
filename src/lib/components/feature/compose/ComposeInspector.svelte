@@ -1,5 +1,4 @@
 <script lang="ts">
-import { compose_filename } from "$lib/media/compose-filename"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type {
     ComposeNode,
@@ -13,6 +12,17 @@ import { validate_compose } from "$lib/media/compose-validation"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
 
+let {
+    on_preview,
+}: {
+    on_preview?: (preview: {
+        node_id: string | null
+        node_type: string | null
+        url: string | null
+        blob: Blob | null
+    }) => void
+} = $props()
+
 let selected: ComposeNode | null = $derived(
     compose_state.nodes.find((node) => node.id === compose_state.selected_id) ?? null,
 )
@@ -25,16 +35,8 @@ let selected_edge_id: string | null = $derived(
 let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
 
-let preview_url = $state<string | null>(null)
-let preview_blob = $state<Blob | null>(null)
-let preview_name = $derived.by(() => {
-    const ext = preview_blob?.type.split("/")[1]?.split(";")[0] ?? "mp4"
-    return compose_filename(`${selected?.type ?? "node"}-preview`, ext || "mp4")
-})
-
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
-    preview_url = preview.url
-    preview_blob = preview.blob
+    on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
 }
 
 function patch_trim(patch: Partial<TrimNodeData>): void {
@@ -211,6 +213,7 @@ function probe_summary(node: ComposeNode): string {
         {/if}
         <ComposeNodePreview
             node_id={null}
+            hide_output
             on_preview={handle_preview}
         />
     {:else}
@@ -477,18 +480,10 @@ function probe_summary(node: ComposeNode): string {
         {#key selected.id}
             <ComposeNodePreview
                 node_id={selected.id}
+                hide_output
                 on_preview={handle_preview}
             />
         {/key}
-        {#if preview_url && preview_blob}
-            <a
-                href={preview_url}
-                download={preview_name}
-                class="btn btn-secondary btn-sm inline-flex items-center justify-center"
-            >
-                Download {preview_name}
-            </a>
-        {/if}
         {#if selected_issues.length > 0}
             <ul class="flex flex-col gap-1">
                 {#each selected_issues as issue (issue.field ?? issue.message)}
