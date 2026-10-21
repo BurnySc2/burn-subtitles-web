@@ -443,7 +443,7 @@ function probe_summary(node: ComposeNode): string {
             </label>
             <div class="grid grid-cols-2 gap-2">
                 <label class="flex flex-col gap-1 text-sm font-medium">
-                    Scale
+                    Scale [%]
                     <input
                         type="number"
                         min="1"

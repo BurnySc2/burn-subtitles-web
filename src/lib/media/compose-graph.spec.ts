@@ -16,6 +16,22 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
             return { id, type, position, data: { input_count: 2 } }
         case "subtitles":
             return { id, type, position, data: { file: null, content: null, mode: "mux" } }
+        case "overlay":
+            return {
+                id,
+                type,
+                position,
+                data: {
+                    image: null,
+                    position: "top-right",
+                    scale: 100,
+                    opacity: 1,
+                    offset_x: 0,
+                    offset_y: 0,
+                    show_start: 0,
+                    show_end: null,
+                },
+            }
         case "output":
             return {
                 id,
