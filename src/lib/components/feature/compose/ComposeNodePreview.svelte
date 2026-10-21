@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onDestroy } from "svelte"
+import { onDestroy, untrack } from "svelte"
 import { get_node_preview_blob } from "$lib/media/compose-preview"
 import { compose_state } from "$lib/media/compose-state.svelte"
 
@@ -97,11 +97,14 @@ async function request_preview(): Promise<void> {
 }
 
 $effect(() => {
-    void node_id
-    cancel_preview()
-    cleanup()
-    error = null
-    notify()
+    const current = node_id
+    untrack(() => {
+        cancel_preview()
+        cleanup()
+        error = null
+        notify()
+    })
+    void current
 })
 
 onDestroy(() => {

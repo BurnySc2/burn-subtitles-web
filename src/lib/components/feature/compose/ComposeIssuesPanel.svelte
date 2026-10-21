@@ -28,7 +28,7 @@ let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges)
                                 compose_state.selected_id = issue.node_id
                                 compose_state.selected_edge_id = null
                             }}
-                            class="w-full rounded bg-red-100 p-2 text-left text-sm text-red-800 hover:bg-red-200"
+                            class="btn btn-secondary w-full p-2 text-left text-sm text-red-800"
                         >
                             <span class="font-mono text-xs">{issue.node_id}</span>
                             {#if issue.field}
