@@ -4,12 +4,14 @@ import type {
     ComposeNode,
     MergeNodeData,
     OutputNodeData,
+    OverlayNodeData,
     SubtitlesNodeData,
     TransitionNodeData,
     TrimNodeData,
 } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
+import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
 
 let {
@@ -115,6 +117,13 @@ function patch_output(patch: Partial<OutputNodeData>): void {
     }
 }
 
+function patch_overlay(patch: Partial<OverlayNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "overlay") {
+        Object.assign(node.data, patch)
+    }
+}
+
 function patch_label(label: string): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node) {
@@ -142,6 +151,14 @@ function on_crf_input(raw: string): void {
     if (Number.isFinite(parsed)) {
         patch_output({ crf: parsed })
     }
+}
+
+function on_show_end_input(raw: string): void {
+    if (raw.trim() === "") {
+        patch_overlay({ show_end: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_overlay({ show_end: value }))
 }
 
 function delete_selected_edge(): void {
@@ -402,6 +419,104 @@ function probe_summary(node: ComposeNode): string {
                     <option value="sidecar">sidecar</option>
                 </select>
             </label>
+        {:else if selected.type === "overlay"}
+            {#key selected.id}
+                <ComposeOverlayPicker node_id={selected.id} />
+            {/key}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Position
+                <select
+                    value={selected.data.position}
+                    onchange={(e) => patch_overlay({ position: e.currentTarget.value as OverlayNodeData["position"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="top-left">top-left</option>
+                    <option value="top-center">top-center</option>
+                    <option value="top-right">top-right</option>
+                    <option value="center-left">center-left</option>
+                    <option value="center">center</option>
+                    <option value="center-right">center-right</option>
+                    <option value="bottom-left">bottom-left</option>
+                    <option value="bottom-center">bottom-center</option>
+                    <option value="bottom-right">bottom-right</option>
+                </select>
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Scale
+                    <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={selected.data.scale}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ scale: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Opacity
+                    <input
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={selected.data.opacity}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ opacity: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Offset X
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={selected.data.offset_x}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ offset_x: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Offset Y
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={selected.data.offset_y}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ offset_y: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Show start (s)
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={selected.data.show_start}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ show_start: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Show end (s)
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={selected.data.show_end ?? ""}
+                        oninput={(e) => on_show_end_input(e.currentTarget.value)}
+                        placeholder="end of video"
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+            </div>
         {:else if selected.type === "output"}
             <label class="flex flex-col gap-1 text-sm font-medium">
                 File name

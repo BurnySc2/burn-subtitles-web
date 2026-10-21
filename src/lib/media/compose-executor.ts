@@ -4,6 +4,7 @@ import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
+import { render_overlay } from "./mediabunny-overlay"
 import { render_transition } from "./mediabunny-transition"
 
 export interface ExecuteComposeGraphOptions {
@@ -240,6 +241,33 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                 const blobs = merge_inputs(node.id, incoming, memo)
                 const result = await render_merge({
                     files: blobs.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
+                    width: output_node?.data.width ?? 1280,
+                    height: output_node?.data.height ?? 720,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: slice,
+                    signal,
+                })
+                memo.set(node.id, result.blob)
+                break
+            }
+            case "overlay": {
+                const input = single_input(node.id, incoming, memo)
+                if (!node.data.image) {
+                    throw new ClipError("FAILED", "Overlay image is missing.")
+                }
+                const result = await render_overlay({
+                    video: blob_to_file(input, "overlay-bg.mp4"),
+                    image: blob_to_file(node.data.image, "overlay.png"),
+                    position: node.data.position,
+                    scale: node.data.scale,
+                    opacity: node.data.opacity,
+                    offset_x: node.data.offset_x,
+                    offset_y: node.data.offset_y,
+                    show_start: node.data.show_start,
+                    show_end: node.data.show_end,
                     width: output_node?.data.width ?? 1280,
                     height: output_node?.data.height ?? 720,
                     fps: output_node?.data.fps ?? 30,

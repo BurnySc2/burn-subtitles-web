@@ -183,10 +183,20 @@ export function add_compose_edge(connection: ComposeConnection): { ok: boolean; 
             return { ok: false, error: "Source nodes accept no inputs." }
         case "trim":
         case "subtitles":
+        case "overlay":
         case "output": {
+            if (target_node.type === "overlay" && target_handle !== null) {
+                return { ok: false, error: "Overlay inputs accept no handle." }
+            }
             if (incoming.length >= 1) {
                 const label =
-                    target_node.type === "trim" ? "Trim" : target_node.type === "subtitles" ? "Subtitles" : "Output"
+                    target_node.type === "trim"
+                        ? "Trim"
+                        : target_node.type === "subtitles"
+                          ? "Subtitles"
+                          : target_node.type === "overlay"
+                            ? "Overlay"
+                            : "Output"
                 return { ok: false, error: `${label} nodes accept 1 input — remove the existing connection first.` }
             }
             break
@@ -287,6 +297,23 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                         label: node.data.label ?? null,
                     },
                 }
+            case "overlay":
+                return {
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    data: {
+                        image: file_stub(node.data.image),
+                        position: node.data.position,
+                        scale: node.data.scale,
+                        opacity: node.data.opacity,
+                        offset_x: node.data.offset_x,
+                        offset_y: node.data.offset_y,
+                        show_start: node.data.show_start,
+                        show_end: node.data.show_end,
+                        label: node.data.label ?? null,
+                    },
+                }
             default:
                 return {
                     id: node.id,
@@ -332,6 +359,17 @@ const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-
 const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra"])
 const EASINGS = new Set(["linear", "exponential"])
 const SUBTITLE_MODES = new Set(["mux", "burn", "sidecar"])
+const OVERLAY_POSITIONS = new Set([
+    "top-left",
+    "top-center",
+    "top-right",
+    "center-left",
+    "center",
+    "center-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+])
 
 function parse_node(raw: unknown): ComposeNode {
     if (!is_record(raw) || typeof raw.id !== "string" || typeof raw.type !== "string") {
@@ -419,6 +457,49 @@ function parse_node(raw: unknown): ComposeNode {
                     file: null,
                     content: raw.data.content,
                     mode: raw.data.mode as "mux" | "burn" | "sidecar",
+                    label: parse_label(raw.data.label, raw.id),
+                },
+            }
+        }
+        case "overlay": {
+            parse_stub(raw.data.image, raw.id)
+            if (typeof raw.data.position !== "string" || !OVERLAY_POSITIONS.has(raw.data.position)) {
+                throw new Error(`Node "${raw.id}": unknown overlay position`)
+            }
+            if (
+                typeof raw.data.scale !== "number" ||
+                typeof raw.data.opacity !== "number" ||
+                typeof raw.data.offset_x !== "number" ||
+                typeof raw.data.offset_y !== "number" ||
+                typeof raw.data.show_start !== "number"
+            ) {
+                throw new Error(`Node "${raw.id}": overlay needs numeric scale, opacity, offsets and show_start`)
+            }
+            if (raw.data.show_end !== null && typeof raw.data.show_end !== "number") {
+                throw new Error(`Node "${raw.id}": invalid overlay show_end`)
+            }
+            return {
+                id: raw.id,
+                type: "overlay",
+                position,
+                data: {
+                    image: null,
+                    position: raw.data.position as
+                        | "top-left"
+                        | "top-center"
+                        | "top-right"
+                        | "center-left"
+                        | "center"
+                        | "center-right"
+                        | "bottom-left"
+                        | "bottom-center"
+                        | "bottom-right",
+                    scale: raw.data.scale,
+                    opacity: raw.data.opacity,
+                    offset_x: raw.data.offset_x,
+                    offset_y: raw.data.offset_y,
+                    show_start: raw.data.show_start,
+                    show_end: raw.data.show_end,
                     label: parse_label(raw.data.label, raw.id),
                 },
             }

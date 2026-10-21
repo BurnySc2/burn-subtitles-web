@@ -2,6 +2,7 @@ import { find_output_node, topo_sort_compose, upstream_of } from "./compose-grap
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
+import { render_overlay } from "./mediabunny-overlay"
 import { render_transition } from "./mediabunny-transition"
 
 export interface NodePreviewOptions {
@@ -29,6 +30,20 @@ function serialize_node(node: ComposeNode): string {
     }
     if (node.type === "subtitles") {
         return [node.id, node.type, file_stub_key(node.data.file), node.data.content ?? "", node.data.mode].join(":")
+    }
+    if (node.type === "overlay") {
+        return [
+            node.id,
+            node.type,
+            file_stub_key(node.data.image),
+            node.data.position,
+            node.data.scale,
+            node.data.opacity,
+            node.data.offset_x,
+            node.data.offset_y,
+            node.data.show_start,
+            node.data.show_end ?? "null",
+        ].join(":")
     }
     return [node.id, node.type, JSON.stringify(node.data)].join(":")
 }
@@ -315,6 +330,33 @@ export async function get_node_preview_blob(
                 const merged = merge_inputs(node.id, incoming, blobs)
                 const result = await render_merge({
                     files: merged.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
+                    width: output_node?.data.width ?? 1280,
+                    height: output_node?.data.height ?? 720,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: slice,
+                    signal,
+                })
+                store(node.id, result.blob)
+                break
+            }
+            case "overlay": {
+                const input = single_input(node.id, incoming, blobs)
+                if (!node.data.image) {
+                    throw new ClipError("FAILED", "Overlay image is missing.")
+                }
+                const result = await render_overlay({
+                    video: blob_to_file(input, "overlay-bg.mp4"),
+                    image: blob_to_file(node.data.image, "overlay.png"),
+                    position: node.data.position,
+                    scale: node.data.scale,
+                    opacity: node.data.opacity,
+                    offset_x: node.data.offset_x,
+                    offset_y: node.data.offset_y,
+                    show_start: node.data.show_start,
+                    show_end: node.data.show_end,
                     width: output_node?.data.width ?? 1280,
                     height: output_node?.data.height ?? 720,
                     fps: output_node?.data.fps ?? 30,
