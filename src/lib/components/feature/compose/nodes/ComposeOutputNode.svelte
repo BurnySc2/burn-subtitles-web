@@ -18,6 +18,17 @@ function on_number_input(field: "width" | "height" | "fps", raw: string): void {
         update_data({ [field]: parsed })
     }
 }
+
+function on_crf_input(raw: string): void {
+    if (raw.trim() === "") {
+        update_data({ crf: null })
+        return
+    }
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) {
+        update_data({ crf: parsed })
+    }
+}
 </script>
 
 <div class="min-w-48 rounded-lg border border-gray-300 bg-white p-3">
@@ -77,6 +88,37 @@ function on_number_input(field: "width" | "height" | "fps", raw: string): void {
                 <option value="very-high">very-high</option>
                 <option value="ultra">ultra</option>
             </select>
+        </label>
+        <label class="flex flex-col gap-1 text-xs text-gray-600">
+            Audio
+            <select
+                id={id ? `${id}-audio-quality` : undefined}
+                value={data.audio_quality ?? "source-max"}
+                onchange={(e) =>
+                    update_data({ audio_quality: e.currentTarget.value as OutputNodeData["audio_quality"] })}
+                class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+            >
+                <option value="source-max">source-max</option>
+                <option value="96k">96k</option>
+                <option value="128k">128k</option>
+                <option value="192k">192k</option>
+                <option value="256k">256k</option>
+                <option value="320k">320k</option>
+            </select>
+        </label>
+        <label class="flex flex-col gap-1 text-xs text-gray-600">
+            CRF
+            <input
+                id={id ? `${id}-crf` : undefined}
+                type="number"
+                min="0"
+                max="51"
+                step="1"
+                value={data.crf ?? ""}
+                oninput={(e) => on_crf_input(e.currentTarget.value)}
+                placeholder="auto"
+                class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+            >
         </label>
     </div>
 </div>

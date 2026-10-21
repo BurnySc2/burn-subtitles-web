@@ -2,6 +2,10 @@
 import { onDestroy } from "svelte"
 import ComposeCanvas from "$lib/components/feature/compose/ComposeCanvas.svelte"
 import ComposeInspector from "$lib/components/feature/compose/ComposeInspector.svelte"
+import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPanel.svelte"
+import ComposeJsonBar from "$lib/components/feature/compose/ComposeJsonBar.svelte"
+import ComposePalette from "$lib/components/feature/compose/ComposePalette.svelte"
+import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.svelte"
 import ComposeToolbar from "$lib/components/feature/compose/ComposeToolbar.svelte"
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
@@ -37,7 +41,15 @@ function handle_add(kind: ComposeNodeKind): void {
                 id,
                 type: "output",
                 position,
-                data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                data: {
+                    file_name: null,
+                    width: 1280,
+                    height: 720,
+                    fps: 30,
+                    quality: "medium",
+                    audio_quality: "source-max",
+                    crf: null,
+                },
             }
             break
     }
@@ -52,7 +64,7 @@ async function handle_render(): Promise<void> {
     const issues = validate_compose(compose_state.nodes, compose_state.edges)
     if (issues.length > 0) {
         compose_state.run_status = "error"
-        compose_state.run_error = `${issues.length} issue${issues.length === 1 ? "" : "s"} — see inspector`
+        compose_state.run_error = `${issues.length} issue${issues.length === 1 ? "" : "s"} — see issues below canvas`
         return
     }
     aborter?.abort()
@@ -142,17 +154,20 @@ onDestroy(() => {
 })
 </script>
 
-<div class="flex w-full max-w-6xl flex-col gap-4 p-4">
+<div class="flex w-full flex-col gap-4 p-4">
     <h1 class="text-2xl font-bold">Compose</h1>
-    <ComposeToolbar
-        on_add={handle_add}
+    <ComposeToolbar on_add={handle_add} />
+    <ComposeRenderBar
         on_render={() => void handle_render()}
         on_cancel={handle_cancel}
     />
-    <div class="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div class="rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
-        <ComposeInspector />
+    <ComposeJsonBar />
+    <div class="flex w-full gap-4">
+        <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
+        <div class="min-w-0 flex-1 rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
+        <div class="w-80 shrink-0"><ComposeInspector /></div>
     </div>
+    <ComposeIssuesPanel />
     {#if compose_state.result}
         <div class="flex flex-col gap-2 rounded-lg bg-gray-100 p-4">
             <h2 class="text-lg font-semibold">Result</h2>

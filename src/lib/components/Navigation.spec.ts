@@ -15,6 +15,12 @@ describe("Navigation", () => {
         expect(links[0]?.getAttribute("href")).toBe("/clip")
     })
 
+    it("never links to /transition", async () => {
+        const screen = await render(Navigation)
+        const hrefs = [...screen.container.querySelectorAll("a")].map((link) => link.getAttribute("href") ?? "")
+        expect(hrefs.some((href) => href.includes("transition"))).toBe(false)
+    })
+
     it("never links to /clip-v2", async () => {
         const screen = await render(Navigation)
         const hrefs = [...screen.container.querySelectorAll("a")].map((link) => link.getAttribute("href") ?? "")

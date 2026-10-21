@@ -202,6 +202,8 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     height: output_node?.data.height ?? 720,
                     fps: output_node?.data.fps ?? 30,
                     quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
                     easing: node.data.easing,
                     on_progress: slice,
                     signal,

@@ -2,7 +2,7 @@
 import { onMount } from "svelte"
 import "@xyflow/svelte/dist/style.css"
 import type { Connection, Edge, Node, NodeTypes, OnDelete, OnSelectionChange } from "@xyflow/svelte"
-import { compose_state } from "$lib/media/compose-state.svelte"
+import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type { ComposeEdge, ComposeNode, ComposePosition } from "$lib/media/compose-types"
 
 async function load_flow() {
@@ -16,7 +16,6 @@ async function load_flow() {
     ])
     return {
         SvelteFlow: lib.SvelteFlow,
-        MiniMap: lib.MiniMap,
         Controls: lib.Controls,
         node_types: {
             source: source.default,
@@ -41,6 +40,7 @@ function to_flow_node(node: ComposeNode): Node {
         type: node.type,
         position: { x: node.position.x, y: node.position.y },
         data: { ...node.data },
+        deletable: true,
     }
 }
 
@@ -72,14 +72,14 @@ function handle_selection_change(selection: Parameters<OnSelectionChange>[0]): v
 }
 
 function handle_delete(deleted: Parameters<OnDelete>[0]): void {
-    const node_ids = new Set(deleted.nodes.map((node) => node.id))
-    const edge_ids = new Set(deleted.edges.map((edge) => edge.id))
-    compose_state.nodes = compose_state.nodes.filter((node) => !node_ids.has(node.id))
-    compose_state.edges = compose_state.edges.filter(
-        (edge) => !edge_ids.has(edge.id) && !node_ids.has(edge.source) && !node_ids.has(edge.target),
-    )
-    if (compose_state.selected_id !== null && node_ids.has(compose_state.selected_id)) {
-        compose_state.selected_id = null
+    const nodes = deleted?.nodes ?? []
+    const edges = deleted?.edges ?? []
+    if (nodes.length > 0) {
+        remove_compose_nodes(nodes.map((node) => node.id))
+    }
+    if (edges.length > 0) {
+        const edge_ids = new Set(edges.map((edge) => edge.id))
+        compose_state.edges = compose_state.edges.filter((edge) => !edge_ids.has(edge.id))
     }
 }
 
@@ -96,7 +96,6 @@ function handle_nodes_drag_stop(event: { nodes: { id: string; position: ComposeP
 <div class="h-[420px] w-full">
     {#if flow !== null}
         {@const SvelteFlow = flow.SvelteFlow}
-        {@const MiniMap = flow.MiniMap}
         {@const Controls = flow.Controls}
         <SvelteFlow
             nodes={flow_nodes}
@@ -104,12 +103,12 @@ function handle_nodes_drag_stop(event: { nodes: { id: string; position: ComposeP
             nodeTypes={flow.node_types}
             fitView
             snapGrid={[15, 15]}
+            deleteKey={["Backspace", "Delete"]}
             onconnect={handle_connect}
             onselectionchange={handle_selection_change}
             ondelete={handle_delete}
             onnodedragstop={handle_nodes_drag_stop}
         >
-            <MiniMap />
             <Controls />
         </SvelteFlow>
     {:else}

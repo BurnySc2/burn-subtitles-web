@@ -2,6 +2,7 @@ import { topo_sort_compose } from "./compose-graph"
 import { validate_srt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
+import { parse_crf_override } from "./transition-utils"
 
 function upstream_duration(
     start_id: string,
@@ -177,6 +178,31 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     node_id: node.id,
                     field: "duration",
                     message: "Transition duration must be greater than 0",
+                })
+            }
+        } else if (node.type === "output") {
+            const audio_quality = node.data.audio_quality ?? "source-max"
+            if (
+                audio_quality !== "96k" &&
+                audio_quality !== "128k" &&
+                audio_quality !== "192k" &&
+                audio_quality !== "256k" &&
+                audio_quality !== "320k" &&
+                audio_quality !== "source-max"
+            ) {
+                issues.push({
+                    node_id: node.id,
+                    field: "audio_quality",
+                    message: "Unknown output audio quality.",
+                })
+            }
+            try {
+                parse_crf_override(node.data.crf ?? null)
+            } catch {
+                issues.push({
+                    node_id: node.id,
+                    field: "crf",
+                    message: "CRF must be a number from 0 to 51.",
                 })
             }
         } else if (node.type === "subtitles") {

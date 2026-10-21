@@ -1,5 +1,6 @@
 <script lang="ts">
-import { compose_state } from "$lib/media/compose-state.svelte"
+import { compose_filename } from "$lib/media/compose-filename"
+import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type {
     ComposeNode,
     OutputNodeData,
@@ -8,6 +9,7 @@ import type {
     TrimNodeData,
 } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
+import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
 
 let selected: ComposeNode | null = $derived(
@@ -15,6 +17,18 @@ let selected: ComposeNode | null = $derived(
 )
 let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
+
+let preview_url = $state<string | null>(null)
+let preview_blob = $state<Blob | null>(null)
+let preview_name = $derived.by(() => {
+    const ext = preview_blob?.type.split("/")[1]?.split(";")[0] ?? "mp4"
+    return compose_filename(`${selected?.type ?? "node"}-preview`, ext || "mp4")
+})
+
+function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
+    preview_url = preview.url
+    preview_blob = preview.blob
+}
 
 function patch_trim(patch: Partial<TrimNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
@@ -55,6 +69,34 @@ function on_number_input(raw: string, apply: (value: number) => void): void {
     }
 }
 
+function on_crf_input(raw: string): void {
+    if (raw.trim() === "") {
+        patch_output({ crf: null })
+        return
+    }
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) {
+        patch_output({ crf: parsed })
+    }
+}
+
+function delete_selected(): void {
+    if (selected !== null) {
+        remove_compose_nodes([selected.id])
+    }
+}
+
+function on_inspector_keydown(event: KeyboardEvent): void {
+    if (event.key !== "Backspace" && event.key !== "Delete") {
+        return
+    }
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable]")) {
+        return
+    }
+    delete_selected()
+}
+
 function probe_summary(node: ComposeNode): string {
     if (node.type !== "source") {
         return ""
@@ -74,15 +116,27 @@ function probe_summary(node: ComposeNode): string {
 }
 </script>
 
+<svelte:window onkeydown={on_inspector_keydown} />
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Inspector</h2>
     {#if !selected}
         <p class="text-sm text-gray-500">No node selected — click a node on the canvas.</p>
+        <ComposeNodePreview
+            node_id={null}
+            on_preview={handle_preview}
+        />
     {:else}
         <p class="text-sm text-gray-600">
             <span class="font-medium capitalize">{selected.type}</span>
             <span class="font-mono text-xs"> · {selected.id}</span>
         </p>
+        <button
+            type="button"
+            onclick={delete_selected}
+            class="btn btn-secondary btn-sm self-start"
+        >
+            Delete node
+        </button>
         {#if selected.type === "source"}
             <p class="text-sm text-gray-700">{probe_summary(selected)}</p>
             <ComposeSourcePicker node_id={selected.id} />
@@ -234,6 +288,48 @@ function probe_summary(node: ComposeNode): string {
                     <option value="ultra">ultra</option>
                 </select>
             </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Audio quality
+                <select
+                    value={selected.data.audio_quality ?? "source-max"}
+                    onchange={(e) =>
+                        patch_output({ audio_quality: e.currentTarget.value as OutputNodeData["audio_quality"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="source-max">source-max</option>
+                    <option value="96k">96k</option>
+                    <option value="128k">128k</option>
+                    <option value="192k">192k</option>
+                    <option value="256k">256k</option>
+                    <option value="320k">320k</option>
+                </select>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                CRF override
+                <input
+                    type="number"
+                    min="0"
+                    max="51"
+                    step="1"
+                    value={selected.data.crf ?? ""}
+                    oninput={(e) => on_crf_input(e.currentTarget.value)}
+                    placeholder="auto"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+        {/if}
+        <ComposeNodePreview
+            node_id={selected.id}
+            on_preview={handle_preview}
+        />
+        {#if preview_url && preview_blob}
+            <a
+                href={preview_url}
+                download={preview_name}
+                class="btn btn-secondary btn-sm inline-flex items-center justify-center"
+            >
+                Download {preview_name}
+            </a>
         {/if}
         {#if selected_issues.length > 0}
             <ul class="flex flex-col gap-1">
@@ -249,21 +345,5 @@ function probe_summary(node: ComposeNode): string {
         {:else}
             <p class="text-sm font-medium text-green-700">✓ Node valid</p>
         {/if}
-    {/if}
-    {#if issues.length > 0}
-        <details class="rounded border border-gray-300 bg-white p-2">
-            <summary class="cursor-pointer text-sm font-medium">Graph issues ({issues.length})</summary>
-            <ul class="mt-2 flex flex-col gap-1">
-                {#each issues as issue, index (`${issue.node_id ?? "graph"}-${issue.field ?? "general"}-${index}`)}
-                    <li class="text-xs text-red-800">
-                        {#if issue.node_id}
-                            <span class="font-mono">{issue.node_id}</span>
-                            ·
-                        {/if}
-                        {issue.message}
-                    </li>
-                {/each}
-            </ul>
-        </details>
     {/if}
 </div>
