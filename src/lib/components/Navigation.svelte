@@ -27,5 +27,11 @@ const is_active = (path: string) => {
             class:font-bold={is_active("/clip")}
             >Clip Extractor</a
         >
+        <a
+            href={resolve("/compose")}
+            class="transition-colors hover:text-gray-800"
+            class:font-bold={is_active("/compose")}
+            >Compose</a
+        >
     </div>
 </nav>

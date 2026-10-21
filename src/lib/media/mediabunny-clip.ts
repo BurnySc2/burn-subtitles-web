@@ -216,7 +216,33 @@ async function probe_decodability(video: VideoTrackLike | null, audio: AudioTrac
     }
 }
 
-export async function probe_media(file: File): Promise<ProbeResult> {
+const probe_cache = new Map<string, Promise<ProbeResult>>()
+
+function probe_cache_key(file: File): string {
+    return `${file.name}:${file.size}:${file.lastModified}:${file.type}`
+}
+
+export function clear_probe_cache(): void {
+    probe_cache.clear()
+}
+
+export function probe_media(file: File): Promise<ProbeResult> {
+    const key = probe_cache_key(file)
+    const cached = probe_cache.get(key)
+    if (cached) {
+        return cached
+    }
+    const pending = probe_media_uncached(file)
+    pending.catch(() => {
+        if (probe_cache.get(key) === pending) {
+            probe_cache.delete(key)
+        }
+    })
+    probe_cache.set(key, pending)
+    return pending
+}
+
+async function probe_media_uncached(file: File): Promise<ProbeResult> {
     const mb = await import("mediabunny")
     const input = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(file) })
     try {

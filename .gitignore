@@ -32,3 +32,8 @@ vite.config.ts.timestamp-*
 /static/fonts/Arial*.ttf
 /static/fonts/Candara*.ttf
 /static/fonts/Tahoma*.ttf
+
+# Core dumps (chromium headless-shell crashes during vitest browser mode)
+core
+core.*
+*.core
