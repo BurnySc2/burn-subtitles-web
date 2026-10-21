@@ -144,6 +144,92 @@ export function remove_compose_nodes(node_ids: string[]): void {
     }
 }
 
+export interface ComposeConnection {
+    source: string | null | undefined
+    sourceHandle: string | null | undefined
+    target: string | null | undefined
+    targetHandle: string | null | undefined
+}
+
+export function add_compose_edge(connection: ComposeConnection): { ok: boolean; error: string | null } {
+    const source = connection.source ?? null
+    const target = connection.target ?? null
+    if (!source || !target) {
+        return { ok: false, error: "Cannot connect: missing source or target." }
+    }
+    if (source === target) {
+        return { ok: false, error: "Cannot connect a node to itself." }
+    }
+    const source_handle = connection.sourceHandle ?? null
+    const target_handle = connection.targetHandle ?? null
+    const by_id = new Map(compose_state.nodes.map((node) => [node.id, node]))
+    const target_node = by_id.get(target)
+    if (!by_id.has(source) || !target_node) {
+        return { ok: false, error: "Cannot connect: unknown node." }
+    }
+    const duplicate = compose_state.edges.some(
+        (edge) =>
+            edge.source === source &&
+            (edge.sourceHandle ?? null) === source_handle &&
+            edge.target === target &&
+            (edge.targetHandle ?? null) === target_handle,
+    )
+    if (duplicate) {
+        return { ok: false, error: "Duplicate connection — this edge already exists." }
+    }
+    const incoming = compose_state.edges.filter((edge) => edge.target === target)
+    switch (target_node.type) {
+        case "source":
+            return { ok: false, error: "Source nodes accept no inputs." }
+        case "trim":
+        case "subtitles":
+        case "output": {
+            if (incoming.length >= 1) {
+                const label =
+                    target_node.type === "trim" ? "Trim" : target_node.type === "subtitles" ? "Subtitles" : "Output"
+                return { ok: false, error: `${label} nodes accept 1 input — remove the existing connection first.` }
+            }
+            break
+        }
+        case "transition": {
+            if (target_handle !== "a" && target_handle !== "b") {
+                return { ok: false, error: 'Transition inputs must be "a" or "b".' }
+            }
+            if (incoming.some((edge) => (edge.targetHandle ?? null) === target_handle)) {
+                return { ok: false, error: `Transition input "${target_handle}" is already connected.` }
+            }
+            if (incoming.length >= 2) {
+                return { ok: false, error: "Transition nodes accept at most 2 inputs." }
+            }
+            break
+        }
+        case "merge": {
+            if (target_handle === null || !/^in\d+$/.test(target_handle)) {
+                return { ok: false, error: 'Merge inputs must be "in0", "in1", ...' }
+            }
+            if (incoming.some((edge) => (edge.targetHandle ?? null) === target_handle)) {
+                return { ok: false, error: `Merge input "${target_handle}" is already connected.` }
+            }
+            const index = Number(target_handle.slice(2))
+            if (!Number.isInteger(index) || index < 0 || index >= target_node.data.input_count) {
+                return {
+                    ok: false,
+                    error: `Merge input "${target_handle}" is outside input_count ${target_node.data.input_count}.`,
+                }
+            }
+            break
+        }
+    }
+    compose_state.edges.push({
+        id: crypto.randomUUID(),
+        source,
+        sourceHandle: source_handle,
+        target,
+        targetHandle: target_handle,
+    })
+    return { ok: true, error: null }
+}
+
 export function revoke_all(): void {
     for (const url of preview_urls.values()) {
         URL.revokeObjectURL(url)

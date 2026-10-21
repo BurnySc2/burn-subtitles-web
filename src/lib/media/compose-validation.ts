@@ -56,6 +56,20 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
     const ins = (id: string): ComposeEdge[] => incoming.get(id) ?? []
     const outs = (id: string): ComposeEdge[] => outgoing.get(id) ?? []
 
+    const seen_connections = new Set<string>()
+    for (const edge of edges) {
+        const key = `${edge.source}|${edge.sourceHandle ?? ""}|${edge.target}|${edge.targetHandle ?? ""}`
+        if (seen_connections.has(key)) {
+            issues.push({
+                node_id: edge.target,
+                field: "connection",
+                message: `Duplicate connection from "${edge.source}" — remove the extra edge`,
+            })
+        } else {
+            seen_connections.add(key)
+        }
+    }
+
     const outputs = nodes.filter((node) => node.type === "output")
     if (outputs.length !== 1) {
         issues.push({

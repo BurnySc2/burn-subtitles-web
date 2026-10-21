@@ -2,7 +2,7 @@
 import { onMount } from "svelte"
 import "@xyflow/svelte/dist/style.css"
 import type { Connection, Edge, Node, NodeTypes, OnDelete, OnSelectionChange } from "@xyflow/svelte"
-import { compose_state, compose_view, remove_compose_nodes } from "$lib/media/compose-state.svelte"
+import { add_compose_edge, compose_state, compose_view, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type { ComposeEdge, ComposeNode, ComposePosition } from "$lib/media/compose-types"
 
 async function load_flow() {
@@ -63,13 +63,12 @@ let flow_nodes = $derived(compose_state.nodes.map(to_flow_node))
 let flow_edges = $derived(compose_state.edges.map(to_flow_edge))
 
 function handle_connect(connection: Connection): void {
-    compose_state.edges.push({
-        id: crypto.randomUUID(),
-        source: connection.source,
-        sourceHandle: connection.sourceHandle,
-        target: connection.target,
-        targetHandle: connection.targetHandle,
-    })
+    const result = add_compose_edge(connection)
+    if (!result.ok) {
+        compose_state.run_error = result.error
+    } else if (compose_state.run_status !== "running") {
+        compose_state.run_error = null
+    }
 }
 
 function handle_selection_change(selection: Parameters<OnSelectionChange>[0]): void {
