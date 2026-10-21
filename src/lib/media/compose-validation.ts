@@ -28,7 +28,7 @@ function upstream_duration(
         if (node.type === "source") {
             return node.data.probe?.duration ?? null
         }
-        if (node.type === "trim" || node.type === "subtitles") {
+        if (node.type === "trim" || node.type === "subtitles" || node.type === "overlay") {
             current = next
             continue
         }
@@ -277,6 +277,78 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     for (const error of check.errors) {
                         issues.push({ node_id: node.id, field: "content", message: error })
                     }
+                }
+            }
+        } else if (node.type === "overlay") {
+            if (ins(node.id).length !== 1) {
+                issues.push({
+                    node_id: node.id,
+                    field: "input",
+                    message: "Overlay node must have exactly 1 input",
+                })
+            }
+            const wired = ins(node.id).length > 0 || outs(node.id).length > 0
+            if (wired && node.data.image == null) {
+                issues.push({ node_id: node.id, field: "image", message: "Overlay image is required" })
+            }
+            const { scale, opacity, offset_x, offset_y, show_start, show_end } = node.data
+            if (!Number.isFinite(scale) || scale < 1 || scale > 100) {
+                issues.push({
+                    node_id: node.id,
+                    field: "scale",
+                    message: "Overlay scale must be between 1 and 100",
+                })
+            }
+            if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+                issues.push({
+                    node_id: node.id,
+                    field: "opacity",
+                    message: "Overlay opacity must be between 0 and 1",
+                })
+            }
+            if (!Number.isFinite(offset_x) || offset_x < 0) {
+                issues.push({
+                    node_id: node.id,
+                    field: "offset_x",
+                    message: "Overlay offset_x must not be negative",
+                })
+            }
+            if (!Number.isFinite(offset_y) || offset_y < 0) {
+                issues.push({
+                    node_id: node.id,
+                    field: "offset_y",
+                    message: "Overlay offset_y must not be negative",
+                })
+            }
+            if (!Number.isFinite(show_start) || show_start < 0) {
+                issues.push({
+                    node_id: node.id,
+                    field: "show_start",
+                    message: "Overlay show_start must not be negative",
+                })
+            }
+            if (show_end !== null && (!Number.isFinite(show_end) || !(show_end > show_start))) {
+                issues.push({
+                    node_id: node.id,
+                    field: "show_end",
+                    message: "Overlay show_end must be greater than show_start",
+                })
+            }
+            const duration = upstream_duration(node.id, by_id, incoming)
+            if (duration !== null) {
+                if (Number.isFinite(show_start) && show_start > duration) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "show_start",
+                        message: `Show start exceeds source duration (${format_timecode(duration)})`,
+                    })
+                }
+                if (show_end !== null && Number.isFinite(show_end) && show_end > duration + 1e-6) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "show_end",
+                        message: `Show end exceeds source duration (${format_timecode(duration)})`,
+                    })
                 }
             }
         }

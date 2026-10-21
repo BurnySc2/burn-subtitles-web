@@ -15,6 +15,7 @@ function is_addable(value: string): value is ComposeNodeKind {
         value === "transition" ||
         value === "merge" ||
         value === "subtitles" ||
+        value === "overlay" ||
         value === "output"
     )
 }
@@ -54,12 +55,7 @@ function handle_click(): void {
             >
                 Canvas (future)
             </option>
-            <option
-                value="overlay"
-                disabled
-            >
-                Overlay (future)
-            </option>
+            <option value="overlay">Overlay</option>
             <option
                 value="logo"
                 disabled

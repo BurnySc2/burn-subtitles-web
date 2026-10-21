@@ -42,6 +42,23 @@ function handle_add(kind: ComposeNodeKind): void {
         case "subtitles":
             node = { id, type: "subtitles", position, data: { file: null, content: null, mode: "mux" } }
             break
+        case "overlay":
+            node = {
+                id,
+                type: "overlay",
+                position,
+                data: {
+                    image: null,
+                    position: "top-right",
+                    scale: 100,
+                    opacity: 1,
+                    offset_x: 0,
+                    offset_y: 0,
+                    show_start: 0,
+                    show_end: null,
+                },
+            }
+            break
         case "output":
             node = {
                 id,
