@@ -2,15 +2,16 @@
 import { onMount } from "svelte"
 import "@xyflow/svelte/dist/style.css"
 import type { Connection, Edge, Node, NodeTypes, OnDelete, OnSelectionChange } from "@xyflow/svelte"
-import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
+import { compose_state, compose_view, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type { ComposeEdge, ComposeNode, ComposePosition } from "$lib/media/compose-types"
 
 async function load_flow() {
-    const [lib, source, trim, transition, subtitles, output] = await Promise.all([
+    const [lib, source, trim, transition, merge, subtitles, output] = await Promise.all([
         import("@xyflow/svelte"),
         import("./nodes/ComposeSourceHost.svelte"),
         import("./nodes/ComposeTrimHost.svelte"),
         import("./nodes/ComposeTransitionHost.svelte"),
+        import("./nodes/ComposeMergeHost.svelte"),
         import("./nodes/ComposeSubtitlesHost.svelte"),
         import("./nodes/ComposeOutputHost.svelte"),
     ])
@@ -21,6 +22,7 @@ async function load_flow() {
             source: source.default,
             trim: trim.default,
             transition: transition.default,
+            merge: merge.default,
             subtitles: subtitles.default,
             output: output.default,
         } satisfies NodeTypes,
@@ -41,6 +43,7 @@ function to_flow_node(node: ComposeNode): Node {
         position: { x: node.position.x, y: node.position.y },
         data: { ...node.data },
         deletable: true,
+        selected: node.id === compose_state.selected_id,
     }
 }
 
@@ -51,6 +54,8 @@ function to_flow_edge(edge: ComposeEdge): Edge {
         sourceHandle: edge.sourceHandle,
         target: edge.target,
         targetHandle: edge.targetHandle,
+        deletable: true,
+        selected: edge.id === compose_state.selected_edge_id,
     }
 }
 
@@ -69,6 +74,7 @@ function handle_connect(connection: Connection): void {
 
 function handle_selection_change(selection: Parameters<OnSelectionChange>[0]): void {
     compose_state.selected_id = selection.nodes.length > 0 ? selection.nodes[0].id : null
+    compose_state.selected_edge_id = selection.edges.length > 0 ? selection.edges[0].id : null
 }
 
 function handle_delete(deleted: Parameters<OnDelete>[0]): void {
@@ -80,6 +86,9 @@ function handle_delete(deleted: Parameters<OnDelete>[0]): void {
     if (edges.length > 0) {
         const edge_ids = new Set(edges.map((edge) => edge.id))
         compose_state.edges = compose_state.edges.filter((edge) => !edge_ids.has(edge.id))
+        if (compose_state.selected_edge_id !== null && edge_ids.has(compose_state.selected_edge_id)) {
+            compose_state.selected_edge_id = null
+        }
     }
 }
 
@@ -91,9 +100,19 @@ function handle_nodes_drag_stop(event: { nodes: { id: string; position: ComposeP
         }
     }
 }
+
+function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: number }): void {
+    compose_view.x = viewport.x
+    compose_view.y = viewport.y
+    compose_view.zoom = viewport.zoom
+}
 </script>
 
-<div class="h-[420px] w-full">
+<div
+    class="h-[420px] w-full"
+    bind:clientWidth={compose_view.width}
+    bind:clientHeight={compose_view.height}
+>
     {#if flow !== null}
         {@const SvelteFlow = flow.SvelteFlow}
         {@const Controls = flow.Controls}
@@ -108,6 +127,7 @@ function handle_nodes_drag_stop(event: { nodes: { id: string; position: ComposeP
             onselectionchange={handle_selection_change}
             ondelete={handle_delete}
             onnodedragstop={handle_nodes_drag_stop}
+            onmove={handle_move}
         >
             <Controls />
         </SvelteFlow>

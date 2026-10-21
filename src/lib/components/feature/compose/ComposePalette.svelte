@@ -10,7 +10,12 @@ let selected: string = $state("source")
 // WHY disabled-future: new kinds need ComposeNodeKind + canvas nodeTypes + handle_add branch — see compose-types.ts
 function is_addable(value: string): value is ComposeNodeKind {
     return (
-        value === "source" || value === "trim" || value === "transition" || value === "subtitles" || value === "output"
+        value === "source" ||
+        value === "trim" ||
+        value === "transition" ||
+        value === "merge" ||
+        value === "subtitles" ||
+        value === "output"
     )
 }
 
@@ -36,6 +41,7 @@ function handle_click(): void {
             <option value="source">Source</option>
             <option value="trim">Trim</option>
             <option value="transition">Transition</option>
+            <option value="merge">Merge</option>
             <option
                 value="resize"
                 disabled
@@ -67,12 +73,6 @@ function handle_click(): void {
                 Fade (future)
             </option>
             <option value="subtitles">Subtitles</option>
-            <option
-                value="merge"
-                disabled
-            >
-                Merge (future)
-            </option>
         </optgroup>
         <optgroup label="Audio">
             <option

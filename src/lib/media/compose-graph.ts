@@ -38,6 +38,32 @@ export function find_output_node(nodes: ComposeNode[]): ComposeOutputNode | null
     return (nodes.find((node) => node.type === "output") as ComposeOutputNode | undefined) ?? null
 }
 
+function merge_handle_index(handle: string | null): number {
+    if (typeof handle !== "string") {
+        return Number.MAX_SAFE_INTEGER
+    }
+    const match = /^in(\d+)$/.exec(handle)
+    if (!match) {
+        return Number.MAX_SAFE_INTEGER
+    }
+    return Number(match[1])
+}
+
+export function ordered_merge_inputs(node_id: string, edges: ComposeEdge[]): string[] {
+    return edges
+        .filter((edge) => edge.target === node_id)
+        .slice()
+        .sort((a, b) => {
+            const index_a = merge_handle_index(a.targetHandle)
+            const index_b = merge_handle_index(b.targetHandle)
+            if (index_a !== index_b) {
+                return index_a - index_b
+            }
+            return a.source < b.source ? -1 : a.source > b.source ? 1 : 0
+        })
+        .map((edge) => edge.source)
+}
+
 export function upstream_of(target_id: string, nodes: ComposeNode[], edges: ComposeEdge[]): string[] {
     const known = new Set(nodes.map((node) => node.id))
     if (!known.has(target_id)) {

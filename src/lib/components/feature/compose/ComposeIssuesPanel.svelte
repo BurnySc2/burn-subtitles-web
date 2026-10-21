@@ -26,6 +26,7 @@ let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges)
                             type="button"
                             onclick={() => {
                                 compose_state.selected_id = issue.node_id
+                                compose_state.selected_edge_id = null
                             }}
                             class="w-full rounded bg-red-100 p-2 text-left text-sm text-red-800 hover:bg-red-200"
                         >

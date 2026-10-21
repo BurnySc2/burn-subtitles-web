@@ -31,7 +31,7 @@ function on_crf_input(raw: string): void {
 }
 </script>
 
-<div class="min-w-48 rounded-lg border border-gray-300 bg-white p-3">
+<div class="min-w-64 rounded-lg border border-gray-300 bg-white p-4">
     <Handle
         type="target"
         position={Position.Left}

@@ -32,6 +32,7 @@ async function handle_import(event: Event): Promise<void> {
         compose_state.nodes = parsed.nodes
         compose_state.edges = parsed.edges
         compose_state.selected_id = null
+        compose_state.selected_edge_id = null
         import_error = null
     } catch (error) {
         import_error = error instanceof Error ? error.message : "Import failed."

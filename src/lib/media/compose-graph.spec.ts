@@ -12,6 +12,8 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
             return { id, type, position, data: { start: 0, end: 1 } }
         case "transition":
             return { id, type, position, data: { start: 0, duration: 1, easing: "linear" } }
+        case "merge":
+            return { id, type, position, data: { input_count: 2 } }
         case "subtitles":
             return { id, type, position, data: { file: null, content: null, mode: "mux" } }
         case "output":

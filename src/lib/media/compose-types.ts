@@ -1,7 +1,7 @@
 import type { ProbeResult } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
 
-export type ComposeNodeKind = "source" | "trim" | "transition" | "subtitles" | "output"
+export type ComposeNodeKind = "source" | "trim" | "transition" | "merge" | "subtitles" | "output"
 
 export interface SourceNodeData {
     file: File | null
@@ -17,6 +17,10 @@ export interface TransitionNodeData {
     start: number
     duration: number
     easing: TransitionEasing
+}
+
+export interface MergeNodeData {
+    input_count: number
 }
 
 export type SubtitleRenderMode = "mux" | "burn" | "sidecar"
@@ -37,7 +41,13 @@ export interface OutputNodeData {
     crf?: number | null
 }
 
-export type ComposeNodeData = SourceNodeData | TrimNodeData | TransitionNodeData | SubtitlesNodeData | OutputNodeData
+export type ComposeNodeData =
+    | SourceNodeData
+    | TrimNodeData
+    | TransitionNodeData
+    | MergeNodeData
+    | SubtitlesNodeData
+    | OutputNodeData
 
 export interface ComposePosition {
     x: number
@@ -48,6 +58,7 @@ export type ComposeNode =
     | { id: string; type: "source"; position: ComposePosition; data: SourceNodeData }
     | { id: string; type: "trim"; position: ComposePosition; data: TrimNodeData }
     | { id: string; type: "transition"; position: ComposePosition; data: TransitionNodeData }
+    | { id: string; type: "merge"; position: ComposePosition; data: MergeNodeData }
     | { id: string; type: "subtitles"; position: ComposePosition; data: SubtitlesNodeData }
     | { id: string; type: "output"; position: ComposePosition; data: OutputNodeData }
 

@@ -10,6 +10,7 @@ const palette: { kind: ComposeNodeKind; label: string }[] = [
     { kind: "source", label: "Source" },
     { kind: "trim", label: "Trim" },
     { kind: "transition", label: "Transition" },
+    { kind: "merge", label: "Merge" },
     { kind: "subtitles", label: "Subtitles" },
     { kind: "output", label: "Output" },
 ]

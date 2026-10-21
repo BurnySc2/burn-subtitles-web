@@ -16,6 +16,7 @@ export interface ComposeState {
     nodes: ComposeNode[]
     edges: ComposeEdge[]
     selected_id: string | null
+    selected_edge_id: string | null
     run_status: ComposeRunStatus
     run_progress: number
     run_error: string | null
@@ -27,6 +28,7 @@ function initial_state(): ComposeState {
         nodes: [],
         edges: [],
         selected_id: null,
+        selected_edge_id: null,
         run_status: "idle",
         run_progress: 0,
         run_error: null,
@@ -36,10 +38,52 @@ function initial_state(): ComposeState {
 
 export const compose_state: ComposeState = $state(initial_state())
 
+export interface ComposeViewport {
+    x: number
+    y: number
+    zoom: number
+    width: number
+    height: number
+}
+
+export const compose_view: ComposeViewport = $state({ x: 0, y: 0, zoom: 1, width: 800, height: 420 })
+
+export function flow_center_position(): { x: number; y: number } {
+    const zoom = compose_view.zoom > 0 ? compose_view.zoom : 1
+    return { x: (compose_view.width / 2 - compose_view.x) / zoom, y: (compose_view.height / 2 - compose_view.y) / zoom }
+}
+
 const preview_urls = new Map<string, string>()
 
 export function preview_url(node_id: string): string | null {
     return preview_urls.get(node_id) ?? null
+}
+
+export function set_source_file(node_id: string, file: File, url: string): void {
+    const previous = preview_urls.get(node_id)
+    if (previous && previous !== url) {
+        URL.revokeObjectURL(previous)
+    }
+    preview_urls.set(node_id, url)
+    const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (node && node.type === "source") {
+        node.data.file = file
+        node.data.probe = null
+    } else if (!node) {
+        compose_state.nodes.push({
+            id: node_id,
+            type: "source",
+            position: flow_center_position(),
+            data: { file, probe: null },
+        })
+    }
+}
+
+export function set_source_probe(node_id: string, file: File, probe: ProbeResult): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (node && node.type === "source" && node.data.file === file) {
+        node.data.probe = probe
+    }
 }
 
 export function upsert_probe(node_id: string, file: File, probe: ProbeResult | null, url: string): void {
@@ -53,7 +97,12 @@ export function upsert_probe(node_id: string, file: File, probe: ProbeResult | n
         node.data.file = file
         node.data.probe = probe
     } else if (!node) {
-        compose_state.nodes.push({ id: node_id, type: "source", position: { x: 0, y: 0 }, data: { file, probe } })
+        compose_state.nodes.push({
+            id: node_id,
+            type: "source",
+            position: flow_center_position(),
+            data: { file, probe },
+        })
     }
 }
 
@@ -83,9 +132,15 @@ export function remove_compose_nodes(node_ids: string[]): void {
         }
     }
     compose_state.nodes = compose_state.nodes.filter((node) => !ids.has(node.id))
+    const removed_edge_ids = new Set(
+        compose_state.edges.filter((edge) => ids.has(edge.source) || ids.has(edge.target)).map((edge) => edge.id),
+    )
     compose_state.edges = compose_state.edges.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target))
     if (compose_state.selected_id !== null && ids.has(compose_state.selected_id)) {
         compose_state.selected_id = null
+    }
+    if (compose_state.selected_edge_id !== null && removed_edge_ids.has(compose_state.selected_edge_id)) {
+        compose_state.selected_edge_id = null
     }
 }
 
@@ -104,6 +159,7 @@ export function revoke_all(): void {
     compose_state.nodes = fresh.nodes
     compose_state.edges = fresh.edges
     compose_state.selected_id = fresh.selected_id
+    compose_state.selected_edge_id = fresh.selected_edge_id
     compose_state.run_status = fresh.run_status
     compose_state.run_progress = fresh.run_progress
     compose_state.run_error = fresh.run_error
@@ -214,6 +270,17 @@ function parse_node(raw: unknown): ComposeNode {
                     easing: raw.data.easing as "linear" | "exponential",
                 },
             }
+        }
+        case "merge": {
+            if (
+                typeof raw.data.input_count !== "number" ||
+                !Number.isInteger(raw.data.input_count) ||
+                raw.data.input_count < 2 ||
+                raw.data.input_count > 8
+            ) {
+                throw new Error(`Node "${raw.id}": merge needs input_count from 2 to 8`)
+            }
+            return { id: raw.id, type: "merge", position, data: { input_count: raw.data.input_count } }
         }
         case "subtitles": {
             parse_stub(raw.data.file, raw.id)

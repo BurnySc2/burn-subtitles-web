@@ -3,6 +3,7 @@ import { srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
+import { render_merge } from "./mediabunny-merge"
 import { render_transition } from "./mediabunny-transition"
 
 export interface ExecuteComposeGraphOptions {
@@ -58,6 +59,30 @@ function transition_inputs(
         throw new ClipError("FAILED", "Transition inputs are missing.")
     }
     return { blob_a, blob_b }
+}
+
+function merge_handle_index(handle: string | null): number {
+    if (typeof handle !== "string") {
+        return Number.MAX_SAFE_INTEGER
+    }
+    const match = /^in(\d+)$/.exec(handle)
+    return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER
+}
+
+function merge_inputs(node_id: string, incoming: Map<string, ComposeEdge[]>, memo: Map<string, Blob>): Blob[] {
+    const edges = (incoming.get(node_id) ?? []).slice().sort((a, b) => {
+        const index_a = merge_handle_index(a.targetHandle)
+        const index_b = merge_handle_index(b.targetHandle)
+        if (index_a !== index_b) {
+            return index_a - index_b
+        }
+        return a.source < b.source ? -1 : a.source > b.source ? 1 : 0
+    })
+    const blobs = edges.map((edge) => memo.get(edge.source) ?? null)
+    if (blobs.length < 2 || blobs.some((blob) => blob === null)) {
+        throw new ClipError("FAILED", "Merge inputs are missing.")
+    }
+    return blobs as Blob[]
 }
 
 async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> {
@@ -205,6 +230,22 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     easing: node.data.easing,
+                    on_progress: slice,
+                    signal,
+                })
+                memo.set(node.id, result.blob)
+                break
+            }
+            case "merge": {
+                const blobs = merge_inputs(node.id, incoming, memo)
+                const result = await render_merge({
+                    files: blobs.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
+                    width: output_node?.data.width ?? 1280,
+                    height: output_node?.data.height ?? 720,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
                     signal,
                 })

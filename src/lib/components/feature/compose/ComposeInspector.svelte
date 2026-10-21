@@ -3,6 +3,7 @@ import { compose_filename } from "$lib/media/compose-filename"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import type {
     ComposeNode,
+    MergeNodeData,
     OutputNodeData,
     SubtitlesNodeData,
     TransitionNodeData,
@@ -14,6 +15,12 @@ import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
 
 let selected: ComposeNode | null = $derived(
     compose_state.nodes.find((node) => node.id === compose_state.selected_id) ?? null,
+)
+let selected_edge_id: string | null = $derived(
+    compose_state.selected_edge_id !== null &&
+        compose_state.edges.some((edge) => edge.id === compose_state.selected_edge_id)
+        ? compose_state.selected_edge_id
+        : null,
 )
 let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
@@ -41,6 +48,54 @@ function patch_transition(patch: Partial<TransitionNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "transition") {
         Object.assign(node.data, patch)
+    }
+}
+
+function patch_merge(patch: Partial<MergeNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "merge") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function merge_handle_index(handle: string | null): number {
+    if (typeof handle !== "string") {
+        return Number.MAX_SAFE_INTEGER
+    }
+    const match = /^in(\d+)$/.exec(handle)
+    return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER
+}
+
+let merge_edges = $derived.by(() => {
+    if (!selected || selected.type !== "merge") {
+        return []
+    }
+    return compose_state.edges
+        .filter((edge) => edge.target === selected.id)
+        .slice()
+        .sort((a, b) => merge_handle_index(a.targetHandle) - merge_handle_index(b.targetHandle))
+})
+
+function move_merge_edge(index: number, direction: -1 | 1): void {
+    if (!selected || selected.type !== "merge") {
+        return
+    }
+    const ordered = merge_edges
+    const other = index + direction
+    if (index < 0 || other < 0 || index >= ordered.length || other >= ordered.length) {
+        return
+    }
+    const current = ordered[index]
+    const sibling = ordered[other]
+    const handle_a = current.targetHandle
+    current.targetHandle = sibling.targetHandle
+    sibling.targetHandle = handle_a
+}
+
+function on_merge_count_input(raw: string): void {
+    const parsed = Number(raw)
+    if (raw.trim() !== "" && Number.isInteger(parsed)) {
+        patch_merge({ input_count: Math.min(8, Math.max(2, parsed)) })
     }
 }
 
@@ -83,6 +138,12 @@ function on_crf_input(raw: string): void {
 function delete_selected(): void {
     if (selected !== null) {
         remove_compose_nodes([selected.id])
+        return
+    }
+    if (selected_edge_id !== null) {
+        const edge_id = selected_edge_id
+        compose_state.edges = compose_state.edges.filter((edge) => edge.id !== edge_id)
+        compose_state.selected_edge_id = null
     }
 }
 
@@ -120,7 +181,21 @@ function probe_summary(node: ComposeNode): string {
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Inspector</h2>
     {#if !selected}
-        <p class="text-sm text-gray-500">No node selected — click a node on the canvas.</p>
+        {#if selected_edge_id}
+            <p class="text-sm text-gray-600">
+                <span class="font-medium">Edge</span>
+                <span class="font-mono text-xs"> · {selected_edge_id}</span>
+            </p>
+            <button
+                type="button"
+                onclick={delete_selected}
+                class="btn btn-secondary btn-sm self-start"
+            >
+                Delete edge
+            </button>
+        {:else}
+            <p class="text-sm text-gray-500">No node selected — click a node on the canvas.</p>
+        {/if}
         <ComposeNodePreview
             node_id={null}
             on_preview={handle_preview}
@@ -200,6 +275,74 @@ function probe_summary(node: ComposeNode): string {
                     <option value="exponential">exponential</option>
                 </select>
             </label>
+        {:else if selected.type === "merge"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Inputs (2-8)
+                <span class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onclick={() => patch_merge({ input_count: Math.max(2, selected.data.input_count - 1) })}
+                        disabled={selected.data.input_count <= 2}
+                        class="btn btn-secondary btn-sm"
+                        aria-label="Decrease merge inputs"
+                    >
+                        -
+                    </button>
+                    <input
+                        type="number"
+                        min="2"
+                        max="8"
+                        step="1"
+                        value={selected.data.input_count}
+                        oninput={(e) => on_merge_count_input(e.currentTarget.value)}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    <button
+                        type="button"
+                        onclick={() => patch_merge({ input_count: Math.min(8, selected.data.input_count + 1) })}
+                        disabled={selected.data.input_count >= 8}
+                        class="btn btn-secondary btn-sm"
+                        aria-label="Increase merge inputs"
+                    >
+                        +
+                    </button>
+                </span>
+            </label>
+            {#if merge_edges.length > 0}
+                <div class="flex flex-col gap-1">
+                    <p class="text-sm font-medium">Input order (in0 first)</p>
+                    <ol class="flex flex-col gap-1">
+                        {#each merge_edges as edge, index (edge.id)}
+                            <li
+                                class="flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-sm"
+                            >
+                                <span class="font-mono text-xs text-gray-500">{edge.targetHandle ?? "?"}</span>
+                                <span class="min-w-0 flex-1 truncate font-mono text-xs">{edge.source}</span>
+                                <button
+                                    type="button"
+                                    onclick={() => move_merge_edge(index, -1)}
+                                    disabled={index === 0}
+                                    class="btn btn-secondary btn-sm"
+                                    aria-label={`Move ${edge.targetHandle} up`}
+                                >
+                                    Up
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick={() => move_merge_edge(index, 1)}
+                                    disabled={index === merge_edges.length - 1}
+                                    class="btn btn-secondary btn-sm"
+                                    aria-label={`Move ${edge.targetHandle} down`}
+                                >
+                                    Down
+                                </button>
+                            </li>
+                        {/each}
+                    </ol>
+                </div>
+            {:else}
+                <p class="text-sm text-gray-500">Connect 2 or more inputs using handles in0, in1, …</p>
+            {/if}
         {:else if selected.type === "subtitles"}
             <label class="flex flex-col gap-1 text-sm font-medium">
                 SRT content
@@ -318,10 +461,12 @@ function probe_summary(node: ComposeNode): string {
                 >
             </label>
         {/if}
-        <ComposeNodePreview
-            node_id={selected.id}
-            on_preview={handle_preview}
-        />
+        {#key selected.id}
+            <ComposeNodePreview
+                node_id={selected.id}
+                on_preview={handle_preview}
+            />
+        {/key}
         {#if preview_url && preview_blob}
             <a
                 href={preview_url}

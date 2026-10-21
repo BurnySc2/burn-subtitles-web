@@ -109,6 +109,47 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     }
                 }
                 break
+            case "merge": {
+                const incoming = ins(node.id)
+                if (incoming.length < 2) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "input",
+                        message: "Merge node must have at least 2 inputs",
+                    })
+                    break
+                }
+                const handles = incoming.map((edge) => edge.targetHandle)
+                if (!handles.every((handle) => typeof handle === "string" && /^in\d+$/.test(handle))) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "input",
+                        message: 'Merge node inputs must be "in0", "in1", ...',
+                    })
+                    break
+                }
+                if (new Set(handles).size !== handles.length) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "input",
+                        message: "Merge node inputs must use distinct handles",
+                    })
+                    break
+                }
+                const capacity = node.data.input_count
+                for (const handle of handles) {
+                    const index = Number((handle as string).slice(2))
+                    if (!Number.isInteger(index) || index < 0 || index >= capacity) {
+                        issues.push({
+                            node_id: node.id,
+                            field: "input",
+                            message: `Merge input "${handle}" is outside input_count ${capacity}`,
+                        })
+                        break
+                    }
+                }
+                break
+            }
             case "output":
                 if (count !== 1) {
                     issues.push({

@@ -9,7 +9,7 @@ import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.s
 import ComposeToolbar from "$lib/components/feature/compose/ComposeToolbar.svelte"
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
-import { compose_state } from "$lib/media/compose-state.svelte"
+import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
 import type { ComposeNode, ComposeNodeKind } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
 import { ClipError } from "$lib/media/mediabunny-clip"
@@ -21,7 +21,11 @@ function handle_add(kind: ComposeNodeKind): void {
         return
     }
     const id = crypto.randomUUID()
-    const position = { x: Math.round(Math.random() * 400), y: Math.round(Math.random() * 300) }
+    const center = flow_center_position()
+    const position = {
+        x: Math.round(center.x + (Math.random() * 120 - 60)),
+        y: Math.round(center.y + (Math.random() * 120 - 60)),
+    }
     let node: ComposeNode
     switch (kind) {
         case "source":
@@ -32,6 +36,9 @@ function handle_add(kind: ComposeNodeKind): void {
             break
         case "transition":
             node = { id, type: "transition", position, data: { start: 0, duration: 1, easing: "linear" } }
+            break
+        case "merge":
+            node = { id, type: "merge", position, data: { input_count: 2 } }
             break
         case "subtitles":
             node = { id, type: "subtitles", position, data: { file: null, content: null, mode: "mux" } }
@@ -55,6 +62,7 @@ function handle_add(kind: ComposeNodeKind): void {
     }
     compose_state.nodes.push(node)
     compose_state.selected_id = id
+    compose_state.selected_edge_id = null
 }
 
 async function handle_render(): Promise<void> {
@@ -157,10 +165,6 @@ onDestroy(() => {
 <div class="flex w-full flex-col gap-4 p-4">
     <h1 class="text-2xl font-bold">Compose</h1>
     <ComposeToolbar on_add={handle_add} />
-    <ComposeRenderBar
-        on_render={() => void handle_render()}
-        on_cancel={handle_cancel}
-    />
     <ComposeJsonBar />
     <div class="flex w-full gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
@@ -168,6 +172,10 @@ onDestroy(() => {
         <div class="w-80 shrink-0"><ComposeInspector /></div>
     </div>
     <ComposeIssuesPanel />
+    <ComposeRenderBar
+        on_render={() => void handle_render()}
+        on_cancel={handle_cancel}
+    />
     {#if compose_state.result}
         <div class="flex flex-col gap-2 rounded-lg bg-gray-100 p-4">
             <h2 class="text-lg font-semibold">Result</h2>

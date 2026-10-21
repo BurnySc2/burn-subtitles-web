@@ -1,6 +1,7 @@
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
+import { render_merge } from "./mediabunny-merge"
 import { render_transition } from "./mediabunny-transition"
 
 export interface NodePreviewOptions {
@@ -8,8 +9,12 @@ export interface NodePreviewOptions {
     on_progress?: (progress: number) => void
 }
 
-const preview_memo = new Map<string, Blob>()
-let preview_fingerprint = ""
+interface PreviewMemoEntry {
+    upstream: string
+    blob: Blob
+}
+
+const preview_memo = new Map<string, PreviewMemoEntry>()
 
 function file_stub_key(file: File | null): string {
     if (!file) {
@@ -18,23 +23,29 @@ function file_stub_key(file: File | null): string {
     return `${file.name}:${file.size}:${file.type}:${file.lastModified}`
 }
 
-function fingerprint_graph(nodes: ComposeNode[], edges: ComposeEdge[]): string {
-    const serial_nodes = nodes.map((node) => {
-        if (node.type === "source") {
-            return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(node.data.probe ?? null)]
-        }
-        if (node.type === "subtitles") {
-            return [node.id, node.type, file_stub_key(node.data.file), node.data.content ?? "", node.data.mode]
-        }
-        return [node.id, node.type, JSON.stringify(node.data)]
-    })
-    const serial_edges = edges.map((edge) => [edge.id, edge.source, edge.target, edge.targetHandle ?? ""])
+function serialize_node(node: ComposeNode): string {
+    if (node.type === "source") {
+        return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(node.data.probe ?? null)].join(":")
+    }
+    if (node.type === "subtitles") {
+        return [node.id, node.type, file_stub_key(node.data.file), node.data.content ?? "", node.data.mode].join(":")
+    }
+    return [node.id, node.type, JSON.stringify(node.data)].join(":")
+}
+
+function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: ComposeEdge[]): string {
+    const by_id = new Map(nodes.map((node) => [node.id, node]))
+    const relevant = new Set([...upstream_of(target_id, nodes, edges), target_id])
+    const serial_nodes = [...relevant].sort().map((id) => serialize_node(by_id.get(id) as ComposeNode))
+    const serial_edges = edges
+        .filter((edge) => relevant.has(edge.source) && relevant.has(edge.target))
+        .map((edge) => [edge.id, edge.source, edge.target, edge.targetHandle ?? ""].join(":"))
+        .sort()
     return JSON.stringify([serial_nodes, serial_edges])
 }
 
 export function clear_node_preview_cache(): void {
     preview_memo.clear()
-    preview_fingerprint = ""
 }
 
 function throw_if_aborted(signal?: AbortSignal): void {
@@ -83,6 +94,30 @@ function transition_inputs(
         throw new ClipError("FAILED", "Transition inputs are missing.")
     }
     return { blob_a, blob_b }
+}
+
+function merge_handle_index(handle: string | null): number {
+    if (typeof handle !== "string") {
+        return Number.MAX_SAFE_INTEGER
+    }
+    const match = /^in(\d+)$/.exec(handle)
+    return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER
+}
+
+function merge_inputs(node_id: string, incoming: Map<string, ComposeEdge[]>, memo: Map<string, Blob>): Blob[] {
+    const edges = (incoming.get(node_id) ?? []).slice().sort((a, b) => {
+        const index_a = merge_handle_index(a.targetHandle)
+        const index_b = merge_handle_index(b.targetHandle)
+        if (index_a !== index_b) {
+            return index_a - index_b
+        }
+        return a.source < b.source ? -1 : a.source > b.source ? 1 : 0
+    })
+    const blobs = edges.map((edge) => memo.get(edge.source) ?? null)
+    if (blobs.length < 2 || blobs.some((blob) => blob === null)) {
+        throw new ClipError("FAILED", "Merge inputs are missing.")
+    }
+    return blobs as Blob[]
 }
 
 async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> {
@@ -186,25 +221,33 @@ export async function get_node_preview_blob(
     if (!target) {
         return null
     }
-    const fingerprint = fingerprint_graph(nodes, edges)
-    if (fingerprint !== preview_fingerprint) {
-        preview_memo.clear()
-        preview_fingerprint = fingerprint
+    const fingerprint = subgraph_fingerprint(target_id, nodes, edges)
+    for (const id of [...preview_memo.keys()]) {
+        if (!by_id.has(id)) {
+            preview_memo.delete(id)
+        }
     }
     const cached = preview_memo.get(target_id)
-    if (cached) {
-        return cached
+    if (cached && cached.upstream === fingerprint) {
+        return cached.blob
     }
     const upstream = upstream_of(target_id, nodes, edges)
     const relevant = new Set([...upstream, target_id])
     const order = topo_sort_compose(nodes, edges).filter((id) => relevant.has(id))
     const incoming = incoming_by_target(edges)
+    const blobs = new Map<string, Blob>()
+    const store = (node_id: string, blob: Blob): void => {
+        blobs.set(node_id, blob)
+        preview_memo.set(node_id, { upstream: subgraph_fingerprint(node_id, nodes, edges), blob })
+    }
     const output_node = find_output_node(nodes)
     const total = Math.max(1, order.length)
     let done = 0
     for (const node_id of order) {
         throw_if_aborted(signal)
-        if (preview_memo.has(node_id)) {
+        const memo_hit = preview_memo.get(node_id)
+        if (memo_hit && memo_hit.upstream === subgraph_fingerprint(node_id, nodes, edges)) {
+            blobs.set(node_id, memo_hit.blob)
             done += 1
             on_progress?.(done / total)
             continue
@@ -219,11 +262,11 @@ export async function get_node_preview_blob(
                 if (!node.data.file) {
                     throw new ClipError("FAILED", "Source file is missing.")
                 }
-                preview_memo.set(node.id, node.data.file)
+                store(node.id, node.data.file)
                 break
             }
             case "trim": {
-                const input = single_input(node.id, incoming, preview_memo)
+                const input = single_input(node.id, incoming, blobs)
                 const result = await extract_clip({
                     file: blob_to_file(input, "trim-input.mp4"),
                     start: node.data.start,
@@ -232,11 +275,11 @@ export async function get_node_preview_blob(
                     on_progress: slice,
                     signal,
                 })
-                preview_memo.set(node.id, result.blob)
+                store(node.id, result.blob)
                 break
             }
             case "transition": {
-                const { blob_a, blob_b } = transition_inputs(node.id, incoming, preview_memo)
+                const { blob_a, blob_b } = transition_inputs(node.id, incoming, blobs)
                 const result = await render_transition({
                     file_a: blob_to_file(blob_a, "transition-a.mp4"),
                     file_b: blob_to_file(blob_b, "transition-b.mp4"),
@@ -252,30 +295,46 @@ export async function get_node_preview_blob(
                     on_progress: slice,
                     signal,
                 })
-                preview_memo.set(node.id, result.blob)
+                store(node.id, result.blob)
                 break
             }
             case "subtitles": {
-                const input = single_input(node.id, incoming, preview_memo)
+                const input = single_input(node.id, incoming, blobs)
                 const content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
                 if (content === null || content.trim() === "") {
                     throw new ClipError("FAILED", "Subtitle content is empty.")
                 }
                 if (node.data.mode === "burn") {
-                    preview_memo.set(node.id, await burn_subtitles_into_video(input, content, signal))
+                    store(node.id, await burn_subtitles_into_video(input, content, signal))
                 } else {
-                    preview_memo.set(node.id, input)
+                    store(node.id, input)
                 }
                 break
             }
+            case "merge": {
+                const merged = merge_inputs(node.id, incoming, blobs)
+                const result = await render_merge({
+                    files: merged.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
+                    width: output_node?.data.width ?? 1280,
+                    height: output_node?.data.height ?? 720,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: slice,
+                    signal,
+                })
+                store(node.id, result.blob)
+                break
+            }
             case "output": {
-                const input = single_input(node.id, incoming, preview_memo)
-                preview_memo.set(node.id, await ensure_mp4_blob(input, signal))
+                const input = single_input(node.id, incoming, blobs)
+                store(node.id, await ensure_mp4_blob(input, signal))
                 break
             }
         }
         done += 1
         on_progress?.(done / total)
     }
-    return preview_memo.get(target_id) ?? null
+    return blobs.get(target_id) ?? null
 }

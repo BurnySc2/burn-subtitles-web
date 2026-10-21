@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
-import { upsert_probe } from "$lib/media/compose-state.svelte"
+import { set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
 import type { SourceNodeData } from "$lib/media/compose-types"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
@@ -46,13 +46,13 @@ async function handle_file(file: File | null): Promise<void> {
     error = null
     update_data({ file, probe: null })
     const url = URL.createObjectURL(file)
-    upsert_probe(id, file, null, url)
+    set_source_file(id, file, url)
     try {
         const probe = await probe_media(file)
         if (mine !== token) {
             return
         }
-        upsert_probe(id, file, probe, url)
+        set_source_probe(id, file, probe)
     } catch (caught) {
         if (mine !== token) {
             return

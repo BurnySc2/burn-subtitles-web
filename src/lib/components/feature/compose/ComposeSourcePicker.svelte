@@ -1,5 +1,5 @@
 <script lang="ts">
-import { upsert_probe } from "$lib/media/compose-state.svelte"
+import { set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
 let { node_id }: { node_id: string } = $props()
@@ -24,13 +24,13 @@ async function handle_file(event: Event): Promise<void> {
     error = null
     file_name = file.name
     const url = URL.createObjectURL(file)
-    upsert_probe(node_id, file, null, url)
+    set_source_file(node_id, file, url)
     try {
         const probe = await probe_media(file)
         if (mine !== token) {
             return
         }
-        upsert_probe(node_id, file, probe, url)
+        set_source_probe(node_id, file, probe)
     } catch (caught) {
         if (mine !== token) {
             return

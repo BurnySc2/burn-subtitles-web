@@ -33,78 +33,73 @@ function notify(): void {
     on_preview?.({ url, blob })
 }
 
-$effect(() => {
+function cancel_preview(): void {
+    run_token += 1
+    aborter?.abort()
+    aborter = null
+    loading = false
+    progress = 0
+}
+
+async function request_preview(): Promise<void> {
     const target = node_id
-    const nodes = compose_state.nodes
-    const edges = compose_state.edges
-    const signature = nodes
-        .map((node) => {
-            const file_key =
-                node.type === "source" || node.type === "subtitles"
-                    ? `${node.data.file?.name ?? ""}:${node.data.file?.size ?? 0}:${node.data.file?.lastModified ?? 0}`
-                    : ""
-            return `${node.id}:${node.type}:${file_key}:${JSON.stringify({ ...node.data, file: null })}`
-        })
-        .join("|")
-    const edge_signature = edges
-        .map((edge) => `${edge.id}:${edge.source}:${edge.target}:${edge.targetHandle ?? ""}`)
-        .join("|")
-    const mine = ++run_token
-    cleanup()
-    if (!target) {
-        loading = false
-        error = null
-        progress = 0
-        notify()
+    if (!target || loading) {
         return
     }
-    // WHY await: track signature reads above so graph edits retrigger preview
-    void signature
-    void edge_signature
+    const mine = ++run_token
+    cleanup()
     loading = true
     error = null
     progress = 0
     notify()
     aborter = new AbortController()
     const active = aborter
-    void (async () => {
-        try {
-            const result = await get_node_preview_blob(target, [...nodes], [...edges], {
-                signal: active.signal,
-                on_progress: (value) => {
-                    if (mine === run_token) {
-                        progress = value
-                    }
-                },
-            })
-            if (mine !== run_token || active.signal.aborted) {
-                return
-            }
-            if (!result) {
-                error = "No preview available for this node."
-                loading = false
-                notify()
-                return
-            }
-            blob = result
-            url = URL.createObjectURL(result)
-            loading = false
-            notify()
-        } catch (caught) {
-            if (mine !== run_token) {
-                return
-            }
-            if (caught instanceof DOMException && caught.name === "AbortError") {
-                return
-            }
-            if (caught instanceof Error && caught.name === "ClipError" && caught.message === "Cancelled.") {
-                return
-            }
-            error = caught instanceof Error ? caught.message : "Preview failed."
-            loading = false
-            notify()
+    const nodes = [...compose_state.nodes]
+    const edges = [...compose_state.edges]
+    try {
+        const result = await get_node_preview_blob(target, nodes, edges, {
+            signal: active.signal,
+            on_progress: (value) => {
+                if (mine === run_token) {
+                    progress = value
+                }
+            },
+        })
+        if (mine !== run_token || active.signal.aborted) {
+            return
         }
-    })()
+        if (!result) {
+            error = "No preview available for this node."
+            loading = false
+            notify()
+            return
+        }
+        blob = result
+        url = URL.createObjectURL(result)
+        loading = false
+        notify()
+    } catch (caught) {
+        if (mine !== run_token) {
+            return
+        }
+        if (caught instanceof DOMException && caught.name === "AbortError") {
+            return
+        }
+        if (caught instanceof Error && caught.name === "ClipError" && caught.message === "Cancelled.") {
+            return
+        }
+        error = caught instanceof Error ? caught.message : "Preview failed."
+        loading = false
+        notify()
+    }
+}
+
+$effect(() => {
+    void node_id
+    cancel_preview()
+    cleanup()
+    error = null
+    notify()
 })
 
 onDestroy(() => {
@@ -121,7 +116,28 @@ let is_audio = $derived((blob?.type ?? "").startsWith("audio/"))
 </script>
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-white p-3">
-    <h3 class="text-sm font-semibold">Node preview</h3>
+    <div class="flex items-center justify-between gap-2">
+        <h3 class="text-sm font-semibold">Node preview</h3>
+        {#if node_id}
+            {#if loading}
+                <button
+                    type="button"
+                    onclick={cancel_preview}
+                    class="btn btn-secondary btn-sm"
+                >
+                    Cancel
+                </button>
+            {:else}
+                <button
+                    type="button"
+                    onclick={() => void request_preview()}
+                    class="btn btn-primary btn-sm"
+                >
+                    Preview
+                </button>
+            {/if}
+        {/if}
+    </div>
     {#if !node_id}
         <p class="text-sm text-gray-500">Select a node to preview its output.</p>
     {:else if loading}
@@ -147,6 +163,6 @@ let is_audio = $derived((blob?.type ?? "").startsWith("audio/"))
             </video>
         {/if}
     {:else}
-        <p class="text-sm text-gray-500">No preview available for this node.</p>
+        <p class="text-sm text-gray-500">Press Preview to render this node.</p>
     {/if}
 </div>
