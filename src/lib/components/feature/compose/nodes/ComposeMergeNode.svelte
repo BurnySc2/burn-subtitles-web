@@ -27,7 +27,11 @@ function on_count_input(raw: string): void {
 let handles = $derived(Array.from({ length: data.input_count }, (_, index) => `in${index}`))
 </script>
 
-<div class="min-w-48 rounded-lg border border-gray-300 bg-white p-3">
+<div
+    class="min-w-48 rounded-lg border border-gray-300 bg-white p-3"
+    data-testid="compose-node"
+    data-kind="merge"
+>
     {#each handles as handle, index (handle)}
         <Handle
             id={handle}

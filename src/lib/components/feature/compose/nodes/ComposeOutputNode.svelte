@@ -36,7 +36,11 @@ function on_crf_input(raw: string): void {
 }
 </script>
 
-<div class="min-w-64 rounded-lg border border-gray-300 bg-white p-4">
+<div
+    class="min-w-64 rounded-lg border border-gray-300 bg-white p-4"
+    data-testid="compose-node"
+    data-kind="output"
+>
     <Handle
         type="target"
         position={Position.Left}

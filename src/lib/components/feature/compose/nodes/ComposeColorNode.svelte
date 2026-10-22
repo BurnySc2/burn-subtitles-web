@@ -25,7 +25,11 @@ function on_duration_input(raw: string): void {
 }
 </script>
 
-<div class="min-w-48 rounded-lg border border-gray-300 bg-white p-3">
+<div
+    class="min-w-48 rounded-lg border border-gray-300 bg-white p-3"
+    data-testid="compose-node"
+    data-kind="color"
+>
     <Handle
         type="source"
         position={Position.Right}

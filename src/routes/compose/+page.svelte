@@ -21,10 +21,15 @@ function handle_add(kind: ComposeNodeKind): void {
     }
     const id = crypto.randomUUID()
     const center = flow_center_position()
-    const position = {
-        x: Math.round(center.x + (Math.random() * 120 - 60)),
-        y: Math.round(center.y + (Math.random() * 120 - 60)),
-    }
+    // WHY deterministic-grid: ?deterministic=1 gives stable node positions for Playwright
+    const deterministic = new URLSearchParams(window.location.search).get("deterministic") === "1"
+    const node_index = compose_state.nodes.length
+    const position = deterministic
+        ? { x: Math.round(center.x + node_index * 40), y: Math.round(center.y + node_index * 40) }
+        : {
+              x: Math.round(center.x + (Math.random() * 120 - 60)),
+              y: Math.round(center.y + (Math.random() * 120 - 60)),
+          }
     let node: ComposeNode
     switch (kind) {
         case "source":

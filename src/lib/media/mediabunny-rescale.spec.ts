@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { probe_media } from "./mediabunny-clip"
-import { render_rescale, type RenderRescaleOptions } from "./mediabunny-rescale"
+import { type RenderRescaleOptions, render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
 
 const valid_blob = (): Blob => new Blob(["x"], { type: "video/mp4" })

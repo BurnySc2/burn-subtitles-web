@@ -37,6 +37,7 @@ function handle_click(): void {
     >
     <select
         id="compose-palette"
+        data-testid="compose-palette-select"
         bind:value={selected}
         disabled={running}
     >
@@ -88,6 +89,7 @@ function handle_click(): void {
     </select>
     <button
         type="button"
+        data-testid="compose-palette-add"
         onclick={handle_click}
         disabled={running}
         class="btn btn-primary btn-sm"
