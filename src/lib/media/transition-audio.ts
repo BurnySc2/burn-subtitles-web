@@ -1,8 +1,8 @@
 import { ClipError } from "./mediabunny-clip"
 import {
     EASING_REGISTRY,
-    TRANSITION_AUDIO_MODES,
     TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODES,
     type TransitionAudioMode,
     type TransitionEasing,
 } from "./transition-utils"

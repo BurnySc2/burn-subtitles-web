@@ -2,7 +2,7 @@ import { topo_sort_compose } from "./compose-graph"
 import { validate_srt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
-import { parse_crf_override, TRANSITION_AUDIO_MODES, TRANSITION_AUDIO_MODE_DEFAULT } from "./transition-utils"
+import { parse_crf_override, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
 
 function upstream_duration(
     start_id: string,

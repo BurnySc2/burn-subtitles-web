@@ -9,13 +9,13 @@ import type {
     TransitionQuality,
 } from "./transition-utils"
 import {
-    TRANSITION_AUDIO_MODES,
     parse_crf_override,
     phase_at,
     quality_to_video_config,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
     TRANSITION_AUDIO_BITRATE_MIN,
+    TRANSITION_AUDIO_MODES,
     total_transition_duration,
     total_transition_frames,
 } from "./transition-utils"

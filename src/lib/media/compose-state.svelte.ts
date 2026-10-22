@@ -3,8 +3,8 @@ import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 import {
     parse_crf_override,
-    TRANSITION_AUDIO_MODES,
     TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODES,
     type TransitionAudioMode,
 } from "./transition-utils"
 
