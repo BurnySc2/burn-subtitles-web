@@ -5,10 +5,23 @@ on:
     branches: [ master, develop ]
   pull_request:
     branches: [ master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -16,11 +29,20 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
 
       - name: Build project
         run: npm run build
@@ -33,9 +55,6 @@ jobs:
 
       - name: Run typescript checks
         run: npm run check
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
 
       - name: Run unit tests
         run: npm run test:unit
