@@ -12,6 +12,7 @@ import { compose_state, flow_center_position } from "$lib/media/compose-state.sv
 import type { ComposeNode, ComposeNodeKind } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
 import { ClipError } from "$lib/media/mediabunny-clip"
+import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
 
 let aborter: AbortController | null = null
 
@@ -43,7 +44,7 @@ function handle_add(kind: ComposeNodeKind): void {
                 id,
                 type: "transition",
                 position,
-                data: { start: 0, duration: 1, easing: "linear", audio_mode: "crossfade" },
+                data: { start: 0, duration: 1, easing: "linear", audio_mode: TRANSITION_AUDIO_MODE_DEFAULT },
             }
             break
         case "merge":

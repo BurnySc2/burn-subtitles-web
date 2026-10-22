@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
 import { compose_node_title, type TransitionNodeData } from "$lib/media/compose-types"
+import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
 
 let {
     id = "",
@@ -107,7 +108,7 @@ let title = $derived(compose_node_title("transition", data.label))
             Audio
             <select
                 id={id ? `${id}-audio-mode` : undefined}
-                value={data.audio_mode ?? "crossfade"}
+                value={data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT}
                 onchange={(e) => update_data({ audio_mode: e.currentTarget.value as TransitionNodeData["audio_mode"] })}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >

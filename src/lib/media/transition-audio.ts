@@ -1,4 +1,11 @@
-import { EASING_REGISTRY, type TransitionAudioMode, type TransitionEasing } from "./transition-utils"
+import { ClipError } from "./mediabunny-clip"
+import {
+    EASING_REGISTRY,
+    TRANSITION_AUDIO_MODES,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    type TransitionAudioMode,
+    type TransitionEasing,
+} from "./transition-utils"
 
 export interface PremixTransitionAudioOptions {
     full_a: AudioBuffer | null
@@ -44,7 +51,10 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
     const sample_rate = Number.isFinite(requested_rate) && requested_rate > 0 ? requested_rate : 48000
     const channels = Number.isInteger(requested_channels) && requested_channels > 0 ? requested_channels : 2
     const ease = EASING_REGISTRY[options.easing ?? "linear"] ?? EASING_REGISTRY.linear
-    const mode = options.audio_mode ?? "crossfade"
+    const mode = options.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT
+    if (!TRANSITION_AUDIO_MODES.includes(mode)) {
+        throw new ClipError("INVALID_RANGE", "Unknown transition audio mode.")
+    }
     const length = Math.max(1, Math.ceil(total_duration * sample_rate))
     const ctx = new OfflineAudioContext(channels, length, sample_rate)
     const blend_start = Number.isFinite(start_a) ? Math.min(Math.max(start_a, 0), total_duration) : 0
@@ -86,7 +96,12 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
         gain_b.gain.setValueAtTime(0, blend_start)
         gain_a.gain.setValueCurveAtTime(curve_a, blend_start, blend_len)
         gain_b.gain.setValueAtTime(1, blend_start + blend_len)
-    } else if (mode === "b-flat") {
+    }
+    // WHY asymmetric flats: a-flat holds A flat while B waits until blend end; b-flat pre-echoes B
+    // from t=0 while A still fades (1-alpha) in blend. Per-leg gains [solo-a, blend-start, blend-end]:
+    // crossfade A[1,1,1-a]/B[0,0,a], a-flat A[1,1,0]/B[0,0,1], a-fadeout A[1,1,1-e]/B[0,0,1],
+    // b-flat A[1,1,1-e]/B[1,1,1], b-fadein A[1,0,0]/B[0,0,e], mute A[1,0,0]/B[0,0,1], dip A[1,1,V]/B[0,0,V]
+    else if (mode === "b-flat") {
         const points = 256
         const curve_a = new Float32Array(points)
         for (let i = 0; i < points; i += 1) {
@@ -94,7 +109,7 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
         }
         gain_a.gain.setValueAtTime(1, 0)
         gain_a.gain.setValueAtTime(1, blend_start)
-        gain_b.gain.setValueAtTime(1, 0)
+        gain_b.gain.setValueAtTime(0, 0)
         gain_b.gain.setValueAtTime(1, blend_start)
         gain_a.gain.setValueCurveAtTime(curve_a, blend_start, blend_len)
         gain_b.gain.setValueAtTime(1, blend_start + blend_len)

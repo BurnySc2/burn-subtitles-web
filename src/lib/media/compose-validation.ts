@@ -2,7 +2,7 @@ import { topo_sort_compose } from "./compose-graph"
 import { validate_srt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
-import { parse_crf_override } from "./transition-utils"
+import { parse_crf_override, TRANSITION_AUDIO_MODES, TRANSITION_AUDIO_MODE_DEFAULT } from "./transition-utils"
 
 function upstream_duration(
     start_id: string,
@@ -253,16 +253,8 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     message: "Transition duration must be greater than 0",
                 })
             }
-            const audio_mode = node.data.audio_mode ?? "crossfade"
-            if (
-                audio_mode !== "crossfade" &&
-                audio_mode !== "a-flat" &&
-                audio_mode !== "a-fadeout" &&
-                audio_mode !== "b-flat" &&
-                audio_mode !== "b-fadein" &&
-                audio_mode !== "mute" &&
-                audio_mode !== "dip"
-            ) {
+            const audio_mode = node.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT
+            if (!TRANSITION_AUDIO_MODES.includes(audio_mode)) {
                 issues.push({
                     node_id: node.id,
                     field: "audio_mode",
