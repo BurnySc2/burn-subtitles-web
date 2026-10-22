@@ -21,10 +21,15 @@ function handle_add(kind: ComposeNodeKind): void {
     }
     const id = crypto.randomUUID()
     const center = flow_center_position()
-    const position = {
-        x: Math.round(center.x + (Math.random() * 120 - 60)),
-        y: Math.round(center.y + (Math.random() * 120 - 60)),
-    }
+    // WHY deterministic-grid: ?deterministic=1 gives stable node positions for Playwright
+    const deterministic = new URLSearchParams(window.location.search).get("deterministic") === "1"
+    const node_index = compose_state.nodes.length
+    const position = deterministic
+        ? { x: Math.round(center.x + node_index * 40), y: Math.round(center.y + node_index * 40) }
+        : {
+              x: Math.round(center.x + (Math.random() * 120 - 60)),
+              y: Math.round(center.y + (Math.random() * 120 - 60)),
+          }
     let node: ComposeNode
     switch (kind) {
         case "source":
@@ -57,6 +62,17 @@ function handle_add(kind: ComposeNodeKind): void {
                     show_start: 0,
                     show_end: null,
                 },
+            }
+            break
+        case "color":
+            node = { id, type: "color", position, data: { color: "#000000", duration: 20, label: null } }
+            break
+        case "rescale":
+            node = {
+                id,
+                type: "rescale",
+                position,
+                data: { width: 1920, height: 1080, fps: null, fit: "contain", label: null },
             }
             break
         case "output":
@@ -204,9 +220,9 @@ onDestroy(() => {
 
 <div class="flex w-full flex-col gap-2 p-3">
     <ComposeJsonBar />
-    <div class="flex w-full gap-4">
+    <div class="flex min-h-[calc(100vh-320px)] w-full items-stretch gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
-        <div class="min-w-0 flex-1 rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
+        <div class="flex min-w-0 flex-1 flex-col rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
         <div class="w-80 shrink-0"><ComposeInspector on_preview={handle_node_preview} /></div>
     </div>
     {#if preview_url && preview_blob}

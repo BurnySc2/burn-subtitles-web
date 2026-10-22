@@ -70,7 +70,11 @@ async function handle_file(file: File | null): Promise<void> {
 }
 </script>
 
-<div class="min-w-48 rounded-lg border border-gray-300 bg-white p-3">
+<div
+    class="min-w-48 rounded-lg border border-gray-300 bg-white p-3"
+    data-testid="compose-node"
+    data-kind="source"
+>
     <Handle
         type="source"
         position={Position.Right}

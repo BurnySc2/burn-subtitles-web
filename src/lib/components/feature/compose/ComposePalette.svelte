@@ -16,6 +16,8 @@ function is_addable(value: string): value is ComposeNodeKind {
         value === "merge" ||
         value === "subtitles" ||
         value === "overlay" ||
+        value === "color" ||
+        value === "rescale" ||
         value === "output"
     )
 }
@@ -35,6 +37,7 @@ function handle_click(): void {
     >
     <select
         id="compose-palette"
+        data-testid="compose-palette-select"
         bind:value={selected}
         disabled={running}
     >
@@ -43,12 +46,8 @@ function handle_click(): void {
             <option value="trim">Trim</option>
             <option value="transition">Transition</option>
             <option value="merge">Merge</option>
-            <option
-                value="resize"
-                disabled
-            >
-                Resize (future)
-            </option>
+            <option value="color">Color</option>
+            <option value="rescale">Rescale</option>
             <option
                 value="canvas"
                 disabled
@@ -90,6 +89,7 @@ function handle_click(): void {
     </select>
     <button
         type="button"
+        data-testid="compose-palette-add"
         onclick={handle_click}
         disabled={running}
         class="btn btn-primary btn-sm"

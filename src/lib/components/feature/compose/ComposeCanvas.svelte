@@ -6,7 +6,7 @@ import { add_compose_edge, compose_state, compose_view, remove_compose_nodes } f
 import type { ComposeEdge, ComposeNode, ComposePosition } from "$lib/media/compose-types"
 
 async function load_flow() {
-    const [lib, source, trim, transition, merge, subtitles, overlay, output] = await Promise.all([
+    const [lib, source, trim, transition, merge, subtitles, overlay, color, rescale, output] = await Promise.all([
         import("@xyflow/svelte"),
         import("./nodes/ComposeSourceHost.svelte"),
         import("./nodes/ComposeTrimHost.svelte"),
@@ -14,6 +14,8 @@ async function load_flow() {
         import("./nodes/ComposeMergeHost.svelte"),
         import("./nodes/ComposeSubtitlesHost.svelte"),
         import("./nodes/ComposeOverlayHost.svelte"),
+        import("./nodes/ComposeColorHost.svelte"),
+        import("./nodes/ComposeRescaleHost.svelte"),
         import("./nodes/ComposeOutputHost.svelte"),
     ])
     return {
@@ -26,6 +28,8 @@ async function load_flow() {
             merge: merge.default,
             subtitles: subtitles.default,
             overlay: overlay.default,
+            color: color.default,
+            rescale: rescale.default,
             output: output.default,
         } satisfies NodeTypes,
     }
@@ -73,7 +77,7 @@ function handle_connect(connection: Connection): void {
     }
 }
 
-function is_valid_preview(connection: Connection): boolean {
+function is_valid_preview(connection: Edge | Connection): boolean {
     const source = connection.source ?? null
     const target = connection.target ?? null
     if (!source || !target || source === target) {
@@ -99,9 +103,12 @@ function is_valid_preview(connection: Connection): boolean {
     const incoming = compose_state.edges.filter((edge) => edge.target === target)
     switch (target_node.type) {
         case "source":
+        case "color":
             return false
         case "trim":
+        case "rescale":
         case "subtitles":
+        case "overlay":
         case "output":
             return incoming.length < 1
         case "transition":
@@ -167,7 +174,7 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 </script>
 
 <div
-    class="compose-canvas h-[calc(100vh-320px)] min-h-[420px] w-full rounded-lg border border-gray-300 bg-gray-50"
+    class="compose-canvas min-h-[420px] w-full flex-1 rounded-lg border border-gray-300 bg-gray-50"
     bind:clientWidth={compose_view.width}
     bind:clientHeight={compose_view.height}
 >

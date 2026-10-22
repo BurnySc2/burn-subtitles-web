@@ -1,0 +1,266 @@
+import type { Output } from "mediabunny"
+import { ClipError, probe_media } from "./mediabunny-clip"
+import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
+import { parse_crf_override, quality_to_video_config, resolve_audio_bitrate } from "./transition-utils"
+
+export interface RenderRescaleOptions {
+    width: number
+    height: number
+    fps: number | null
+    fit: "contain"
+    quality?: TransitionQuality
+    crf?: number | string | null
+    audio_quality?: TransitionAudioQuality
+    signal?: AbortSignal
+    on_progress?: (done: number, total: number) => void
+}
+
+const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser rescaling."
+const FALLBACK_FPS = 30
+
+let aac_encoder_promise: Promise<void> | null = null
+
+async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
+    aac_encoder_promise ??= (async () => {
+        try {
+            if (!(await mb.canEncodeAudio("aac"))) {
+                const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
+                registerAacEncoder()
+            }
+        } catch (error) {
+            aac_encoder_promise = null
+            throw error
+        }
+    })()
+    return aac_encoder_promise
+}
+
+function validate_rescale_options(options: RenderRescaleOptions): void {
+    const { width, height, fps, fit, quality } = options
+    if (!Number.isInteger(width) || width <= 0 || width > 7680 || width % 2 !== 0) {
+        throw new ClipError("INVALID_RANGE", "Output width must be a positive even integer up to 7680.")
+    }
+    if (!Number.isInteger(height) || height <= 0 || height > 7680 || height % 2 !== 0) {
+        throw new ClipError("INVALID_RANGE", "Output height must be a positive even integer up to 7680.")
+    }
+    if (fps !== null && (!Number.isFinite(fps) || fps <= 0)) {
+        throw new ClipError("INVALID_RANGE", "Output frame rate must be greater than 0.")
+    }
+    if (fit !== "contain") {
+        throw new ClipError("INVALID_RANGE", "Unknown rescale fit mode.")
+    }
+    if (quality !== undefined) {
+        if (
+            quality !== "low" &&
+            quality !== "medium" &&
+            quality !== "high" &&
+            quality !== "very-high" &&
+            quality !== "ultra"
+        ) {
+            throw new ClipError("INVALID_RANGE", "Unknown rescale quality.")
+        }
+    }
+    try {
+        parse_crf_override(options.crf ?? null)
+    } catch {
+        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+    }
+    if (options.audio_quality !== undefined) {
+        if (
+            options.audio_quality !== "96k" &&
+            options.audio_quality !== "128k" &&
+            options.audio_quality !== "192k" &&
+            options.audio_quality !== "256k" &&
+            options.audio_quality !== "320k" &&
+            options.audio_quality !== "source-max"
+        ) {
+            throw new ClipError("INVALID_RANGE", "Unknown rescale audio quality.")
+        }
+    }
+}
+
+function draw_contain_fit(
+    ctx: CanvasRenderingContext2D,
+    source: HTMLCanvasElement | OffscreenCanvas,
+    width: number,
+    height: number,
+): void {
+    const source_width = source.width
+    const source_height = source.height
+    if (source_width <= 0 || source_height <= 0) {
+        return
+    }
+    const scale = Math.min(width / source_width, height / source_height)
+    const draw_width = source_width * scale
+    const draw_height = source_height * scale
+    ctx.drawImage(source, (width - draw_width) / 2, (height - draw_height) / 2, draw_width, draw_height)
+}
+
+async function decode_full_audio(
+    sink: InstanceType<typeof import("mediabunny").AudioBufferSink>,
+): Promise<AudioBuffer | null> {
+    const chunks: AudioBuffer[] = []
+    for await (const wrapped of sink.buffers()) {
+        chunks.push(wrapped.buffer)
+    }
+    const first = chunks[0]
+    if (!first) {
+        return null
+    }
+    if (chunks.length === 1) {
+        return first
+    }
+    const channels = first.numberOfChannels
+    let length = 0
+    for (const chunk of chunks) {
+        length += chunk.length
+    }
+    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
+    let offset = 0
+    for (const chunk of chunks) {
+        for (let channel = 0; channel < channels; channel += 1) {
+            full.getChannelData(channel).set(
+                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
+                offset,
+            )
+        }
+        offset += chunk.length
+    }
+    return full
+}
+
+export async function render_rescale(input: Blob, options: RenderRescaleOptions): Promise<Blob> {
+    const { width, height, signal, on_progress } = options
+    const quality: TransitionQuality = options.quality ?? "medium"
+    validate_rescale_options({ ...options, quality })
+    if (!(input instanceof Blob) || input.size <= 0) {
+        throw new ClipError("INVALID_RANGE", "Rescale input must be a non-empty blob.")
+    }
+    if (signal?.aborted) {
+        throw new ClipError("CANCELLED", "Cancelled.")
+    }
+    const mb = await import("mediabunny")
+    const source = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(input) })
+    let output: Output | null = null
+    const on_abort = () => {
+        void output?.cancel()
+    }
+    signal?.addEventListener("abort", on_abort, { once: true })
+    try {
+        if (!(await source.canRead())) {
+            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
+        }
+        const probe = await probe_media(new File([input], "input", { type: input.type }))
+        if (!probe || !probe.has_video || !probe.can_play) {
+            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
+        }
+        if (probe.duration === null || !Number.isFinite(probe.duration) || probe.duration <= 0) {
+            throw new ClipError("INVALID_RANGE", "Rescale source duration is unknown.")
+        }
+        const fps =
+            options.fps ??
+            (typeof probe.frame_rate === "number" && Number.isFinite(probe.frame_rate) && probe.frame_rate > 0
+                ? probe.frame_rate
+                : FALLBACK_FPS)
+        const duration = probe.duration
+        const total_frames = Math.max(1, Math.round(duration * fps))
+        if (signal?.aborted) {
+            throw new ClipError("CANCELLED", "Cancelled.")
+        }
+        if (!(await mb.canEncodeVideo("avc"))) {
+            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
+        }
+        await ensure_aac_encoder(mb)
+        const target = new mb.BufferTarget()
+        output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
+        const canvas = document.createElement("canvas")
+        canvas.width = width
+        canvas.height = height
+        const crf = parse_crf_override(options.crf ?? null)
+        const video_config = quality_to_video_config(quality, width, height, fps, crf)
+        const video_quality =
+            video_config.quantizer !== null
+                ? new mb.Quality({
+                      quantizer: video_config.quantizer,
+                      bitrate: video_config.bitrate,
+                      bitrateMode: "variable",
+                  })
+                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
+        const video_source = new mb.CanvasSource(canvas, {
+            codec: "avc",
+            quality: video_quality,
+            latencyMode: "quality",
+            hardwareAcceleration: "no-preference",
+            bitrateMode: "variable",
+        })
+        output.addVideoTrack(video_source)
+        const audio_tracks = await source.getAudioTracks()
+        const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null
+        const decoded = sink ? await decode_full_audio(sink) : null
+        let audio_source: InstanceType<typeof mb.AudioBufferSource> | null = null
+        if (probe.has_audio && decoded) {
+            audio_source = new mb.AudioBufferSource({
+                codec: "aac",
+                bitrate: resolve_audio_bitrate(probe, null, options.audio_quality ?? "source-max"),
+            })
+            output.addAudioTrack(audio_source)
+        }
+        await output.start()
+        if (signal?.aborted) {
+            await output.cancel()
+            throw new ClipError("CANCELLED", "Cancelled.")
+        }
+        if (audio_source && decoded) {
+            await audio_source.add(decoded)
+        }
+        const ctx = canvas.getContext("2d")
+        if (!ctx) {
+            throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
+        }
+        const video_tracks = await source.getVideoTracks()
+        const track = video_tracks[0] ?? null
+        if (!track) {
+            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
+        }
+        const timestamps: number[] = []
+        for (let i = 0; i < total_frames; i += 1) {
+            timestamps.push(i / fps)
+        }
+        const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
+        const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
+        for (let i = 0; i < total_frames; i += 1) {
+            if (signal?.aborted) {
+                await output.cancel()
+                throw new ClipError("CANCELLED", "Cancelled.")
+            }
+            const wrapped = (await frames.next()).value
+            ctx.globalAlpha = 1
+            ctx.fillStyle = "#000"
+            ctx.fillRect(0, 0, width, height)
+            if (wrapped?.canvas) {
+                draw_contain_fit(ctx, wrapped.canvas, width, height)
+            }
+            await video_source.add(i / fps, 1 / fps)
+            on_progress?.(i + 1, total_frames)
+        }
+        try {
+            await output.finalize()
+        } catch (error) {
+            if (
+                output.state === "canceled" ||
+                error instanceof mb.ConversionCanceledError ||
+                (error instanceof Error && error.name === "ConversionCanceledError")
+            ) {
+                throw new ClipError("CANCELLED", "Cancelled.")
+            }
+            throw error
+        }
+        if (!target.buffer) {
+            throw new ClipError("FAILED", "Rescale rendering produced no output.")
+        }
+        return new Blob([target.buffer], { type: output.format.mimeType })
+    } finally {
+        signal?.removeEventListener("abort", on_abort)
+        source.dispose()
+    }
+}

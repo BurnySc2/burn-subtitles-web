@@ -18,7 +18,11 @@ let label_draft = $state("")
 let title = $derived(compose_node_title("subtitles", data.label))
 </script>
 
-<div class="min-w-48 rounded-lg border border-gray-300 bg-white p-3">
+<div
+    class="min-w-48 rounded-lg border border-gray-300 bg-white p-3"
+    data-testid="compose-node"
+    data-kind="subtitles"
+>
     <Handle
         type="target"
         position={Position.Left}

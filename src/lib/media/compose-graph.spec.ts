@@ -32,6 +32,10 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
                     show_end: null,
                 },
             }
+        case "color":
+            return { id, type, position, data: { color: "#000000", duration: 20 } }
+        case "rescale":
+            return { id, type, position, data: { width: 1920, height: 1080, fps: null, fit: "contain" } }
         case "output":
             return {
                 id,

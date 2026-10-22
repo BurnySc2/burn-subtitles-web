@@ -28,7 +28,10 @@ function upstream_duration(
         if (node.type === "source") {
             return node.data.probe?.duration ?? null
         }
-        if (node.type === "trim" || node.type === "subtitles" || node.type === "overlay") {
+        if (node.type === "color") {
+            return node.data.duration
+        }
+        if (node.type === "trim" || node.type === "rescale" || node.type === "subtitles" || node.type === "overlay") {
             current = next
             continue
         }
@@ -87,12 +90,27 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     issues.push({ node_id: node.id, field: "input", message: "Source node must have no inputs" })
                 }
                 break
+            case "color":
+                if (count > 0) {
+                    issues.push({ node_id: node.id, field: "input", message: "Color node must have no inputs" })
+                }
+                break
             case "trim":
                 if (count !== 1) {
                     issues.push({
                         node_id: node.id,
                         field: "input",
                         message: "Trim node must have exactly 1 input",
+                    })
+                }
+                break
+            // WHY overlay arity lives in the per-node detail branch below (single check avoids duplicate issues)
+            case "rescale":
+                if (count !== 1) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "input",
+                        message: "Rescale node must have exactly 1 input",
                     })
                 }
                 break
@@ -236,6 +254,19 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                 })
             }
         } else if (node.type === "output") {
+            for (const dimension of ["width", "height"] as const) {
+                const value = node.data[dimension]
+                if (!Number.isInteger(value) || value <= 0 || value > 7680 || value % 2 !== 0) {
+                    issues.push({
+                        node_id: node.id,
+                        field: dimension,
+                        message: `Output ${dimension} must be a positive even integer up to 7680`,
+                    })
+                }
+            }
+            if (!Number.isFinite(node.data.fps) || node.data.fps < 1 || node.data.fps > 120) {
+                issues.push({ node_id: node.id, field: "fps", message: "Output fps must be from 1 to 120" })
+            }
             const audio_quality = node.data.audio_quality ?? "source-max"
             if (
                 audio_quality !== "96k" &&
@@ -350,6 +381,35 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                         message: `Show end exceeds source duration (${format_timecode(duration)})`,
                     })
                 }
+            }
+        } else if (node.type === "color") {
+            if (!/^#[0-9a-fA-F]{6}$/.test(node.data.color)) {
+                issues.push({ node_id: node.id, field: "color", message: "Color must be a hex string like #000000" })
+            }
+            if (!Number.isFinite(node.data.duration) || node.data.duration <= 0 || node.data.duration > 3600) {
+                issues.push({
+                    node_id: node.id,
+                    field: "duration",
+                    message: "Color duration must be greater than 0 and at most 3600",
+                })
+            }
+        } else if (node.type === "rescale") {
+            for (const dimension of ["width", "height"] as const) {
+                const value = node.data[dimension]
+                if (!Number.isInteger(value) || value <= 0 || value > 7680 || value % 2 !== 0) {
+                    issues.push({
+                        node_id: node.id,
+                        field: dimension,
+                        message: `Rescale ${dimension} must be a positive even integer up to 7680`,
+                    })
+                }
+            }
+            const fps = node.data.fps
+            if (fps !== null && (!Number.isFinite(fps) || fps < 1 || fps > 120)) {
+                issues.push({ node_id: node.id, field: "fps", message: "Rescale fps must be null or from 1 to 120" })
+            }
+            if (node.data.fit !== "contain") {
+                issues.push({ node_id: node.id, field: "fit", message: 'Rescale fit must be "contain"' })
             }
         }
     }
