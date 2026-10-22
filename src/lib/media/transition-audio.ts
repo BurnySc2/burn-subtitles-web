@@ -1,4 +1,4 @@
-import { EASING_REGISTRY, type TransitionEasing } from "./transition-utils"
+import { EASING_REGISTRY, type TransitionAudioMode, type TransitionEasing } from "./transition-utils"
 
 export interface PremixTransitionAudioOptions {
     full_a: AudioBuffer | null
@@ -9,6 +9,7 @@ export interface PremixTransitionAudioOptions {
     target_sample_rate?: number
     target_channels?: number
     easing?: TransitionEasing
+    audio_mode?: TransitionAudioMode
 }
 
 function attach_source(
@@ -43,6 +44,7 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
     const sample_rate = Number.isFinite(requested_rate) && requested_rate > 0 ? requested_rate : 48000
     const channels = Number.isInteger(requested_channels) && requested_channels > 0 ? requested_channels : 2
     const ease = EASING_REGISTRY[options.easing ?? "linear"] ?? EASING_REGISTRY.linear
+    const mode = options.audio_mode ?? "crossfade"
     const length = Math.max(1, Math.ceil(total_duration * sample_rate))
     const ctx = new OfflineAudioContext(channels, length, sample_rate)
     const blend_start = Number.isFinite(start_a) ? Math.min(Math.max(start_a, 0), total_duration) : 0
@@ -58,6 +60,71 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
         gain_a.gain.setValueAtTime(0, blend_start)
         gain_b.gain.setValueAtTime(0, 0)
         gain_b.gain.setValueAtTime(1, blend_start)
+    } else if (mode === "a-flat") {
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_a.gain.setValueAtTime(1, blend_start)
+        gain_a.gain.setValueAtTime(0, blend_start + blend_len)
+        gain_b.gain.setValueAtTime(0, 0)
+        gain_b.gain.setValueAtTime(0, blend_start)
+        gain_b.gain.setValueAtTime(1, blend_start + blend_len)
+    } else if (mode === "mute") {
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_a.gain.setValueAtTime(0, blend_start)
+        gain_a.gain.setValueAtTime(0, blend_start + blend_len)
+        gain_b.gain.setValueAtTime(0, 0)
+        gain_b.gain.setValueAtTime(0, blend_start)
+        gain_b.gain.setValueAtTime(1, blend_start + blend_len)
+    } else if (mode === "a-fadeout") {
+        const points = 256
+        const curve_a = new Float32Array(points)
+        for (let i = 0; i < points; i += 1) {
+            curve_a[i] = 1 - ease(i / (points - 1))
+        }
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_a.gain.setValueAtTime(1, blend_start)
+        gain_b.gain.setValueAtTime(0, 0)
+        gain_b.gain.setValueAtTime(0, blend_start)
+        gain_a.gain.setValueCurveAtTime(curve_a, blend_start, blend_len)
+        gain_b.gain.setValueAtTime(1, blend_start + blend_len)
+    } else if (mode === "b-flat") {
+        const points = 256
+        const curve_a = new Float32Array(points)
+        for (let i = 0; i < points; i += 1) {
+            curve_a[i] = 1 - ease(i / (points - 1))
+        }
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_a.gain.setValueAtTime(1, blend_start)
+        gain_b.gain.setValueAtTime(1, 0)
+        gain_b.gain.setValueAtTime(1, blend_start)
+        gain_a.gain.setValueCurveAtTime(curve_a, blend_start, blend_len)
+        gain_b.gain.setValueAtTime(1, blend_start + blend_len)
+    } else if (mode === "b-fadein") {
+        const points = 256
+        const curve_b = new Float32Array(points)
+        for (let i = 0; i < points; i += 1) {
+            curve_b[i] = ease(i / (points - 1))
+        }
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_a.gain.setValueAtTime(0, blend_start)
+        gain_a.gain.setValueAtTime(0, blend_start + blend_len)
+        gain_b.gain.setValueAtTime(0, 0)
+        gain_b.gain.setValueAtTime(0, blend_start)
+        gain_b.gain.setValueCurveAtTime(curve_b, blend_start, blend_len)
+    } else if (mode === "dip") {
+        const points = 256
+        const curve_a = new Float32Array(points)
+        const curve_b = new Float32Array(points)
+        for (let i = 0; i < points; i += 1) {
+            const alpha = ease(i / (points - 1))
+            curve_a[i] = Math.max(0, 1 - 2 * alpha)
+            curve_b[i] = Math.max(0, 2 * alpha - 1)
+        }
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_a.gain.setValueAtTime(1, blend_start)
+        gain_b.gain.setValueAtTime(0, 0)
+        gain_b.gain.setValueAtTime(0, blend_start)
+        gain_a.gain.setValueCurveAtTime(curve_a, blend_start, blend_len)
+        gain_b.gain.setValueCurveAtTime(curve_b, blend_start, blend_len)
     } else {
         const points = 256
         const curve_a = new Float32Array(points)

@@ -10,6 +10,20 @@ export type TransitionAudioQuality = "96k" | "128k" | "192k" | "256k" | "320k" |
 
 export type TransitionEasing = "linear" | "exponential"
 
+export type TransitionAudioMode = "crossfade" | "a-flat" | "a-fadeout" | "b-flat" | "b-fadein" | "mute" | "dip"
+
+export const TRANSITION_AUDIO_MODES: readonly TransitionAudioMode[] = [
+    "crossfade",
+    "a-flat",
+    "a-fadeout",
+    "b-flat",
+    "b-fadein",
+    "mute",
+    "dip",
+]
+
+export const TRANSITION_AUDIO_MODE_DEFAULT: TransitionAudioMode = "crossfade"
+
 export type TransitionFn = (u: number) => number
 
 export const EASING_REGISTRY: Record<TransitionEasing, TransitionFn> = {

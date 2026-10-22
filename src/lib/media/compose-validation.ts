@@ -253,6 +253,22 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     message: "Transition duration must be greater than 0",
                 })
             }
+            const audio_mode = node.data.audio_mode ?? "crossfade"
+            if (
+                audio_mode !== "crossfade" &&
+                audio_mode !== "a-flat" &&
+                audio_mode !== "a-fadeout" &&
+                audio_mode !== "b-flat" &&
+                audio_mode !== "b-fadein" &&
+                audio_mode !== "mute" &&
+                audio_mode !== "dip"
+            ) {
+                issues.push({
+                    node_id: node.id,
+                    field: "audio_mode",
+                    message: "Unknown transition audio mode.",
+                })
+            }
         } else if (node.type === "output") {
             for (const dimension of ["width", "height"] as const) {
                 const value = node.data[dimension]

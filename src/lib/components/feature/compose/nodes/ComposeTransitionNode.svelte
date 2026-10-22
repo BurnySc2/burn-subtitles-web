@@ -103,5 +103,22 @@ let title = $derived(compose_node_title("transition", data.label))
                 <option value="exponential">exponential</option>
             </select>
         </label>
+        <label class="flex flex-col gap-1 text-xs text-gray-600">
+            Audio
+            <select
+                id={id ? `${id}-audio-mode` : undefined}
+                value={data.audio_mode ?? "crossfade"}
+                onchange={(e) => update_data({ audio_mode: e.currentTarget.value as TransitionNodeData["audio_mode"] })}
+                class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+            >
+                <option value="crossfade">crossfade</option>
+                <option value="a-flat">a-flat</option>
+                <option value="a-fadeout">a-fadeout</option>
+                <option value="b-flat">b-flat</option>
+                <option value="b-fadein">b-fadein</option>
+                <option value="mute">mute</option>
+                <option value="dip">dip</option>
+            </select>
+        </label>
     </div>
 </div>

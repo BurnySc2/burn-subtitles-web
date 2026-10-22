@@ -1,7 +1,7 @@
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
-import { parse_crf_override } from "./transition-utils"
+import { parse_crf_override, type TransitionAudioMode } from "./transition-utils"
 
 export type ComposeRunStatus = "idle" | "running" | "done" | "error"
 
@@ -362,6 +362,7 @@ function parse_label(value: unknown, node_id: string): string | null {
 
 const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-max"])
 const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra"])
+const AUDIO_MODES = new Set(["crossfade", "a-flat", "a-fadeout", "b-flat", "b-fadein", "mute", "dip"])
 const EASINGS = new Set(["linear", "exponential"])
 const SUBTITLE_MODES = new Set(["mux", "burn", "sidecar"])
 const OVERLAY_POSITIONS = new Set([
@@ -418,6 +419,10 @@ function parse_node(raw: unknown): ComposeNode {
             if (typeof raw.data.easing !== "string" || !EASINGS.has(raw.data.easing)) {
                 throw new Error(`Node "${raw.id}": unknown transition easing`)
             }
+            const raw_mode = typeof raw.data.audio_mode === "string" ? raw.data.audio_mode : "crossfade"
+            const audio_mode: TransitionAudioMode = AUDIO_MODES.has(raw_mode)
+                ? (raw_mode as TransitionAudioMode)
+                : "crossfade"
             return {
                 id: raw.id,
                 type: "transition",
@@ -426,6 +431,7 @@ function parse_node(raw: unknown): ComposeNode {
                     start: raw.data.start,
                     duration: raw.data.duration,
                     easing: raw.data.easing as "linear" | "exponential",
+                    audio_mode,
                     label: parse_label(raw.data.label, raw.id),
                 },
             }

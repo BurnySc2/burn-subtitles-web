@@ -39,7 +39,12 @@ function handle_add(kind: ComposeNodeKind): void {
             node = { id, type: "trim", position, data: { start: 0, end: 1 } }
             break
         case "transition":
-            node = { id, type: "transition", position, data: { start: 0, duration: 1, easing: "linear" } }
+            node = {
+                id,
+                type: "transition",
+                position,
+                data: { start: 0, duration: 1, easing: "linear", audio_mode: "crossfade" },
+            }
             break
         case "merge":
             node = { id, type: "merge", position, data: { input_count: 2 } }

@@ -2,8 +2,14 @@ import type { AudioBufferSink, Output } from "mediabunny"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import { premix_transition_audio } from "./transition-audio"
-import type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
+import type {
+    TransitionAudioMode,
+    TransitionAudioQuality,
+    TransitionEasing,
+    TransitionQuality,
+} from "./transition-utils"
 import {
+    TRANSITION_AUDIO_MODES,
     parse_crf_override,
     phase_at,
     quality_to_video_config,
@@ -16,7 +22,12 @@ import {
 
 export type { ProbeResult } from "./mediabunny-clip"
 export { ClipError } from "./mediabunny-clip"
-export type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
+export type {
+    TransitionAudioMode,
+    TransitionAudioQuality,
+    TransitionEasing,
+    TransitionQuality,
+} from "./transition-utils"
 
 export interface RenderTransitionOptions {
     file_a: File
@@ -35,6 +46,7 @@ export interface RenderTransitionOptions {
     audio_quality?: TransitionAudioQuality
     audio_bitrate?: number
     easing: TransitionEasing
+    audio_mode?: TransitionAudioMode
     on_progress?: (progress: number) => void
     signal?: AbortSignal
 }
@@ -103,6 +115,9 @@ function validate_transition_options(options: RenderTransitionOptions): void {
     }
     if (easing !== "linear" && easing !== "exponential") {
         throw new ClipError("INVALID_RANGE", "Unknown transition easing.")
+    }
+    if (options.audio_mode !== undefined && !TRANSITION_AUDIO_MODES.includes(options.audio_mode)) {
+        throw new ClipError("INVALID_RANGE", "Unknown transition audio mode.")
     }
     resolve_render_crf(options)
     if (options.audio_bitrate !== undefined) {
@@ -351,6 +366,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
                       blend_duration: duration,
                       total_duration: total,
                       easing,
+                      audio_mode: options.audio_mode,
                   })
         await output.start()
         if (signal?.aborted) {
