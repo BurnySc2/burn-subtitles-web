@@ -215,9 +215,9 @@ onDestroy(() => {
 
 <div class="flex w-full flex-col gap-2 p-3">
     <ComposeJsonBar />
-    <div class="flex w-full gap-4">
+    <div class="flex min-h-[calc(100vh-320px)] w-full items-stretch gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
-        <div class="min-w-0 flex-1 rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
+        <div class="flex min-w-0 flex-1 flex-col rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
         <div class="w-80 shrink-0"><ComposeInspector on_preview={handle_node_preview} /></div>
     </div>
     {#if preview_url && preview_blob}
