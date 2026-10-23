@@ -69,6 +69,18 @@ async function handle_file(file: File | null): Promise<void> {
     }
 }
 
+function handle_remove(): void {
+    token += 1
+    probing = false
+    error = null
+    probe = null
+    revoke_thumb()
+    const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (target && target.type === "overlay") {
+        target.data.image = null
+    }
+}
+
 onDestroy(() => {
     token += 1
     revoke_thumb()
@@ -134,4 +146,14 @@ onDestroy(() => {
             No file chosen — select an image
         {/if}
     </p>
+    {#if file_name}
+        <button
+            type="button"
+            onclick={handle_remove}
+            aria-label={`Remove overlay image ${file_name}`}
+            class="self-start text-sm text-red-700 underline"
+        >
+            Remove
+        </button>
+    {/if}
 </div>

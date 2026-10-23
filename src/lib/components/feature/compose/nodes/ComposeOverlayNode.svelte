@@ -25,6 +25,9 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("overlay", data.label))
+let has_image = $derived(data.image !== null)
+let choose_label = $derived(has_image ? "Replace image" : "Choose image")
+let choose_aria = $derived(has_image ? "Replace overlay image" : "Choose overlay image")
 let summary = $derived(`${data.position} · ${data.scale}% · ${data.opacity}`)
 
 let file_line = $derived.by(() => {
@@ -141,7 +144,12 @@ $effect(() => {
     >
         {summary}
     </p>
-    <p class="mt-1 text-xs text-gray-600">{file_line}</p>
+    <p
+        aria-live="polite"
+        class="mt-1 text-xs text-gray-600"
+    >
+        {file_line}
+    </p>
     {#if probing}
         <p class="mt-1 text-xs text-gray-500">Reading image…</p>
     {:else if error}
@@ -184,9 +192,27 @@ $effect(() => {
         <button
             type="button"
             onclick={() => file_input?.click()}
+            aria-label={choose_aria}
             class="btn btn-primary btn-sm nodrag mt-2"
         >
-            Choose image
+            {choose_label}
         </button>
+        {#if data.image}
+            <button
+                type="button"
+                onclick={() => {
+                    token += 1
+                    probing = false
+                    error = null
+                    image_probe = null
+                    probed_file = null
+                    update_data({ image: null })
+                }}
+                aria-label={`Remove overlay image ${data.image.name}`}
+                class="nodrag mt-1 text-xs text-red-700 underline"
+            >
+                Remove
+            </button>
+        {/if}
     </div>
 </div>

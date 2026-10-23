@@ -29,7 +29,7 @@ describe("is_accepted", () => {
         ["audio/mpeg", "overlay", false],
         ["text/plain", "overlay", false],
         ["", "overlay", false],
-    ])("accepts %s for %s: %s", (mime: string, kind: "source" | "overlay", want: boolean) => {
+    ] as const)("accepts %s for %s: %s", (mime: string, kind: "source" | "overlay", want: boolean) => {
         expect(is_accepted(typed_file(mime), kind)).toBe(want)
     })
 })
@@ -38,7 +38,9 @@ describe("drop routing", () => {
     it("callers fast-fail rejected drops so probe is never called", () => {
         const probe = vi.fn()
         const handle_file = (file: File, kind: "source" | "overlay"): boolean => {
-            if (!is_accepted(file, kind)) return false
+            if (!is_accepted(file, kind)) {
+                return false
+            }
             probe(file)
             return true
         }

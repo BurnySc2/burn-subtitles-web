@@ -1,15 +1,17 @@
 <script lang="ts">
 import { first_dropped_file, is_accepted } from "$lib/media/compose-drop"
-import { set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
+import { compose_state, set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
 let { node_id }: { node_id: string } = $props()
 
 let probing = $state(false)
 let error = $state<string | null>(null)
-let file_name = $state<string | null>(null)
 let is_dragging = $state(false)
 let token = 0
+
+let node = $derived(compose_state.nodes.find((candidate) => candidate.id === node_id) ?? null)
+let file_name = $derived(node && node.type === "source" ? (node.data.file?.name ?? null) : null)
 
 let status_class = $derived(
     error ? "text-sm text-red-700" : file_name ? "text-sm font-medium text-green-700" : "text-sm text-gray-500",
@@ -21,14 +23,12 @@ async function handle_file(file: File | null): Promise<void> {
     }
     if (!is_accepted(file, "source")) {
         token += 1
-        file_name = file.name
         error = "Please select a video or audio file."
         return
     }
     const mine = ++token
     probing = true
     error = null
-    file_name = file.name
     const url = URL.createObjectURL(file)
     set_source_file(node_id, file, url)
     try {
@@ -46,6 +46,17 @@ async function handle_file(file: File | null): Promise<void> {
         if (mine === token) {
             probing = false
         }
+    }
+}
+
+function handle_remove(): void {
+    token += 1
+    probing = false
+    error = null
+    const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (target && target.type === "source") {
+        target.data.file = null
+        target.data.probe = null
     }
 }
 </script>
@@ -102,4 +113,14 @@ async function handle_file(file: File | null): Promise<void> {
             No file chosen — select video or audio
         {/if}
     </p>
+    {#if file_name}
+        <button
+            type="button"
+            onclick={handle_remove}
+            aria-label={`Remove source file ${file_name}`}
+            class="self-start text-sm text-red-700 underline"
+        >
+            Remove
+        </button>
+    {/if}
 </div>
