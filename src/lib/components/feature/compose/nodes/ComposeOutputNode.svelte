@@ -1,6 +1,8 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
+import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
+import { compose_node_durations } from "$lib/media/compose-validation"
 import { QUALITY_QUANTIZER } from "$lib/media/transition-utils"
 
 let {
@@ -17,6 +19,9 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("output", data.label))
+
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
 
 function on_number_input(field: "width" | "height" | "fps", raw: string): void {
     const parsed = Number(raw)
@@ -56,6 +61,7 @@ function on_crf_input(raw: string): void {
     >
         {title}
     </p>
+    <p class="text-xs text-gray-600">Duration: {result_duration?.toFixed(2) ?? "—"}s</p>
     {#if editing_label}
         <input
             type="text"

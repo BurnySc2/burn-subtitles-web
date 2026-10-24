@@ -1,6 +1,8 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
+import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type TransitionNodeData } from "$lib/media/compose-types"
+import { compose_node_durations } from "$lib/media/compose-validation"
 import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODE_HINTS } from "$lib/media/transition-utils"
 
 let {
@@ -19,6 +21,9 @@ let label_draft = $state("")
 let title = $derived(compose_node_title("transition", data.label))
 
 let audio_hint = $derived(TRANSITION_AUDIO_MODE_HINTS[data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT])
+
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
 </script>
 
 <div
@@ -111,6 +116,7 @@ let audio_hint = $derived(TRANSITION_AUDIO_MODE_HINTS[data.audio_mode ?? TRANSIT
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>
+        <p class="text-xs text-gray-600">Result: {result_duration?.toFixed(2) ?? "—"}s</p>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
             Easing
             <select

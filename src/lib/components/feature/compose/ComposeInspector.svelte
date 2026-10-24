@@ -11,7 +11,7 @@ import type {
     TransitionNodeData,
     TrimNodeData,
 } from "$lib/media/compose-types"
-import { validate_compose } from "$lib/media/compose-validation"
+import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
 import {
     QUALITY_QUANTIZER,
     TRANSITION_AUDIO_MODE_DEFAULT,
@@ -42,6 +42,8 @@ let selected_edge_id: string | null = $derived(
         : null,
 )
 let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
@@ -342,6 +344,7 @@ function probe_summary(node: ComposeNode): string {
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
             </label>
+            <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
             <label class="flex flex-col gap-1 text-sm font-medium">
                 Easing
                 <select
@@ -791,6 +794,7 @@ function probe_summary(node: ComposeNode): string {
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
             </label>
+            <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
         {/if}
         {#key selected.id}
             <ComposeNodePreview

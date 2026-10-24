@@ -146,6 +146,24 @@ function node_duration(
     return result
 }
 
+export function compose_node_durations(nodes: ComposeNode[], edges: ComposeEdge[]): Map<string, number | null> {
+    const by_id = new Map(nodes.map((node) => [node.id, node]))
+    const incoming = new Map<string, ComposeEdge[]>()
+    for (const node of nodes) {
+        incoming.set(node.id, [])
+    }
+    for (const edge of edges) {
+        if (incoming.has(edge.target)) {
+            incoming.get(edge.target)?.push(edge)
+        }
+    }
+    const duration_memo = new Map<string, number | null>()
+    for (const node of nodes) {
+        node_duration(node.id, by_id, incoming, duration_memo, new Set<string>())
+    }
+    return duration_memo
+}
+
 export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): ValidationIssue[] {
     const issues: ValidationIssue[] = []
     const by_id = new Map(nodes.map((node) => [node.id, node]))
