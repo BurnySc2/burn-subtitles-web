@@ -16,6 +16,23 @@ import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
 
 let aborter: AbortController | null = null
 
+function format_elapsed(ms: number): string {
+    const total_seconds = ms / 1000
+    if (total_seconds < 60) {
+        return `${total_seconds.toFixed(1)}s`
+    }
+    if (total_seconds < 3600) {
+        const minutes = Math.floor(total_seconds / 60)
+        const seconds = total_seconds - minutes * 60
+        return `${minutes}m ${seconds.toFixed(1)}s`
+    }
+    const hours = Math.floor(total_seconds / 3600)
+    const remainder = total_seconds - hours * 3600
+    const minutes = Math.floor(remainder / 60)
+    const seconds = Math.floor(remainder - minutes * 60)
+    return `${hours}h ${minutes}m ${seconds}s`
+}
+
 function handle_add(kind: ComposeNodeKind): void {
     if (compose_state.run_status === "running") {
         return
@@ -111,6 +128,7 @@ async function handle_render(): Promise<void> {
     if (issues.length > 0) {
         compose_state.run_status = "error"
         compose_state.run_error = `${issues.length} issue${issues.length === 1 ? "" : "s"} — see issues below canvas`
+        compose_state.run_elapsed_ms = null
         return
     }
     aborter?.abort()
@@ -124,6 +142,8 @@ async function handle_render(): Promise<void> {
     compose_state.run_status = "running"
     compose_state.run_progress = 0
     compose_state.run_error = null
+    compose_state.run_elapsed_ms = null
+    const started_at = performance.now()
     aborter = new AbortController()
     try {
         const result = await execute_compose_graph({
@@ -137,6 +157,7 @@ async function handle_render(): Promise<void> {
         if (!result.ok || !result.output) {
             compose_state.run_status = "error"
             compose_state.run_error = result.issues[0]?.message ?? "Composition failed."
+            compose_state.run_elapsed_ms = null
             return
         }
         compose_state.result = {
@@ -145,6 +166,7 @@ async function handle_render(): Promise<void> {
             ext: result.output.ext,
             sidecar_url: result.output.sidecar_url,
         }
+        compose_state.run_elapsed_ms = Math.round(performance.now() - started_at)
         compose_state.run_status = "done"
     } catch (error) {
         if (error instanceof ClipError && error.code === "CANCELLED") {
@@ -153,6 +175,7 @@ async function handle_render(): Promise<void> {
             compose_state.run_status = "error"
             compose_state.run_error = error instanceof Error ? error.message : "Composition failed."
         }
+        compose_state.run_elapsed_ms = null
     } finally {
         aborter = null
     }
@@ -268,6 +291,14 @@ onDestroy(() => {
     {#if compose_state.result}
         <div class="flex flex-col gap-2 rounded-lg bg-gray-100 p-4">
             <h2 class="text-lg font-semibold">Result</h2>
+            {#if compose_state.run_status === "done" && compose_state.run_elapsed_ms !== null}
+                <p
+                    class="text-sm text-gray-600"
+                    title={`${compose_state.run_elapsed_ms} ms`}
+                >
+                    Rendered in {format_elapsed(compose_state.run_elapsed_ms)}
+                </p>
+            {/if}
             <video
                 src={compose_state.result.url}
                 controls

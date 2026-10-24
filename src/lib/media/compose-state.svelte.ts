@@ -25,6 +25,7 @@ export interface ComposeState {
     run_status: ComposeRunStatus
     run_progress: number
     run_error: string | null
+    run_elapsed_ms: number | null
     result: ComposeResult | null
 }
 
@@ -37,6 +38,7 @@ function initial_state(): ComposeState {
         run_status: "idle",
         run_progress: 0,
         run_error: null,
+        run_elapsed_ms: null,
         result: null,
     }
 }
@@ -122,6 +124,7 @@ export function reset_compose(): void {
     compose_state.run_error = null
     compose_state.run_status = "idle"
     compose_state.run_progress = 0
+    compose_state.run_elapsed_ms = null
 }
 
 export function remove_compose_nodes(node_ids: string[]): void {
@@ -269,6 +272,7 @@ export function revoke_all(): void {
     compose_state.run_status = fresh.run_status
     compose_state.run_progress = fresh.run_progress
     compose_state.run_error = fresh.run_error
+    compose_state.run_elapsed_ms = fresh.run_elapsed_ms
     compose_state.result = fresh.result
 }
 
