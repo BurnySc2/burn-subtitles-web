@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
-import { validate_compose } from "./compose-validation"
+import { compose_node_durations, validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 
 function probe_with(duration: number | null): ProbeResult {
@@ -255,5 +255,27 @@ describe("validate_compose", () => {
             field: "audio_quality",
             message: "Unknown output audio quality.",
         })
+    })
+})
+
+describe("compose_node_durations", () => {
+    it("covers every node id and propagates connected durations", () => {
+        const nodes = [source("src"), trim("trim"), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        const durations = compose_node_durations(nodes, edges)
+        expect([...durations.keys()].sort()).toEqual(["out", "src", "trim"])
+        expect(durations.get("src")).toBe(120)
+        expect(durations.get("trim")).toBe(10)
+        expect(durations.get("out")).toBe(10)
+    })
+
+    it("yields null for disconnected trims and unknown probe durations", () => {
+        const stray = [source("src"), trim("stray"), output()]
+        expect(compose_node_durations(stray, []).get("stray")).toBeNull()
+        const unknown = [source("src", null), trim("trim", 10, 40), output()]
+        const wired = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        const durations = compose_node_durations(unknown, wired)
+        expect(durations.get("src")).toBeNull()
+        expect(durations.get("trim")).toBeNull()
     })
 })
