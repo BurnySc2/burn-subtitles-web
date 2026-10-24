@@ -112,6 +112,104 @@ describe("premix_transition_audio", () => {
         expect(at_time(BLEND_END)).toBeCloseTo(at_end, 1)
     })
 
+    it.each([
+        ["a-only", 1],
+        ["b-only", 0.5],
+    ] as Array<[TransitionAudioMode, number]>)("renders %s as survivor-only constant", async (mode, expected) => {
+        const out = await premix_transition_audio({
+            full_a: shared_a,
+            full_b: shared_b,
+            start_a: BLEND_START,
+            blend_duration: BLEND_END - BLEND_START,
+            total_duration: 1,
+            audio_mode: mode,
+        })
+        const data = out?.getChannelData(0)
+        expect(data).toBeDefined()
+        if (!data || !out) {
+            return
+        }
+        const at_time = (time: number): number => data[Math.min(data.length - 1, Math.round(time * out.sampleRate))]
+        expect(at_time(0)).toBeCloseTo(expected, 1)
+        expect(at_time(BLEND_MID)).toBeCloseTo(expected, 1)
+        expect(at_time(0.99)).toBeCloseTo(expected, 1)
+    })
+
+    it.each(["a-only", "b-only"] as Array<TransitionAudioMode>)("ignores easing for %s", async (mode) => {
+        const render = (easing: TransitionEasing): Promise<AudioBuffer | null> =>
+            premix_transition_audio({
+                full_a: shared_a,
+                full_b: shared_b,
+                start_a: BLEND_START,
+                blend_duration: BLEND_END - BLEND_START,
+                total_duration: 1,
+                easing,
+                audio_mode: mode,
+            })
+        const linear = await render("linear")
+        const exponential = await render("exponential")
+        const linear_data = linear?.getChannelData(0)
+        const exponential_data = exponential?.getChannelData(0)
+        expect(linear_data).toBeDefined()
+        expect(exponential_data).toBeDefined()
+        if (!linear_data || !exponential_data) {
+            return
+        }
+        expect(linear_data.length).toBe(exponential_data.length)
+        for (let index = 0; index < linear_data.length; index += 1000) {
+            expect(exponential_data[index]).toBeCloseTo(linear_data[index], 2)
+        }
+    })
+
+    it.each([
+        "a-only",
+        "b-only",
+    ] as Array<TransitionAudioMode>)("renders silence for %s when the survivor is missing", async (mode) => {
+        const out = await premix_transition_audio({
+            full_a: mode === "b-only" ? shared_a : null,
+            full_b: mode === "a-only" ? shared_b : null,
+            start_a: BLEND_START,
+            blend_duration: BLEND_END - BLEND_START,
+            total_duration: 1,
+            audio_mode: mode,
+        })
+        const data = out?.getChannelData(0)
+        expect(data).toBeDefined()
+        if (!data || !out) {
+            return
+        }
+        const at_time = (time: number): number => data[Math.min(data.length - 1, Math.round(time * out.sampleRate))]
+        expect(at_time(0)).toBeCloseTo(0, 2)
+        expect(at_time(BLEND_MID)).toBeCloseTo(0, 2)
+        expect(at_time(0.99)).toBeCloseTo(0, 2)
+    })
+
+    it.each([
+        ["a-only", 1],
+        ["b-only", 0.5],
+    ] as Array<
+        [TransitionAudioMode, number]
+    >)("keeps %s constant when blend length is zero", async (mode, expected) => {
+        const out = await premix_transition_audio({
+            full_a: shared_a,
+            full_b: shared_b,
+            start_a: BLEND_MID,
+            blend_duration: 0,
+            total_duration: 1,
+            easing: "exponential",
+            audio_mode: mode,
+        })
+        const data = out?.getChannelData(0)
+        expect(data).toBeDefined()
+        if (!data || !out) {
+            return
+        }
+        const at_time = (time: number): number => data[Math.min(data.length - 1, Math.round(time * out.sampleRate))]
+        expect(at_time(0)).toBeCloseTo(expected, 1)
+        expect(at_time(BLEND_MID)).toBeCloseTo(expected, 1)
+        expect(at_time(0.99)).toBeCloseTo(expected, 1)
+    })
+
     it("rejects unknown audio modes without rendering", async () => {
         const failure = await premix_transition_audio({
             full_a: shared_a,

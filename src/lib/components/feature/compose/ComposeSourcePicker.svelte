@@ -24,6 +24,7 @@ async function handle_file(file: File | null): Promise<void> {
     if (!is_accepted(file, "source")) {
         token += 1
         error = "Please select a video or audio file."
+        probing = false
         return
     }
     const mine = ++token
@@ -55,6 +56,7 @@ function handle_remove(): void {
     error = null
     const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (target && target.type === "source") {
+        // WHY orphan URL: preview_urls is private, next set_source_file revokes it
         target.data.file = null
         target.data.probe = null
     }

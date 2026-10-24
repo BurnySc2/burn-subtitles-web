@@ -54,6 +54,7 @@ async function handle_file(file: File | null): Promise<void> {
         token += 1
         update_data({ file: null, probe: null })
         error = "Please select a video or audio file."
+        probing = false
         return
     }
     const mine = ++token

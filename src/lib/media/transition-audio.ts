@@ -106,7 +106,7 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
     // WHY asymmetric flats: a-flat holds A flat while B waits until blend end; b-flat pre-echoes B
     // from t=0 while A still fades (1-alpha) in blend. Per-leg gains [solo-a, blend-start, blend-end]:
     // crossfade A[1,1,1-a]/B[0,0,a], a-flat A[1,1,0]/B[0,0,1], a-fadeout A[1,1,1-e]/B[0,0,1],
-    // b-flat A[1,1,1-e]/B[1,1,1], b-fadein A[1,0,0]/B[0,0,e], mute A[1,0,0]/B[0,0,1], dip A[1,1,V]/B[0,0,V],
+    // b-flat A[1,1,1-e]/B[0,1,1], b-fadein A[1,0,0]/B[0,0,e], mute A[1,0,0]/B[0,0,1], dip A[1,1,V]/B[0,0,V],
     // a-only A[1]/B[0] full_a@0, b-only A[0]/B[1] full_b@0 (constant gains, easing ignored).
     else if (mode === "b-flat") {
         const points = 256

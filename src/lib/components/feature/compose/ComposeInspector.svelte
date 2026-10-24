@@ -149,7 +149,7 @@ function patch_label(label: string): void {
 }
 
 function patch_output_name(file_name: string): void {
-    patch_output({ file_name: file_name === "" ? null : file_name })
+    patch_output({ file_name: file_name.trim() === "" ? null : file_name.trim() })
 }
 
 function on_number_input(raw: string, apply: (value: number) => void): void {

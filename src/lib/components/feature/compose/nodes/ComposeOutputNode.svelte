@@ -88,7 +88,7 @@ function on_crf_input(raw: string): void {
                 value={data.file_name ?? ""}
                 oninput={(e) => {
                     const value = e.currentTarget.value
-                    update_data({ file_name: value === "" ? null : value })
+                    update_data({ file_name: value.trim() === "" ? null : value.trim() })
                 }}
                 placeholder="composition.mp4"
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"

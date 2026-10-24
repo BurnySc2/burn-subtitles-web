@@ -43,8 +43,9 @@ export const TRANSITION_AUDIO_MODE_HINTS: Record<TransitionAudioMode, string> = 
     "b-fadein": "Cut A at blend start, then fade B in.",
     mute: "Silence during blend; B starts after.",
     dip: "Dip both to silence mid-blend.",
-    "a-only": "Play only A for the whole output; B is muted.",
-    "b-only": "Play only B from the start; B audio leads picture by the A-offset.",
+    "a-only": "Play only A for the whole output; B is muted. Renders silence if that side has no audio.",
+    "b-only":
+        "Play only B from the start; B audio leads picture by the A-offset. Renders silence if that side has no audio.",
 }
 export type TransitionFn = (u: number) => number
 

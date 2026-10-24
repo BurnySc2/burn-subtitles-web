@@ -12,6 +12,8 @@ import {
     resolve_output_dims,
     resolve_output_fps,
     resolve_start_seconds,
+    TRANSITION_AUDIO_MODE_HINTS,
+    TRANSITION_AUDIO_MODES,
     total_transition_duration,
     total_transition_frames,
     validate_transition_range,
@@ -240,5 +242,16 @@ describe("total_transition_frames", () => {
     it("rounds total duration times fps", () => {
         expect(total_transition_frames(60, 30)).toBe(1800)
         expect(total_transition_frames(0.001, 1)).toBe(0)
+    })
+})
+
+describe("TRANSITION_AUDIO_MODE_HINTS", () => {
+    it("covers exactly the nine documented audio modes", () => {
+        expect(Object.keys(TRANSITION_AUDIO_MODE_HINTS).sort()).toEqual([...TRANSITION_AUDIO_MODES].sort())
+        expect(TRANSITION_AUDIO_MODES).toHaveLength(9)
+    })
+
+    it.each(["a-only", "b-only"] as const)("ends %s hint with the silence suffix", (mode) => {
+        expect(TRANSITION_AUDIO_MODE_HINTS[mode].endsWith("Renders silence if that side has no audio.")).toBe(true)
     })
 })
