@@ -187,7 +187,6 @@ let audio_hint = $derived(TRANSITION_AUDIO_MODE_HINTS[data.audio_mode ?? TRANSIT
                     b-only
                 </option>
             </select>
-            <small class="text-gray-500">{audio_hint}</small>
         </label>
     </div>
 </div>
