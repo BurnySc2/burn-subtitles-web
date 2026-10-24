@@ -1,6 +1,9 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
+import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
+import { compose_node_durations } from "$lib/media/compose-validation"
+import { QUALITY_QUANTIZER } from "$lib/media/transition-utils"
 
 let {
     id = "",
@@ -16,6 +19,9 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("output", data.label))
+
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
 
 function on_number_input(field: "width" | "height" | "fps", raw: string): void {
     const parsed = Number(raw)
@@ -55,6 +61,7 @@ function on_crf_input(raw: string): void {
     >
         {title}
     </p>
+    <p class="text-xs text-gray-600">Duration: {result_duration?.toFixed(2) ?? "—"}s</p>
     {#if editing_label}
         <input
             type="text"
@@ -80,6 +87,20 @@ function on_crf_input(raw: string): void {
         >
     {/if}
     <div class="mt-2 grid grid-cols-2 gap-2">
+        <label class="col-span-2 flex flex-col gap-1 text-xs text-gray-600">
+            File name
+            <input
+                id={id ? `${id}-file-name` : undefined}
+                type="text"
+                value={data.file_name ?? ""}
+                oninput={(e) => {
+                    const value = e.currentTarget.value
+                    update_data({ file_name: value.trim() === "" ? null : value.trim() })
+                }}
+                placeholder="composition.mp4"
+                class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+            >
+        </label>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
             Width
             <input
@@ -131,8 +152,11 @@ function on_crf_input(raw: string): void {
                 <option value="ultra">ultra</option>
             </select>
         </label>
-        <label class="flex flex-col gap-1 text-xs text-gray-600">
-            Audio
+        <label
+            class="flex flex-col gap-1 text-xs text-gray-600"
+            title="AAC bitrate"
+        >
+            Audio quality (AAC)
             <select
                 id={id ? `${id}-audio-quality` : undefined}
                 value={data.audio_quality ?? "source-max"}
@@ -149,7 +173,7 @@ function on_crf_input(raw: string): void {
             </select>
         </label>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
-            CRF
+            CRF override
             <input
                 id={id ? `${id}-crf` : undefined}
                 type="number"
@@ -158,9 +182,12 @@ function on_crf_input(raw: string): void {
                 step="1"
                 value={data.crf ?? ""}
                 oninput={(e) => on_crf_input(e.currentTarget.value)}
-                placeholder="auto"
+                placeholder={`auto (${QUALITY_QUANTIZER[data.quality] ?? "bitrate"})`}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
+            {#if data.quality === "ultra"}
+                <span class="text-gray-500">Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.</span>
+            {/if}
         </label>
     </div>
 </div>

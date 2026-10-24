@@ -52,7 +52,7 @@ test("renders color through rescale at 64x36 and half a second", async ({ page }
 
     await page.getByRole("button", { name: "Render", exact: true }).click()
     await expect(page.getByRole("heading", { name: "Result" })).toBeVisible({ timeout: 120_000 })
-    const result_video = page.locator("h2:has-text('Result') + video")
+    const result_video = page.locator("h2:has-text('Result') ~ video")
     await expect(result_video).toHaveAttribute("src", /blob:/, { timeout: 120_000 })
     const src = await result_video.getAttribute("src")
     expect(src).toBeTruthy()

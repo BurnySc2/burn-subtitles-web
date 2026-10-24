@@ -24,6 +24,7 @@ const fake_probe = (overrides: Partial<ProbeResult> = {}): ProbeResult => ({
     coded_height: 720,
     frame_rate: 30,
     video_bitrate: null,
+    video_color_space: null,
     audio_codec: null,
     audio_codec_param: null,
     audio_channels: null,

@@ -75,6 +75,12 @@ let { details }: { details: ProbeResult } = $props()
                     <dd>{details.frame_rate.toFixed(2)} fps</dd>
                 </div>
             {/if}
+            {#if details.video_color_space}
+                <div class="flex gap-2">
+                    <dt class="font-medium">Color space:</dt>
+                    <dd>{details.video_color_space}</dd>
+                </div>
+            {/if}
             {#if details.video_bitrate !== null}
                 <div class="flex gap-2">
                     <dt class="font-medium">Video bitrate:</dt>
