@@ -1,7 +1,13 @@
 import type { Output } from "mediabunny"
 import { ClipError } from "./mediabunny-clip"
 import type { TransitionQuality } from "./transition-utils"
-import { parse_crf_override, quality_to_video_config } from "./transition-utils"
+import {
+    add_canvas_frame,
+    CRF_INVALID_MESSAGE,
+    create_encode_canvas,
+    create_encode_video_source,
+    parse_crf_override,
+} from "./transition-utils"
 
 export interface RenderSolidOptions {
     color: string
@@ -45,7 +51,7 @@ function validate_solid_options(options: RenderSolidOptions): void {
     try {
         parse_crf_override(options.crf ?? null)
     } catch {
-        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
 }
 
@@ -72,33 +78,15 @@ export async function render_solid_color(options: RenderSolidOptions): Promise<B
         }
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const canvas = document.createElement("canvas")
-        canvas.width = width
-        canvas.height = height
-        const crf = parse_crf_override(options.crf ?? null)
-        const video_config = quality_to_video_config(quality, width, height, fps, crf)
-        const video_quality =
-            video_config.quantizer !== null
-                ? new mb.Quality({
-                      quantizer: video_config.quantizer,
-                      bitrate: video_config.bitrate,
-                      bitrateMode: "variable",
-                  })
-                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
-        const video_source = new mb.CanvasSource(canvas, {
-            codec: "avc",
-            quality: video_quality,
-            latencyMode: "quality",
-            hardwareAcceleration: "no-preference",
-            bitrateMode: "variable",
-        })
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
         output.addVideoTrack(video_source)
         await output.start()
         if (signal?.aborted) {
             await output.cancel()
             throw new ClipError("CANCELLED", "Cancelled.")
         }
-        const ctx = canvas.getContext("2d")
+        const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
@@ -110,7 +98,7 @@ export async function render_solid_color(options: RenderSolidOptions): Promise<B
             ctx.globalAlpha = 1
             ctx.fillStyle = color
             ctx.fillRect(0, 0, width, height)
-            await video_source.add(i / fps, 1 / fps)
+            await add_canvas_frame(mb, video_source, canvas, i / fps, 1 / fps)
             on_progress?.(i + 1, total_frames)
         }
         try {

@@ -9,9 +9,13 @@ import type {
     TransitionQuality,
 } from "./transition-utils"
 import {
+    add_canvas_frame,
+    CRF_INVALID_MESSAGE,
+    create_encode_canvas,
+    create_encode_video_source,
+    ensure_aac_encoder,
     parse_crf_override,
     phase_at,
-    quality_to_video_config,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
     TRANSITION_AUDIO_BITRATE_MIN,
@@ -82,7 +86,7 @@ function resolve_render_crf(options: RenderTransitionOptions): number | null {
     try {
         return parse_crf_override(options.crf ?? null)
     } catch {
-        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
 }
 
@@ -182,18 +186,6 @@ export function resolve_transition_timeline(
         throw new ClipError("INVALID_RANGE", "Total duration and frame rate must yield at least one frame.")
     }
     return { total, total_frames, frame_duration: 1 / fps }
-}
-
-let aac_encoder_promise: Promise<void> | null = null
-
-async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
-    aac_encoder_promise ??= (async () => {
-        if (!(await mb.canEncodeAudio("aac"))) {
-            const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
-            registerAacEncoder()
-        }
-    })()
-    return aac_encoder_promise
 }
 
 function draw_contain_fit(
@@ -316,26 +308,8 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         await ensure_aac_encoder(mb)
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const canvas = document.createElement("canvas")
-        canvas.width = width
-        canvas.height = height
-        const crf = resolve_render_crf(options)
-        const video_config = quality_to_video_config(quality, width, height, fps, crf)
-        const video_quality =
-            video_config.quantizer !== null
-                ? new mb.Quality({
-                      quantizer: video_config.quantizer,
-                      bitrate: video_config.bitrate,
-                      bitrateMode: "variable",
-                  })
-                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
-        const video_source = new mb.CanvasSource(canvas, {
-            codec: "avc",
-            quality: video_quality,
-            latencyMode: "quality",
-            hardwareAcceleration: "no-preference",
-            bitrateMode: "variable",
-        })
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
         output.addVideoTrack(video_source)
         const [audio_tracks_a, audio_tracks_b] = await Promise.all([input_a.getAudioTracks(), input_b.getAudioTracks()])
         const audio_a = resolved_a.has_audio ? (audio_tracks_a[0] ?? null) : null
@@ -376,7 +350,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         if (audio_source && premixed) {
             await audio_source.add(premixed)
         }
-        const ctx = canvas.getContext("2d")
+        const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
@@ -407,7 +381,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             const wrapped_a = phase === "solo-b" ? null : (await frames_a.next()).value
             const wrapped_b = phase === "solo-a" ? null : (await frames_b.next()).value
             draw_transition_frame(ctx, wrapped_a?.canvas ?? null, wrapped_b?.canvas ?? null, width, height, alpha)
-            await video_source.add(output_t, frame_duration)
+            await add_canvas_frame(mb, video_source, canvas, output_t, frame_duration)
             on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
         }
         try {

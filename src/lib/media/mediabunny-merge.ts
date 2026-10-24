@@ -4,8 +4,12 @@ import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
+    add_canvas_frame,
+    CRF_INVALID_MESSAGE,
+    create_encode_canvas,
+    create_encode_video_source,
+    ensure_aac_encoder,
     parse_crf_override,
-    quality_to_video_config,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
     TRANSITION_AUDIO_BITRATE_MIN,
@@ -31,18 +35,6 @@ export interface RenderMergeResult {
 }
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser merging."
-
-let aac_encoder_promise: Promise<void> | null = null
-
-async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
-    aac_encoder_promise ??= (async () => {
-        if (!(await mb.canEncodeAudio("aac"))) {
-            const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
-            registerAacEncoder()
-        }
-    })()
-    return aac_encoder_promise
-}
 
 function validate_merge_options(options: RenderMergeOptions): void {
     const { files, width, height, fps, quality } = options
@@ -75,7 +67,7 @@ function validate_merge_options(options: RenderMergeOptions): void {
     try {
         parse_crf_override(options.crf ?? null)
     } catch {
-        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
     if (options.audio_quality !== undefined) {
         if (
@@ -196,26 +188,8 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         await ensure_aac_encoder(mb)
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const canvas = document.createElement("canvas")
-        canvas.width = width
-        canvas.height = height
-        const crf = parse_crf_override(options.crf ?? null)
-        const video_config = quality_to_video_config(quality, width, height, fps, crf)
-        const video_quality =
-            video_config.quantizer !== null
-                ? new mb.Quality({
-                      quantizer: video_config.quantizer,
-                      bitrate: video_config.bitrate,
-                      bitrateMode: "variable",
-                  })
-                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
-        const video_source = new mb.CanvasSource(canvas, {
-            codec: "avc",
-            quality: video_quality,
-            latencyMode: "quality",
-            hardwareAcceleration: "no-preference",
-            bitrateMode: "variable",
-        })
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
         output.addVideoTrack(video_source)
         const audio_tracks = await Promise.all(inputs.map((input) => input.getAudioTracks()))
         const has_audio = probes.some((probe, index) => probe.has_audio && (audio_tracks[index]?.[0] ?? null) !== null)
@@ -238,7 +212,7 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         if (audio_source && mixed) {
             await audio_source.add(mixed)
         }
-        const ctx = canvas.getContext("2d")
+        const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
@@ -275,7 +249,7 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
                 if (wrapped?.canvas) {
                     draw_contain_fit(ctx, wrapped.canvas, width, height)
                 }
-                await video_source.add(elapsed, 1 / fps)
+                await add_canvas_frame(mb, video_source, canvas, elapsed, 1 / fps)
                 elapsed += 1 / fps
                 frame_index += 1
                 on_progress?.(total_frames <= 1 ? 1 : frame_index / total_frames)

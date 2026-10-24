@@ -299,3 +299,110 @@ export function total_transition_duration(start_a: number, duration_b: number | 
 export function total_transition_frames(total_duration: number, fps: number): number {
     return Math.round(total_duration * fps)
 }
+
+export const OUTPUT_COLOR_SPACE: Readonly<VideoColorSpaceInit> = Object.freeze({
+    primaries: "bt709",
+    transfer: "iec61966-2-1",
+    matrix: "bt709",
+    fullRange: false,
+})
+
+// WHY vui-pin: the encoder derives MP4 VUI from each frame, and canvas frames default to full-range sRGB.
+export async function add_canvas_frame(
+    mb: typeof import("mediabunny"),
+    video_source: InstanceType<typeof mb.VideoSampleSource>,
+    canvas: HTMLCanvasElement,
+    timestamp: number,
+    duration: number,
+): Promise<void> {
+    const init: VideoFrameInit & { colorSpace: VideoColorSpaceInit } = {
+        timestamp: Math.trunc(timestamp * 1_000_000),
+        duration: Math.trunc(duration * 1_000_000),
+        colorSpace: OUTPUT_COLOR_SPACE,
+    }
+    const frame = new VideoFrame(canvas, init)
+    try {
+        const sample = new mb.VideoSample(frame, { timestamp, duration })
+        try {
+            await video_source.add(sample)
+        } finally {
+            sample.close()
+        }
+    } finally {
+        frame.close()
+    }
+}
+
+export const CRF_INVALID_MESSAGE = "CRF override must be a number from 0 to 51."
+
+let aac_encoder_promise: Promise<void> | null = null
+
+export async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
+    aac_encoder_promise ??= (async () => {
+        try {
+            if (!(await mb.canEncodeAudio("aac"))) {
+                const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
+                registerAacEncoder()
+            }
+        } catch (error) {
+            aac_encoder_promise = null
+            throw error
+        }
+    })()
+    return aac_encoder_promise
+}
+
+export interface EncodeCanvas {
+    canvas: HTMLCanvasElement
+    ctx: CanvasRenderingContext2D | null
+}
+
+export function create_encode_canvas(width: number, height: number): EncodeCanvas {
+    const canvas = document.createElement("canvas")
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext("2d", { colorSpace: "srgb", alpha: false })
+    if (ctx) {
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = "high"
+    }
+    return { canvas, ctx }
+}
+
+export function resolve_video_encode_config(
+    quality: TransitionQuality,
+    width: number,
+    height: number,
+    fps: number,
+    crf_raw: number | string | null | undefined,
+): TransitionVideoConfig {
+    return quality_to_video_config(quality, width, height, fps, parse_crf_override(crf_raw ?? null))
+}
+
+export function create_video_sample_source(
+    mb: typeof import("mediabunny"),
+    config: TransitionVideoConfig,
+): InstanceType<typeof mb.VideoSampleSource> {
+    const quality =
+        config.quantizer !== null
+            ? new mb.Quality({ quantizer: config.quantizer, bitrate: config.bitrate, bitrateMode: "variable" })
+            : new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
+    return new mb.VideoSampleSource({
+        codec: "avc",
+        quality,
+        latencyMode: "quality",
+        hardwareAcceleration: "no-preference",
+        bitrateMode: "variable",
+    })
+}
+
+export function create_encode_video_source(
+    mb: typeof import("mediabunny"),
+    quality: TransitionQuality,
+    width: number,
+    height: number,
+    fps: number,
+    crf_raw: number | string | null | undefined,
+): InstanceType<typeof mb.VideoSampleSource> {
+    return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw))
+}

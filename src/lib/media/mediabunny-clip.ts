@@ -20,6 +20,7 @@ export interface ProbeResult {
     coded_height: number | null
     frame_rate: number | null
     video_bitrate: number | null
+    video_color_space: string | null
     audio_codec: string | null
     audio_codec_param: string | null
     audio_channels: number | null
@@ -109,6 +110,7 @@ interface VideoProbe {
     coded_height: number | null
     frame_rate: number | null
     video_bitrate: number | null
+    video_color_space: string | null
 }
 
 interface AudioProbe {
@@ -127,6 +129,58 @@ async function resolve_duration(input: ProbeInput): Promise<number | null> {
     return try_probe(() => input.computeDuration())
 }
 
+function normalize_video_color_space(raw: unknown): string | null {
+    if (typeof raw === "string") {
+        const trimmed = raw.trim()
+        return trimmed === "" ? null : trimmed
+    }
+    if (raw !== null && typeof raw === "object") {
+        const record = raw as Record<string, unknown>
+        const text_of = (value: unknown): string | null => {
+            if (typeof value === "string") {
+                const trimmed = value.trim()
+                return trimmed === "" ? null : trimmed
+            }
+            if (typeof value === "number" || typeof value === "boolean") {
+                const text = String(value).trim()
+                return text === "" ? null : text
+            }
+            return null
+        }
+        const range_of = (): string | null => {
+            const range = record["range"]
+            if (typeof range === "string") {
+                const trimmed = range.trim()
+                if (trimmed !== "") {
+                    return trimmed
+                }
+            } else if (typeof range === "boolean") {
+                return range ? "full" : "limited"
+            } else if (typeof range === "number") {
+                const text = String(range).trim()
+                if (text !== "") {
+                    return text
+                }
+            }
+            const full_range = record["fullRange"]
+            if (typeof full_range === "boolean") {
+                return full_range ? "full" : "limited"
+            }
+            return text_of(full_range)
+        }
+        const parts = [
+            text_of(record["primaries"]),
+            text_of(record["transfer"]),
+            text_of(record["matrix"]),
+            range_of(),
+        ].filter((value): value is string => value !== null && value !== "")
+        if (parts.length > 0) {
+            return parts.join("/")
+        }
+    }
+    return null
+}
+
 async function probe_video_track(video: VideoTrackLike | null): Promise<VideoProbe> {
     const fallback: VideoProbe = {
         video_codec: null,
@@ -137,6 +191,7 @@ async function probe_video_track(video: VideoTrackLike | null): Promise<VideoPro
         coded_height: null,
         frame_rate: null,
         video_bitrate: null,
+        video_color_space: null,
     }
     if (!video) {
         return fallback
@@ -160,6 +215,9 @@ async function probe_video_track(video: VideoTrackLike | null): Promise<VideoPro
     } catch {
         frame_rate = null
     }
+    const color_space_raw = await try_probe(async () =>
+        (video as unknown as { getColorSpace?: () => unknown }).getColorSpace?.(),
+    )
     return {
         video_codec,
         video_codec_param,
@@ -169,6 +227,7 @@ async function probe_video_track(video: VideoTrackLike | null): Promise<VideoPro
         coded_height,
         frame_rate,
         video_bitrate,
+        video_color_space: normalize_video_color_space(color_space_raw),
     }
 }
 
