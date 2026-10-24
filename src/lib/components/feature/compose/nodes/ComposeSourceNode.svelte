@@ -84,7 +84,7 @@ async function handle_file(file: File | null): Promise<void> {
 </script>
 
 <div
-    class="min-w-48 max-w-64 overflow-hidden rounded-lg border border-gray-300 bg-white p-3"
+    class="w-64 overflow-hidden rounded-lg border border-gray-300 bg-white p-3"
     data-testid="compose-node"
     data-kind="source"
 >
@@ -184,29 +184,31 @@ async function handle_file(file: File | null): Promise<void> {
                 void handle_file(file)
             }}
         >
-        <button
-            type="button"
-            onclick={() => file_input?.click()}
-            aria-label={choose_aria}
-            class="btn btn-primary btn-sm nodrag mt-2"
-        >
-            {choose_label}
-        </button>
-        {#if data.file}
+        <div class="mt-2 flex gap-2 nodrag">
             <button
                 type="button"
-                onclick={() => {
-                    token += 1
-                    probing = false
-                    error = null
-                    // WHY orphan URL: preview_urls is private, next set_source_file revokes it
-                    update_data({ file: null, probe: null })
-                }}
-                aria-label={`Remove source file ${data.file.name}`}
-                class="btn btn-sm nodrag mt-1 bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
+                onclick={() => file_input?.click()}
+                aria-label={choose_aria}
+                class="btn btn-primary btn-sm nodrag"
             >
-                Remove
+                {choose_label}
             </button>
-        {/if}
+            {#if data.file}
+                <button
+                    type="button"
+                    onclick={() => {
+                        token += 1
+                        probing = false
+                        error = null
+                        // WHY orphan URL: preview_urls is private, next set_source_file revokes it
+                        update_data({ file: null, probe: null })
+                    }}
+                    aria-label={`Remove source file ${data.file.name}`}
+                    class="btn btn-sm nodrag bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
+                >
+                    Remove
+                </button>
+            {/if}
+        </div>
     </div>
 </div>
