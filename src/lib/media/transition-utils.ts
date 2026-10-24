@@ -323,7 +323,7 @@ export async function add_canvas_frame(
     }
     const frame = new VideoFrame(canvas, init)
     try {
-        const sample = new mb.VideoSample(frame, { timestamp, duration })
+        const sample = new mb.VideoSample(frame, { timestamp, duration, colorSpace: OUTPUT_COLOR_SPACE })
         try {
             await video_source.add(sample)
         } finally {
