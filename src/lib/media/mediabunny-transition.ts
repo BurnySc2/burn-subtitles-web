@@ -1,4 +1,4 @@
-import type { AudioBufferSink, Output } from "mediabunny"
+import type { Output } from "mediabunny"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import { premix_transition_audio } from "./transition-audio"
@@ -13,6 +13,8 @@ import {
     CRF_INVALID_MESSAGE,
     create_encode_canvas,
     create_encode_video_source,
+    decode_full_audio,
+    draw_contain_fit,
     ensure_aac_encoder,
     parse_crf_override,
     phase_at,
@@ -188,23 +190,6 @@ export function resolve_transition_timeline(
     return { total, total_frames, frame_duration: 1 / fps }
 }
 
-function draw_contain_fit(
-    ctx: CanvasRenderingContext2D,
-    source: HTMLCanvasElement | OffscreenCanvas,
-    width: number,
-    height: number,
-): void {
-    const source_width = source.width
-    const source_height = source.height
-    if (source_width <= 0 || source_height <= 0) {
-        return
-    }
-    const scale = Math.min(width / source_width, height / source_height)
-    const draw_width = source_width * scale
-    const draw_height = source_height * scale
-    ctx.drawImage(source, (width - draw_width) / 2, (height - draw_height) / 2, draw_width, draw_height)
-}
-
 function draw_transition_frame(
     ctx: CanvasRenderingContext2D,
     frame_a: HTMLCanvasElement | OffscreenCanvas | null,
@@ -224,37 +209,6 @@ function draw_transition_frame(
         draw_contain_fit(ctx, frame_b, width, height)
         ctx.globalAlpha = 1
     }
-}
-
-async function decode_full_audio(sink: AudioBufferSink): Promise<AudioBuffer | null> {
-    const chunks: AudioBuffer[] = []
-    for await (const wrapped of sink.buffers()) {
-        chunks.push(wrapped.buffer)
-    }
-    const first = chunks[0]
-    if (!first) {
-        return null
-    }
-    if (chunks.length === 1) {
-        return first
-    }
-    const channels = first.numberOfChannels
-    let length = 0
-    for (const chunk of chunks) {
-        length += chunk.length
-    }
-    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
-    let offset = 0
-    for (const chunk of chunks) {
-        for (let channel = 0; channel < channels; channel += 1) {
-            full.getChannelData(channel).set(
-                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
-                offset,
-            )
-        }
-        offset += chunk.length
-    }
-    return full
 }
 
 export async function render_transition(options: RenderTransitionOptions): Promise<RenderTransitionResult> {

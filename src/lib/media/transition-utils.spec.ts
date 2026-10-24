@@ -1,9 +1,12 @@
+import type { AudioBufferSink } from "mediabunny"
 import { describe, expect, it } from "vitest"
 import { TimecodeError } from "./timecode"
 import { transition_filename } from "./transition-filename"
 import {
+    decode_full_audio,
     EASING_REGISTRY,
     estimate_frame_count,
+    OUTPUT_COLOR_SPACE,
     parse_crf_override,
     phase_at,
     quality_to_video_config,
@@ -12,6 +15,7 @@ import {
     resolve_output_dims,
     resolve_output_fps,
     resolve_start_seconds,
+    resolve_video_encode_config,
     TRANSITION_AUDIO_MODE_HINTS,
     TRANSITION_AUDIO_MODES,
     total_transition_duration,
@@ -253,5 +257,39 @@ describe("TRANSITION_AUDIO_MODE_HINTS", () => {
 
     it.each(["a-only", "b-only"] as const)("ends %s hint with the silence suffix", (mode) => {
         expect(TRANSITION_AUDIO_MODE_HINTS[mode].endsWith("Renders silence if that side has no audio.")).toBe(true)
+    })
+})
+
+describe("OUTPUT_COLOR_SPACE", () => {
+    it("pins bt709 VUI with sRGB transfer and stays frozen", () => {
+        expect(OUTPUT_COLOR_SPACE).toEqual({
+            primaries: "bt709",
+            transfer: "iec61966-2-1",
+            matrix: "bt709",
+            fullRange: false,
+        })
+        expect(Object.isFrozen(OUTPUT_COLOR_SPACE)).toBe(true)
+    })
+})
+
+describe("resolve_video_encode_config", () => {
+    it("maps quality tier to quantizer and honors a CRF override", () => {
+        const tier_default = resolve_video_encode_config("very-high", 1920, 1080, 30, null)
+        expect(tier_default.quantizer).toBe(18)
+        expect(tier_default.bitrate).toBe(16_000_000)
+        const overridden = resolve_video_encode_config("high", 1920, 1080, 30, 18)
+        expect(overridden.quantizer).toBe(18)
+        expect(overridden.bitrate).toBe(10_000_000)
+    })
+})
+
+describe("decode_full_audio", () => {
+    it("returns null when the sink yields no buffers", async () => {
+        const empty_sink = {
+            buffers: async function* () {
+                // Yields nothing: empty audio sink.
+            },
+        }
+        await expect(decode_full_audio(empty_sink as unknown as AudioBufferSink)).resolves.toBeNull()
     })
 })

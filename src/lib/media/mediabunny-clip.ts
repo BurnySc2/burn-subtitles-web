@@ -148,7 +148,7 @@ function normalize_video_color_space(raw: unknown): string | null {
             return null
         }
         const range_of = (): string | null => {
-            const range = record["range"]
+            const range = record.range
             if (typeof range === "string") {
                 const trimmed = range.trim()
                 if (trimmed !== "") {
@@ -162,18 +162,15 @@ function normalize_video_color_space(raw: unknown): string | null {
                     return text
                 }
             }
-            const full_range = record["fullRange"]
+            const full_range = record.fullRange
             if (typeof full_range === "boolean") {
                 return full_range ? "full" : "limited"
             }
             return text_of(full_range)
         }
-        const parts = [
-            text_of(record["primaries"]),
-            text_of(record["transfer"]),
-            text_of(record["matrix"]),
-            range_of(),
-        ].filter((value): value is string => value !== null && value !== "")
+        const parts = [text_of(record.primaries), text_of(record.transfer), text_of(record.matrix), range_of()].filter(
+            (value): value is string => value !== null && value !== "",
+        )
         if (parts.length > 0) {
             return parts.join("/")
         }

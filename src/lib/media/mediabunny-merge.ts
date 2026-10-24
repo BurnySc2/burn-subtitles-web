@@ -1,4 +1,4 @@
-import type { AudioBufferSink, Output } from "mediabunny"
+import type { Output } from "mediabunny"
 import { concat_audio_buffers } from "./compose-audio"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
@@ -8,6 +8,8 @@ import {
     CRF_INVALID_MESSAGE,
     create_encode_canvas,
     create_encode_video_source,
+    decode_full_audio,
+    draw_contain_fit,
     ensure_aac_encoder,
     parse_crf_override,
     resolve_audio_bitrate,
@@ -98,54 +100,6 @@ function resolve_merge_audio_bitrate(probes: Array<ProbeResult | null>, choice: 
         return Math.min(TRANSITION_AUDIO_BITRATE_MAX, Math.max(TRANSITION_AUDIO_BITRATE_MIN, Math.round(peak)))
     }
     return resolve_audio_bitrate(null, null, "source-max")
-}
-
-function draw_contain_fit(
-    ctx: CanvasRenderingContext2D,
-    source: HTMLCanvasElement | OffscreenCanvas,
-    width: number,
-    height: number,
-): void {
-    const source_width = source.width
-    const source_height = source.height
-    if (source_width <= 0 || source_height <= 0) {
-        return
-    }
-    const scale = Math.min(width / source_width, height / source_height)
-    const draw_width = source_width * scale
-    const draw_height = source_height * scale
-    ctx.drawImage(source, (width - draw_width) / 2, (height - draw_height) / 2, draw_width, draw_height)
-}
-
-async function decode_full_audio(sink: AudioBufferSink): Promise<AudioBuffer | null> {
-    const chunks: AudioBuffer[] = []
-    for await (const wrapped of sink.buffers()) {
-        chunks.push(wrapped.buffer)
-    }
-    const first = chunks[0]
-    if (!first) {
-        return null
-    }
-    if (chunks.length === 1) {
-        return first
-    }
-    const channels = first.numberOfChannels
-    let length = 0
-    for (const chunk of chunks) {
-        length += chunk.length
-    }
-    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
-    let offset = 0
-    for (const chunk of chunks) {
-        for (let channel = 0; channel < channels; channel += 1) {
-            full.getChannelData(channel).set(
-                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
-                offset,
-            )
-        }
-        offset += chunk.length
-    }
-    return full
 }
 
 export async function render_merge(options: RenderMergeOptions): Promise<RenderMergeResult> {
