@@ -2,7 +2,12 @@ import { topo_sort_compose } from "./compose-graph"
 import { validate_srt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
-import { parse_crf_override, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
+import {
+    parse_crf_override,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODES,
+    total_transition_duration,
+} from "./transition-utils"
 
 function upstream_duration(
     start_id: string,
@@ -37,6 +42,108 @@ function upstream_duration(
         }
         return null
     }
+}
+
+function sole_pred(id: string, incoming: Map<string, ComposeEdge[]>): string | null {
+    const edges = incoming.get(id) ?? []
+    if (edges.length !== 1) {
+        return null
+    }
+    return edges[0].source
+}
+
+function pred_by_handle(id: string, handle: string, incoming: Map<string, ComposeEdge[]>): string | null {
+    const matches = (incoming.get(id) ?? []).filter((edge) => edge.targetHandle === handle)
+    if (matches.length !== 1) {
+        return null
+    }
+    return matches[0].source
+}
+
+function gate_duration(value: number | null): number | null {
+    if (value === null || !Number.isFinite(value) || value <= 0) {
+        return null
+    }
+    return value
+}
+
+function node_duration(
+    id: string,
+    by_id: Map<string, ComposeNode>,
+    incoming: Map<string, ComposeEdge[]>,
+    memo: Map<string, number | null>,
+    seen: Set<string>,
+): number | null {
+    if (memo.has(id)) {
+        return memo.get(id) ?? null
+    }
+    if (seen.has(id)) {
+        return null
+    }
+    const node = by_id.get(id)
+    if (!node) {
+        return null
+    }
+    seen.add(id)
+    let result: number | null = null
+    if (node.type === "source") {
+        result = gate_duration(node.data.probe?.duration ?? null)
+    } else if (node.type === "color") {
+        result = gate_duration(node.data.duration)
+    } else if (node.type === "trim") {
+        const pred = sole_pred(node.id, incoming)
+        if (pred !== null) {
+            const up = node_duration(pred, by_id, incoming, memo, seen)
+            const { start, end } = node.data
+            const own = Number.isFinite(start) && Number.isFinite(end) && end > start ? end - start : null
+            result = up === null || own === null ? null : gate_duration(Math.min(up, own))
+        }
+    } else if (
+        node.type === "rescale" ||
+        node.type === "subtitles" ||
+        node.type === "overlay" ||
+        node.type === "output"
+    ) {
+        const pred = sole_pred(node.id, incoming)
+        if (pred !== null) {
+            result = node_duration(pred, by_id, incoming, memo, seen)
+        }
+    } else if (node.type === "transition") {
+        const pred_a = pred_by_handle(node.id, "a", incoming)
+        const pred_b = pred_by_handle(node.id, "b", incoming)
+        const start_a = node.data.start
+        if (pred_a !== null && pred_b !== null && Number.isFinite(start_a) && start_a >= 0) {
+            const len_b = node_duration(pred_b, by_id, incoming, memo, seen)
+            if (len_b !== null && Number.isFinite(len_b) && len_b > 0) {
+                result = gate_duration(total_transition_duration(start_a, len_b))
+            }
+        }
+    } else if (node.type === "merge") {
+        const edges = incoming.get(node.id) ?? []
+        const handles = edges.map((edge) => edge.targetHandle)
+        if (
+            edges.length >= 2 &&
+            handles.every((handle) => typeof handle === "string" && /^in\d+$/.test(handle)) &&
+            new Set(handles).size === handles.length
+        ) {
+            let sum = 0
+            let ok = true
+            for (const edge of edges) {
+                const part = node_duration(edge.source, by_id, incoming, memo, seen)
+                if (part === null) {
+                    ok = false
+                    break
+                }
+                sum += part
+            }
+            if (ok) {
+                result = gate_duration(sum)
+            }
+        }
+    }
+    memo.set(id, result)
+    seen.delete(id)
+    return result
 }
 
 export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): ValidationIssue[] {
@@ -216,6 +323,7 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
         }
     }
 
+    const duration_memo = new Map<string, number | null>()
     for (const node of nodes) {
         if (node.type === "source" && !node.data.file) {
             issues.push({ node_id: node.id, field: "file", message: "Source file is required" })
@@ -232,10 +340,20 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
             if (check.range_error) {
                 issues.push({ node_id: node.id, field: "range", message: check.range_error })
             }
+            if (!Number.isFinite(start) || start < 0) {
+                issues.push({ node_id: node.id, field: "start", message: "Trim start must not be negative." })
+            }
+            if (!Number.isFinite(end) || !Number.isFinite(start) || end <= start) {
+                issues.push({ node_id: node.id, field: "end", message: "Trim end must be larger than start." })
+            }
             const duration = upstream_duration(node.id, by_id, incoming)
             if (duration !== null) {
-                if (start < 0) {
-                    issues.push({ node_id: node.id, field: "start", message: "Start time must not be negative" })
+                if (Number.isFinite(start) && start >= duration) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "start",
+                        message: `Trim start exceeds input duration (${format_timecode(duration)}).`,
+                    })
                 }
                 if (end > duration) {
                     issues.push({
@@ -246,11 +364,45 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                 }
             }
         } else if (node.type === "transition") {
-            if (!(node.data.duration > 0)) {
+            const start = node.data.start
+            const transition_duration = node.data.duration
+            if (!Number.isFinite(start) || start < 0) {
+                issues.push({
+                    node_id: node.id,
+                    field: "start",
+                    message: "Transition start must not be negative.",
+                })
+            }
+            if (!(transition_duration > 0)) {
                 issues.push({
                     node_id: node.id,
                     field: "duration",
                     message: "Transition duration must be greater than 0",
+                })
+            }
+            const pred_a = pred_by_handle(node.id, "a", incoming)
+            const duration_a =
+                pred_a === null ? null : node_duration(pred_a, by_id, incoming, duration_memo, new Set<string>())
+            if (
+                duration_a !== null &&
+                Number.isFinite(start) &&
+                Number.isFinite(transition_duration) &&
+                start + transition_duration > duration_a
+            ) {
+                issues.push({
+                    node_id: node.id,
+                    field: "start",
+                    message: `Transition start plus duration exceeds source A duration (${format_timecode(duration_a)}).`,
+                })
+            }
+            const pred_b = pred_by_handle(node.id, "b", incoming)
+            const len_b =
+                pred_b === null ? null : node_duration(pred_b, by_id, incoming, duration_memo, new Set<string>())
+            if (len_b !== null && Number.isFinite(transition_duration) && transition_duration > len_b) {
+                issues.push({
+                    node_id: node.id,
+                    field: "duration",
+                    message: `Transition duration exceeds source B duration (${format_timecode(len_b)}).`,
                 })
             }
             const audio_mode = node.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT

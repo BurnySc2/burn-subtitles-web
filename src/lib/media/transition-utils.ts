@@ -178,7 +178,7 @@ const QUALITY_LABEL: Record<TransitionQuality, string> = {
     ultra: "Ultra (~50 Mbps, high-bitrate for further processing, not bit-exact)",
 }
 
-const QUALITY_QUANTIZER: Record<TransitionQuality, number | null> = {
+export const QUALITY_QUANTIZER: Record<TransitionQuality, number | null> = {
     low: 30,
     medium: 26,
     high: 22,

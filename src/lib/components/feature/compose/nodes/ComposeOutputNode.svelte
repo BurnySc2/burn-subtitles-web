@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
+import { QUALITY_QUANTIZER } from "$lib/media/transition-utils"
 
 let {
     id = "",
@@ -172,7 +173,7 @@ function on_crf_input(raw: string): void {
                 step="1"
                 value={data.crf ?? ""}
                 oninput={(e) => on_crf_input(e.currentTarget.value)}
-                placeholder="auto"
+                placeholder={`auto (${QUALITY_QUANTIZER[data.quality] ?? "bitrate"})`}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>

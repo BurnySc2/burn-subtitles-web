@@ -12,7 +12,11 @@ import type {
     TrimNodeData,
 } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
-import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODE_HINTS } from "$lib/media/transition-utils"
+import {
+    QUALITY_QUANTIZER,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODE_HINTS,
+} from "$lib/media/transition-utils"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
@@ -783,7 +787,7 @@ function probe_summary(node: ComposeNode): string {
                     step="1"
                     value={selected.data.crf ?? ""}
                     oninput={(e) => on_crf_input(e.currentTarget.value)}
-                    placeholder="auto"
+                    placeholder={`auto (${QUALITY_QUANTIZER[selected.data.quality] ?? "bitrate"})`}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
             </label>
