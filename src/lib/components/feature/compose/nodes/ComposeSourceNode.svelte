@@ -127,7 +127,8 @@ async function handle_file(file: File | null): Promise<void> {
     {/if}
     <p
         aria-live="polite"
-        class="mt-1 text-xs text-gray-600"
+        class="mt-1 block max-w-full truncate text-xs text-gray-600"
+        title={probe_line}
     >
         {probe_line}
     </p>

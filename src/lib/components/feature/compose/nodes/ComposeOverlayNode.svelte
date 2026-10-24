@@ -146,7 +146,8 @@ $effect(() => {
     </p>
     <p
         aria-live="polite"
-        class="mt-1 text-xs text-gray-600"
+        class="mt-1 block max-w-full truncate text-xs text-gray-600"
+        title={file_line}
     >
         {file_line}
     </p>
