@@ -246,7 +246,7 @@ function probe_summary(node: ComposeNode): string {
 </script>
 
 <svelte:window onkeydown={on_inspector_keydown} />
-<div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
+<div class="flex h-full w-full flex-col gap-2 overflow-y-auto rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Inspector</h2>
     {#if selected_edge_id}
         <p class="text-sm text-gray-600">
@@ -793,6 +793,11 @@ function probe_summary(node: ComposeNode): string {
                     placeholder={`auto (${QUALITY_QUANTIZER[selected.data.quality] ?? "bitrate"})`}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
+                {#if selected.data.quality === "ultra"}
+                    <small class="text-xs font-normal text-gray-500">
+                        Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.
+                    </small>
+                {/if}
             </label>
             <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
         {/if}

@@ -182,6 +182,9 @@ function on_crf_input(raw: string): void {
                 placeholder={`auto (${QUALITY_QUANTIZER[data.quality] ?? "bitrate"})`}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
+            {#if data.quality === "ultra"}
+                <span class="text-gray-500">Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.</span>
+            {/if}
         </label>
     </div>
 </div>
