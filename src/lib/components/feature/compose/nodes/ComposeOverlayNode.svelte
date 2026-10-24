@@ -92,7 +92,7 @@ $effect(() => {
 </script>
 
 <div
-    class="min-w-48 rounded-lg border border-gray-300 bg-white p-3"
+    class="min-w-48 max-w-64 overflow-hidden rounded-lg border border-gray-300 bg-white p-3"
     data-testid="compose-node"
     data-kind="overlay"
 >
@@ -146,7 +146,7 @@ $effect(() => {
     </p>
     <p
         aria-live="polite"
-        class="mt-1 block max-w-full truncate text-xs text-gray-600"
+        class="mt-1 block w-full min-w-0 max-w-full truncate text-xs text-gray-600"
         title={file_line}
     >
         {file_line}
@@ -158,7 +158,7 @@ $effect(() => {
     {/if}
     <!-- svelte-ignore a11y_no_static_element_interactions: inner button/input is the keyboard path; drop is enhancement only, so no role=button -->
     <div
-        class="drop-zone nodrag mt-2"
+        class="drop-zone nodrag mt-2 w-full"
         class:drag-over={is_dragging}
         ondragover={(e) => {
             e.preventDefault()
