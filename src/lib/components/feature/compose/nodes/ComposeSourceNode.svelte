@@ -189,7 +189,7 @@ async function handle_file(file: File | null): Promise<void> {
                     update_data({ file: null, probe: null })
                 }}
                 aria-label={`Remove source file ${data.file.name}`}
-                class="nodrag mt-1 text-xs text-red-700 underline"
+                class="btn btn-sm nodrag mt-1 bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
             >
                 Remove
             </button>

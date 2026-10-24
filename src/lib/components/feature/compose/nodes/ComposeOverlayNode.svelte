@@ -209,7 +209,7 @@ $effect(() => {
                     update_data({ image: null })
                 }}
                 aria-label={`Remove overlay image ${data.image.name}`}
-                class="nodrag mt-1 text-xs text-red-700 underline"
+                class="btn btn-sm nodrag mt-1 bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
             >
                 Remove
             </button>
