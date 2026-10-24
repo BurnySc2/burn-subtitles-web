@@ -765,8 +765,11 @@ function probe_summary(node: ComposeNode): string {
                     <option value="ultra">ultra</option>
                 </select>
             </label>
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                Audio quality
+            <label
+                class="flex flex-col gap-1 text-sm font-medium"
+                title="AAC bitrate"
+            >
+                Audio quality (AAC)
                 <select
                     value={selected.data.audio_quality ?? "source-max"}
                     onchange={(e) =>

@@ -152,8 +152,11 @@ function on_crf_input(raw: string): void {
                 <option value="ultra">ultra</option>
             </select>
         </label>
-        <label class="flex flex-col gap-1 text-xs text-gray-600">
-            Audio quality
+        <label
+            class="flex flex-col gap-1 text-xs text-gray-600"
+            title="AAC bitrate"
+        >
+            Audio quality (AAC)
             <select
                 id={id ? `${id}-audio-quality` : undefined}
                 value={data.audio_quality ?? "source-max"}
