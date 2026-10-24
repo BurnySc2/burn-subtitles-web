@@ -83,9 +83,9 @@ describe("premix_transition_audio", () => {
         expect(data?.[data.length - 1]).toBeCloseTo(1, 1)
     })
 
-    it("covers the seven documented audio modes", () => {
+    it("covers the nine documented audio modes", () => {
         expect([...TRANSITION_AUDIO_MODES].sort()).toEqual(
-            ["a-fadeout", "a-flat", "b-fadein", "b-flat", "crossfade", "dip", "mute"].sort(),
+            ["a-fadeout", "a-flat", "a-only", "b-fadein", "b-flat", "b-only", "crossfade", "dip", "mute"].sort(),
         )
     })
 

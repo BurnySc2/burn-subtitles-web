@@ -80,6 +80,20 @@ function on_crf_input(raw: string): void {
         >
     {/if}
     <div class="mt-2 grid grid-cols-2 gap-2">
+        <label class="col-span-2 flex flex-col gap-1 text-xs text-gray-600">
+            File name
+            <input
+                id={id ? `${id}-file-name` : undefined}
+                type="text"
+                value={data.file_name ?? ""}
+                oninput={(e) => {
+                    const value = e.currentTarget.value
+                    update_data({ file_name: value === "" ? null : value })
+                }}
+                placeholder="composition.mp4"
+                class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+            >
+        </label>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
             Width
             <input
@@ -132,7 +146,7 @@ function on_crf_input(raw: string): void {
             </select>
         </label>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
-            Audio
+            Audio quality
             <select
                 id={id ? `${id}-audio-quality` : undefined}
                 value={data.audio_quality ?? "source-max"}
@@ -149,7 +163,7 @@ function on_crf_input(raw: string): void {
             </select>
         </label>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
-            CRF
+            CRF override
             <input
                 id={id ? `${id}-crf` : undefined}
                 type="number"

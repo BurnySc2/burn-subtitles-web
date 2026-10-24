@@ -12,6 +12,7 @@ import type {
     TrimNodeData,
 } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
+import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODE_HINTS } from "$lib/media/transition-utils"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
@@ -348,6 +349,74 @@ function probe_summary(node: ComposeNode): string {
                     <option value="linear">linear</option>
                     <option value="exponential">exponential</option>
                 </select>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Audio
+                <select
+                    value={selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT}
+                    onchange={(e) =>
+                        patch_transition({ audio_mode: e.currentTarget.value as TransitionNodeData["audio_mode"] })}
+                    title={TRANSITION_AUDIO_MODE_HINTS[selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT]}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option
+                        value="crossfade"
+                        title={TRANSITION_AUDIO_MODE_HINTS.crossfade}
+                    >
+                        crossfade
+                    </option>
+                    <option
+                        value="a-flat"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-flat"]}
+                    >
+                        a-flat
+                    </option>
+                    <option
+                        value="a-fadeout"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-fadeout"]}
+                    >
+                        a-fadeout
+                    </option>
+                    <option
+                        value="b-flat"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-flat"]}
+                    >
+                        b-flat
+                    </option>
+                    <option
+                        value="b-fadein"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-fadein"]}
+                    >
+                        b-fadein
+                    </option>
+                    <option
+                        value="mute"
+                        title={TRANSITION_AUDIO_MODE_HINTS.mute}
+                    >
+                        mute
+                    </option>
+                    <option
+                        value="dip"
+                        title={TRANSITION_AUDIO_MODE_HINTS.dip}
+                    >
+                        dip
+                    </option>
+                    <option
+                        value="a-only"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-only"]}
+                    >
+                        a-only
+                    </option>
+                    <option
+                        value="b-only"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-only"]}
+                    >
+                        b-only
+                    </option>
+                </select>
+                <small class="text-xs font-normal text-gray-500">
+                    {TRANSITION_AUDIO_MODE_HINTS[selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT]}
+                </small>
             </label>
         {:else if selected.type === "merge"}
             <label class="flex flex-col gap-1 text-sm font-medium">

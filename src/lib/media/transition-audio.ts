@@ -65,7 +65,13 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
     const gain_b = ctx.createGain()
     gain_a.connect(ctx.destination)
     gain_b.connect(ctx.destination)
-    if (blend_len <= 0) {
+    if (mode === "a-only") {
+        gain_a.gain.setValueAtTime(1, 0)
+        gain_b.gain.setValueAtTime(0, 0)
+    } else if (mode === "b-only") {
+        gain_a.gain.setValueAtTime(0, 0)
+        gain_b.gain.setValueAtTime(1, 0)
+    } else if (blend_len <= 0) {
         gain_a.gain.setValueAtTime(1, 0)
         gain_a.gain.setValueAtTime(0, blend_start)
         gain_b.gain.setValueAtTime(0, 0)
@@ -100,7 +106,8 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
     // WHY asymmetric flats: a-flat holds A flat while B waits until blend end; b-flat pre-echoes B
     // from t=0 while A still fades (1-alpha) in blend. Per-leg gains [solo-a, blend-start, blend-end]:
     // crossfade A[1,1,1-a]/B[0,0,a], a-flat A[1,1,0]/B[0,0,1], a-fadeout A[1,1,1-e]/B[0,0,1],
-    // b-flat A[1,1,1-e]/B[1,1,1], b-fadein A[1,0,0]/B[0,0,e], mute A[1,0,0]/B[0,0,1], dip A[1,1,V]/B[0,0,V]
+    // b-flat A[1,1,1-e]/B[1,1,1], b-fadein A[1,0,0]/B[0,0,e], mute A[1,0,0]/B[0,0,1], dip A[1,1,V]/B[0,0,V],
+    // a-only A[1]/B[0] full_a@0, b-only A[0]/B[1] full_b@0 (constant gains, easing ignored).
     else if (mode === "b-flat") {
         const points = 256
         const curve_a = new Float32Array(points)
@@ -156,10 +163,18 @@ export async function premix_transition_audio(options: PremixTransitionAudioOpti
         gain_a.gain.setValueCurveAtTime(curve_a, blend_start, blend_len)
         gain_b.gain.setValueCurveAtTime(curve_b, blend_start, blend_len)
     }
-    if (full_a) {
+    if (mode === "a-only") {
+        if (full_a) {
+            attach_source(ctx, full_a, 0, 0, gain_a)
+        }
+    } else if (mode === "b-only") {
+        if (full_b) {
+            attach_source(ctx, full_b, 0, 0, gain_b)
+        }
+    } else if (full_a) {
         attach_source(ctx, full_a, 0, 0, gain_a)
     }
-    if (full_b) {
+    if (mode !== "a-only" && mode !== "b-only" && full_b) {
         attach_source(ctx, full_b, blend_start, 0, gain_b)
     }
     return ctx.startRendering()

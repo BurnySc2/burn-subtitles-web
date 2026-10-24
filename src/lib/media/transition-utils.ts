@@ -10,7 +10,16 @@ export type TransitionAudioQuality = "96k" | "128k" | "192k" | "256k" | "320k" |
 
 export type TransitionEasing = "linear" | "exponential"
 
-export type TransitionAudioMode = "crossfade" | "a-flat" | "a-fadeout" | "b-flat" | "b-fadein" | "mute" | "dip"
+export type TransitionAudioMode =
+    | "crossfade"
+    | "a-flat"
+    | "a-fadeout"
+    | "b-flat"
+    | "b-fadein"
+    | "mute"
+    | "dip"
+    | "a-only"
+    | "b-only"
 
 export const TRANSITION_AUDIO_MODES: readonly TransitionAudioMode[] = [
     "crossfade",
@@ -20,10 +29,23 @@ export const TRANSITION_AUDIO_MODES: readonly TransitionAudioMode[] = [
     "b-fadein",
     "mute",
     "dip",
+    "a-only",
+    "b-only",
 ]
 
 export const TRANSITION_AUDIO_MODE_DEFAULT: TransitionAudioMode = "crossfade"
 
+export const TRANSITION_AUDIO_MODE_HINTS: Record<TransitionAudioMode, string> = {
+    crossfade: "Fade A out while B fades in.",
+    "a-flat": "Keep A loud until blend ends, then switch to B.",
+    "a-fadeout": "Fade A out during blend; B starts after.",
+    "b-flat": "Play B under blend while A fades out.",
+    "b-fadein": "Cut A at blend start, then fade B in.",
+    mute: "Silence during blend; B starts after.",
+    dip: "Dip both to silence mid-blend.",
+    "a-only": "Play only A for the whole output; B is muted.",
+    "b-only": "Play only B from the start; B audio leads picture by the A-offset.",
+}
 export type TransitionFn = (u: number) => number
 
 export const EASING_REGISTRY: Record<TransitionEasing, TransitionFn> = {
