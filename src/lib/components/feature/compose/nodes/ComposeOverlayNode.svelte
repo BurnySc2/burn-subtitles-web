@@ -30,16 +30,8 @@ let choose_label = $derived(has_image ? "Replace image" : "Choose image")
 let choose_aria = $derived(has_image ? "Replace overlay image" : "Choose overlay image")
 let summary = $derived(`${data.position} · ${data.scale}% · ${data.opacity}`)
 
-let file_line = $derived.by(() => {
-    if (!data.image) {
-        return "No image selected"
-    }
-    const parts = [data.image.name]
-    if (image_probe && probed_file === data.image) {
-        parts.push(`${image_probe.width}x${image_probe.height}`)
-    }
-    return parts.join(" · ")
-})
+let file_name = $derived(data.image ? data.image.name : "No image selected")
+let meta_line = $derived(image_probe && probed_file === data.image ? `${image_probe.width}x${image_probe.height}` : "")
 
 async function handle_file(file: File | null): Promise<void> {
     if (!file || !id) {
@@ -144,13 +136,25 @@ $effect(() => {
     >
         {summary}
     </p>
-    <p
+    <div
         aria-live="polite"
-        class="mt-1 block w-full min-w-0 max-w-full truncate text-xs text-gray-600"
-        title={file_line}
+        class="mt-1 min-w-0"
     >
-        {file_line}
-    </p>
+        <p
+            class="block w-full min-w-0 max-w-full truncate text-xs text-gray-600"
+            title={file_name}
+        >
+            {file_name}
+        </p>
+        {#if meta_line}
+            <p
+                class="block w-full min-w-0 max-w-full truncate text-xs text-gray-500"
+                title={meta_line}
+            >
+                {meta_line}
+            </p>
+        {/if}
+    </div>
     {#if probing}
         <p class="mt-1 text-xs text-gray-500">Reading image…</p>
     {:else if error}

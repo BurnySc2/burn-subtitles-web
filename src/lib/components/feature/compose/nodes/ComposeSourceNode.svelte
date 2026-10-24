@@ -28,22 +28,23 @@ let has_file = $derived(data.file !== null)
 let choose_label = $derived(has_file ? "Replace file" : "Choose file")
 let choose_aria = $derived(has_file ? "Replace source file" : "Choose source file")
 
-let probe_line = $derived.by(() => {
+let file_name = $derived(data.file ? data.file.name : "No file selected")
+let meta_line = $derived.by(() => {
     const probe = data.probe
     if (!probe) {
-        return data.file ? data.file.name : "No file selected"
+        return ""
     }
     const parts: string[] = []
-    if (data.file) {
-        parts.push(data.file.name)
-    }
     if (probe.duration !== null) {
         parts.push(`${probe.duration.toFixed(2)}s`)
     }
     if (probe.display_width !== null && probe.display_height !== null) {
         parts.push(`${probe.display_width}x${probe.display_height}`)
     }
-    return parts.length > 0 ? parts.join(" · ") : "No file selected"
+    if (probe.frame_rate !== null) {
+        parts.push(`${probe.frame_rate.toFixed(2)} fps`)
+    }
+    return parts.join(" · ")
 })
 
 async function handle_file(file: File | null): Promise<void> {
@@ -125,13 +126,25 @@ async function handle_file(file: File | null): Promise<void> {
             class="nodrag mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
         >
     {/if}
-    <p
+    <div
         aria-live="polite"
-        class="mt-1 block w-full min-w-0 max-w-full truncate text-xs text-gray-600"
-        title={probe_line}
+        class="mt-1 min-w-0"
     >
-        {probe_line}
-    </p>
+        <p
+            class="block w-full min-w-0 max-w-full truncate text-xs text-gray-600"
+            title={file_name}
+        >
+            {file_name}
+        </p>
+        {#if meta_line}
+            <p
+                class="block w-full min-w-0 max-w-full truncate text-xs text-gray-500"
+                title={meta_line}
+            >
+                {meta_line}
+            </p>
+        {/if}
+    </div>
     {#if probing}
         <p class="mt-1 text-xs text-gray-500">Reading media…</p>
     {:else if error}
