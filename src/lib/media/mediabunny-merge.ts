@@ -118,12 +118,6 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
     }
     signal?.addEventListener("abort", on_abort, { once: true })
     const timings: Record<string, number> = {}
-    let is_dev = false
-    try {
-        is_dev = Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV)
-    } catch {
-        is_dev = false
-    }
     let actual_encoder_config: unknown
     try {
         for (const input of inputs) {
@@ -156,13 +150,11 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
         const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
         const encode_init_start = performance.now()
-        const video_source = is_dev
-            ? create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null, {
-                  on_encoder_config: (config) => {
-                      actual_encoder_config = config
-                  },
-              })
-            : create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null, {
+            on_encoder_config: (config) => {
+                actual_encoder_config = config
+            },
+        })
         timings.encode_init = performance.now() - encode_init_start
         output.addVideoTrack(video_source)
         const audio_tracks = await Promise.all(inputs.map((input) => input.getAudioTracks()))
@@ -251,27 +243,25 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
             throw error
         }
         timings.finalize = performance.now() - finalize_start
-        if (is_dev) {
-            try {
-                let ua: string | undefined
-                if (typeof navigator !== "undefined") {
-                    const brands = (
-                        navigator as unknown as {
-                            userAgentData?: { brands?: Array<{ brand: string; version: string }> }
-                        }
-                    ).userAgentData?.brands
-                    ua = brands?.map((item) => `${item.brand}/${item.version}`).join(" ") ?? navigator.userAgent
-                }
-                log_encoder_diagnostics({
-                    requested: { quality, width, height, fps },
-                    actual: actual_encoder_config,
-                    timings,
-                    source_vui: probes[0]?.video_color_space ?? null,
-                    output_vui: OUTPUT_COLOR_SPACE,
-                    ua,
-                })
-            } catch {}
-        }
+        try {
+            let ua: string | undefined
+            if (typeof navigator !== "undefined") {
+                const brands = (
+                    navigator as unknown as {
+                        userAgentData?: { brands?: Array<{ brand: string; version: string }> }
+                    }
+                ).userAgentData?.brands
+                ua = brands?.map((item) => `${item.brand}/${item.version}`).join(" ") ?? navigator.userAgent
+            }
+            log_encoder_diagnostics({
+                requested: { quality, width, height, fps },
+                actual: actual_encoder_config,
+                timings,
+                source_vui: probes[0]?.video_color_space ?? null,
+                output_vui: OUTPUT_COLOR_SPACE,
+                ua,
+            })
+        } catch {}
         if (!target.buffer) {
             throw new ClipError("FAILED", "Merge rendering produced no output.")
         }

@@ -326,10 +326,7 @@ export interface EncoderDiagnostics {
 
 export function log_encoder_diagnostics(event: EncoderDiagnostics): void {
     try {
-        const env = (import.meta as unknown as { env?: { DEV?: boolean } }).env
-        if (env && !env.DEV) {
-            return
-        }
+        void (import.meta as unknown as { env?: { DEV?: boolean } }).env
     } catch {}
     console.log("[encoder-diagnostics]", event)
 }
