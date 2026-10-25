@@ -331,7 +331,7 @@ export function log_encoder_diagnostics(event: EncoderDiagnostics): void {
             return
         }
     } catch {}
-    console.debug(event)
+    console.log("[encoder-diagnostics]", event)
 }
 
 // WHY vui-pin: the encoder derives MP4 VUI from each frame, and canvas frames default to full-range sRGB.
