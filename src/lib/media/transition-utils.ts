@@ -308,29 +308,6 @@ export const OUTPUT_COLOR_SPACE: Readonly<VideoColorSpaceInit> = Object.freeze({
     fullRange: false,
 })
 
-export const OUTPUT_COLOR_SPACE_BT709: Readonly<VideoColorSpaceInit> = Object.freeze({
-    primaries: "bt709",
-    transfer: "bt709",
-    matrix: "bt709",
-    fullRange: false,
-})
-
-export interface EncoderDiagnostics {
-    requested?: unknown
-    actual?: unknown
-    timings?: Record<string, number>
-    source_vui?: string | null
-    output_vui?: unknown
-    ua?: string
-}
-
-export function log_encoder_diagnostics(event: EncoderDiagnostics): void {
-    try {
-        void (import.meta as unknown as { env?: { DEV?: boolean } }).env
-    } catch {}
-    console.log("[encoder-diagnostics]", event)
-}
-
 // WHY vui-pin: the encoder derives MP4 VUI from each frame, and canvas frames default to full-range sRGB.
 export async function add_canvas_frame(
     mb: typeof import("mediabunny"),
@@ -346,7 +323,7 @@ export async function add_canvas_frame(
     }
     const frame = new VideoFrame(canvas, init)
     try {
-        const sample = new mb.VideoSample(frame, { timestamp, duration, colorSpace: OUTPUT_COLOR_SPACE })
+        const sample = new mb.VideoSample(frame, { timestamp, duration })
         try {
             await video_source.add(sample)
         } finally {

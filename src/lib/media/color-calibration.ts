@@ -201,15 +201,21 @@ export async function run_red_patch_calibration(
     }
 }
 
-export async function run_decode_probe(mb: typeof import("mediabunny"), file: File | Blob): Promise<DecodeProbeResult> {
-    return run_decode_probe_with_conversion(mb, file)
+export async function run_decode_probe(
+    mb: typeof import("mediabunny"),
+    file: File | Blob,
+    timestamp_sec = 0.001,
+): Promise<DecodeProbeResult> {
+    return run_decode_probe_with_conversion(mb, file, undefined, timestamp_sec)
 }
 
 export async function run_decode_probe_with_conversion(
     mb: typeof import("mediabunny"),
     file: File | Blob,
     conversion?: DecodeProbeConversion,
+    timestamp_sec = 0.001,
 ): Promise<DecodeProbeResult> {
+    const timestamp = Number.isFinite(timestamp_sec) ? timestamp_sec : 0.001
     const empty: DecodeProbeResult = { rgb: null, frame_color_space: null, probe_vui: null, width: 0, height: 0 }
     try {
         const input = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(file) })
@@ -244,7 +250,7 @@ export async function run_decode_probe_with_conversion(
                     | undefined
                 if (typeof ctor === "function") {
                     const sink = new ctor(track)
-                    const iterator = sink.samplesAtTimestamps([0.001])[Symbol.asyncIterator]()
+                    const iterator = sink.samplesAtTimestamps([timestamp])[Symbol.asyncIterator]()
                     const sample = (await iterator.next()).value
                     if (sample) {
                         try {
@@ -261,7 +267,7 @@ export async function run_decode_probe_with_conversion(
             let rgb: CalibrationRgb | null = null
             try {
                 const sink = new mb.CanvasSink(track, { poolSize: 1 })
-                const frames = sink.canvasesAtTimestamps([0.001])[Symbol.asyncIterator]()
+                const frames = sink.canvasesAtTimestamps([timestamp])[Symbol.asyncIterator]()
                 const wrapped = (await frames.next()).value as
                     | { canvas?: HTMLCanvasElement | OffscreenCanvas }
                     | null

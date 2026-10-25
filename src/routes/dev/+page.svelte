@@ -15,6 +15,7 @@ let message = $state("Click Convert Video to start")
 let calib_result = $state<RedPatchCalibrationResult | null>(null)
 let calib_running = $state(false)
 let probe_file = $state<File | null>(null)
+let probe_timestamp = $state(0.001)
 let probe_result = $state<DecodeProbeResult | null>(null)
 let probe_running = $state(false)
 
@@ -38,7 +39,7 @@ function on_probe_file(event: Event) {
     probe_result = null
 }
 
-async function run_probe(conversion?: "none" | "default") {
+async function run_probe(conversion?: "none" | "default", timestamp_sec: number = probe_timestamp) {
     if (!probe_file || probe_running) {
         return
     }
@@ -46,7 +47,7 @@ async function run_probe(conversion?: "none" | "default") {
     probe_result = null
     try {
         const [mb, calib] = await Promise.all([import("mediabunny"), import("$lib/media/color-calibration")])
-        probe_result = await calib.run_decode_probe_with_conversion(mb, probe_file, conversion)
+        probe_result = await calib.run_decode_probe_with_conversion(mb, probe_file, conversion, timestamp_sec)
     } finally {
         probe_running = false
     }
@@ -266,16 +267,26 @@ function download_video() {
             onchange={on_probe_file}
             class="mb-4 block text-sm"
         >
+        <label class="mb-4 flex items-center gap-2 text-sm text-gray-600">
+            Timestamp (s)
+            <input
+                type="number"
+                min="0"
+                step="0.1"
+                bind:value={probe_timestamp}
+                class="w-28 rounded border px-2 py-1 text-sm"
+            >
+        </label>
         <div class="flex gap-2">
             <button
-                onclick={() => run_probe()}
+                onclick={() => run_probe(undefined, probe_timestamp)}
                 disabled={!probe_file || probe_running}
                 class="btn btn-secondary btn-md"
             >
                 {probe_running ? "Probing…" : "Run decode (default)"}
             </button>
             <button
-                onclick={() => run_probe("none")}
+                onclick={() => run_probe("none", probe_timestamp)}
                 disabled={!probe_file || probe_running}
                 class="btn btn-secondary btn-md"
             >

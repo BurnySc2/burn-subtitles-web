@@ -261,10 +261,10 @@ describe("TRANSITION_AUDIO_MODE_HINTS", () => {
 })
 
 describe("OUTPUT_COLOR_SPACE", () => {
-    it("pins bt709 VUI with sRGB transfer and stays frozen", () => {
+    it("pins bt709 VUI with BT.709 transfer and stays frozen", () => {
         expect(OUTPUT_COLOR_SPACE).toEqual({
             primaries: "bt709",
-            transfer: "iec61966-2-1",
+            transfer: "bt709",
             matrix: "bt709",
             fullRange: false,
         })
