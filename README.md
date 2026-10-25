@@ -30,6 +30,10 @@ Develop branch deployment: https://burn-subtitles-dev.netlify.app
 - Easing `linear` / `exponential`; audio mixed to AAC 128 kbps when either source has audio (bundled AAC encoder registers automatically).
 - Requires Secure Context (HTTPS/localhost) + WebCodecs; output is buffered fully in RAM, so large files may run out of memory.
 
+### Browser support
+
+Chromium (Chrome/Edge) recommended for `/compose`; other browsers show a dismissible warning and colors may differ.
+
 ## Fonts & Licensing
 
 This project burns subtitles with FFmpeg and supports 16 bundled fonts in `static/fonts/`.

@@ -86,3 +86,4 @@ npm run test:integration   # playwright test
 - Clip path works offline after first load (encoders bundled, no runtime CDN); C+D note: copy/download flow stays local, no uploads ever.
 - `optimizeDeps.exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"]` in `vite.config.ts` — do not remove; dropping FFmpeg entirely deferred while `/` burn-in uses it.
 - Large-file flows hold Blobs + object URLs in memory; always revoke on reset/replace/unmount.
+- Compose render tested on Chromium only; non-Chromium shows dismissible warning (`ComposeBrowserWarning` + `is_chromium` in `browser-detect.ts`), colors may be wrong elsewhere.

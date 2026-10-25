@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest"
 import { TimecodeError } from "./timecode"
 import { transition_filename } from "./transition-filename"
 import {
+    add_canvas_frame,
+    create_video_sample_source,
     decode_full_audio,
     EASING_REGISTRY,
     estimate_frame_count,
@@ -278,5 +280,85 @@ describe("decode_full_audio", () => {
             },
         }
         await expect(decode_full_audio(empty_sink as unknown as AudioBufferSink)).resolves.toBeNull()
+    })
+})
+
+describe("post-revert encoder defaults", () => {
+    it("passes timestamp/duration only to VideoFrame and VideoSample", async () => {
+        const canvas = document.createElement("canvas")
+        canvas.width = 2
+        canvas.height = 2
+        const frame_inits: Array<Record<string, unknown>> = []
+        const sample_inits: Array<Record<string, unknown>> = []
+        const holder = globalThis as unknown as Record<string, unknown>
+        const original_frame = holder.VideoFrame
+        holder.VideoFrame = class {
+            constructor(_source: unknown, init: Record<string, unknown>) {
+                frame_inits.push({ ...init })
+            }
+            close(): void {}
+        }
+        const added: unknown[] = []
+        const fake_source = {
+            add: async (sample: unknown): Promise<void> => {
+                added.push(sample)
+            },
+        }
+        const stub_mb = {
+            VideoSample: class {
+                constructor(_frame: unknown, options: Record<string, unknown>) {
+                    sample_inits.push({ ...options })
+                }
+                close(): void {}
+            },
+        }
+        try {
+            await add_canvas_frame(
+                stub_mb as unknown as typeof import("mediabunny"),
+                fake_source as unknown as InstanceType<typeof import("mediabunny").VideoSampleSource>,
+                canvas,
+                1.5,
+                0.5,
+            )
+        } finally {
+            holder.VideoFrame = original_frame
+        }
+        expect(frame_inits).toHaveLength(1)
+        expect(frame_inits[0]).toEqual({ timestamp: 1_500_000, duration: 500_000 })
+        expect(sample_inits).toHaveLength(1)
+        expect(sample_inits[0]).toEqual({ timestamp: 1.5, duration: 0.5 })
+    })
+
+    it("passes no packet/config callbacks to VideoSampleSource", () => {
+        let captured: Record<string, unknown> | null = null
+        const stub_mb = {
+            Quality: class {
+                options: unknown
+                constructor(options: unknown) {
+                    this.options = options
+                }
+            },
+            VideoSampleSource: class {
+                constructor(options: Record<string, unknown>) {
+                    captured = { ...options }
+                }
+            },
+        }
+        create_video_sample_source(stub_mb as unknown as typeof import("mediabunny"), {
+            bitrate: 5_000_000,
+            quantizer: 26,
+            description: "medium",
+        })
+        expect(captured).not.toBeNull()
+        expect(Object.keys(captured ?? {}).sort()).toEqual(
+            ["bitrateMode", "codec", "hardwareAcceleration", "latencyMode", "quality"].sort(),
+        )
+        expect(captured ?? {}).not.toHaveProperty("onEncodedPacket")
+        expect(captured ?? {}).not.toHaveProperty("onEncoderConfig")
+    })
+
+    it("exposes no OUTPUT_COLOR_SPACE export", async () => {
+        const module = await import("./transition-utils")
+        expect(module as Record<string, unknown>).not.toHaveProperty("OUTPUT_COLOR_SPACE")
     })
 })
