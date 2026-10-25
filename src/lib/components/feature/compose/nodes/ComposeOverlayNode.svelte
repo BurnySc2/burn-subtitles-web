@@ -1,5 +1,6 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
+import { first_dropped_file, is_accepted } from "$lib/media/compose-drop"
 import { compose_node_title, type OverlayNodeData } from "$lib/media/compose-types"
 import type { ImageProbe } from "$lib/media/mediabunny-overlay"
 
@@ -16,6 +17,7 @@ let {
 let file_input = $state<HTMLInputElement | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
+let is_dragging = $state(false)
 let image_probe = $state<ImageProbe | null>(null)
 let probed_file = $state<File | null>(null)
 let token = 0
@@ -23,18 +25,13 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("overlay", data.label))
+let has_image = $derived(data.image !== null)
+let choose_label = $derived(has_image ? "Replace image" : "Choose image")
+let choose_aria = $derived(has_image ? "Replace overlay image" : "Choose overlay image")
 let summary = $derived(`${data.position} · ${data.scale}% · ${data.opacity}`)
 
-let file_line = $derived.by(() => {
-    if (!data.image) {
-        return "No image selected"
-    }
-    const parts = [data.image.name]
-    if (image_probe && probed_file === data.image) {
-        parts.push(`${image_probe.width}x${image_probe.height}`)
-    }
-    return parts.join(" · ")
-})
+let file_name = $derived(data.image ? data.image.name : "No image selected")
+let meta_line = $derived(image_probe && probed_file === data.image ? `${image_probe.width}x${image_probe.height}` : "")
 
 async function handle_file(file: File | null): Promise<void> {
     if (!file || !id) {
@@ -45,7 +42,7 @@ async function handle_file(file: File | null): Promise<void> {
     error = null
     image_probe = null
     probed_file = null
-    if (!file.type.startsWith("image/")) {
+    if (!is_accepted(file, "overlay")) {
         update_data({ image: null })
         error = "Please select an image file."
         probing = false
@@ -87,7 +84,7 @@ $effect(() => {
 </script>
 
 <div
-    class="min-w-48 rounded-lg border border-gray-300 bg-white p-3"
+    class="w-64 overflow-hidden rounded-lg border border-gray-300 bg-white p-3"
     data-testid="compose-node"
     data-kind="overlay"
 >
@@ -139,29 +136,90 @@ $effect(() => {
     >
         {summary}
     </p>
-    <p class="mt-1 text-xs text-gray-600">{file_line}</p>
+    <div
+        aria-live="polite"
+        class="mt-1 min-w-0"
+    >
+        <p
+            class="block w-full min-w-0 max-w-full truncate text-xs text-gray-600"
+            title={file_name}
+        >
+            {file_name}
+        </p>
+        {#if meta_line}
+            <p
+                class="block w-full min-w-0 max-w-full truncate text-xs text-gray-500"
+                title={meta_line}
+            >
+                {meta_line}
+            </p>
+        {/if}
+    </div>
     {#if probing}
         <p class="mt-1 text-xs text-gray-500">Reading image…</p>
     {:else if error}
         <p class="mt-1 text-xs text-red-700">{error}</p>
     {/if}
-    <input
-        id={id ? `${id}-file` : undefined}
-        bind:this={file_input}
-        type="file"
-        accept="image/*"
-        class="nodrag hidden"
-        onchange={(e) => {
-            const file = e.currentTarget.files?.[0] ?? null
-            e.currentTarget.value = ""
-            void handle_file(file)
+    <!-- svelte-ignore a11y_no_static_element_interactions: inner button/input is the keyboard path; drop is enhancement only, so no role=button -->
+    <div
+        class="drop-zone nodrag mt-2 w-full"
+        class:drag-over={is_dragging}
+        ondragover={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            is_dragging = true
+        }}
+        ondragleave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                return
+            }
+            is_dragging = false
+        }}
+        ondrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            is_dragging = false
+            void handle_file(first_dropped_file(e))
         }}
     >
-    <button
-        type="button"
-        onclick={() => file_input?.click()}
-        class="btn btn-primary btn-sm nodrag mt-2"
-    >
-        Choose image
-    </button>
+        <input
+            id={id ? `${id}-file` : undefined}
+            bind:this={file_input}
+            type="file"
+            accept="image/*"
+            class="nodrag hidden"
+            onchange={(e) => {
+                const file = e.currentTarget.files?.[0] ?? null
+                e.currentTarget.value = ""
+                void handle_file(file)
+            }}
+        >
+        <div class="mt-2 flex gap-2 nodrag">
+            <button
+                type="button"
+                onclick={() => file_input?.click()}
+                aria-label={choose_aria}
+                class="btn btn-primary btn-sm nodrag"
+            >
+                {choose_label}
+            </button>
+            {#if data.image}
+                <button
+                    type="button"
+                    onclick={() => {
+                        token += 1
+                        probing = false
+                        error = null
+                        image_probe = null
+                        probed_file = null
+                        update_data({ image: null })
+                    }}
+                    aria-label={`Remove overlay image ${data.image.name}`}
+                    class="btn btn-sm nodrag bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
+                >
+                    Remove
+                </button>
+            {/if}
+        </div>
+    </div>
 </div>

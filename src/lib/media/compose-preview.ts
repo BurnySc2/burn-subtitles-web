@@ -333,6 +333,7 @@ export async function get_node_preview_blob(
                     crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     easing: node.data.easing,
+                    audio_mode: node.data.audio_mode,
                     on_progress: slice,
                     signal,
                 })

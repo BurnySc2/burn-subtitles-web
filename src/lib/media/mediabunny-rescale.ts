@@ -1,7 +1,17 @@
 import type { Output } from "mediabunny"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
-import { parse_crf_override, quality_to_video_config, resolve_audio_bitrate } from "./transition-utils"
+import {
+    add_canvas_frame,
+    CRF_INVALID_MESSAGE,
+    create_encode_canvas,
+    create_encode_video_source,
+    decode_full_audio,
+    draw_contain_fit,
+    ensure_aac_encoder,
+    parse_crf_override,
+    resolve_audio_bitrate,
+} from "./transition-utils"
 
 export interface RenderRescaleOptions {
     width: number
@@ -17,23 +27,6 @@ export interface RenderRescaleOptions {
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser rescaling."
 const FALLBACK_FPS = 30
-
-let aac_encoder_promise: Promise<void> | null = null
-
-async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
-    aac_encoder_promise ??= (async () => {
-        try {
-            if (!(await mb.canEncodeAudio("aac"))) {
-                const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
-                registerAacEncoder()
-            }
-        } catch (error) {
-            aac_encoder_promise = null
-            throw error
-        }
-    })()
-    return aac_encoder_promise
-}
 
 function validate_rescale_options(options: RenderRescaleOptions): void {
     const { width, height, fps, fit, quality } = options
@@ -63,7 +56,7 @@ function validate_rescale_options(options: RenderRescaleOptions): void {
     try {
         parse_crf_override(options.crf ?? null)
     } catch {
-        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
     if (options.audio_quality !== undefined) {
         if (
@@ -77,56 +70,6 @@ function validate_rescale_options(options: RenderRescaleOptions): void {
             throw new ClipError("INVALID_RANGE", "Unknown rescale audio quality.")
         }
     }
-}
-
-function draw_contain_fit(
-    ctx: CanvasRenderingContext2D,
-    source: HTMLCanvasElement | OffscreenCanvas,
-    width: number,
-    height: number,
-): void {
-    const source_width = source.width
-    const source_height = source.height
-    if (source_width <= 0 || source_height <= 0) {
-        return
-    }
-    const scale = Math.min(width / source_width, height / source_height)
-    const draw_width = source_width * scale
-    const draw_height = source_height * scale
-    ctx.drawImage(source, (width - draw_width) / 2, (height - draw_height) / 2, draw_width, draw_height)
-}
-
-async function decode_full_audio(
-    sink: InstanceType<typeof import("mediabunny").AudioBufferSink>,
-): Promise<AudioBuffer | null> {
-    const chunks: AudioBuffer[] = []
-    for await (const wrapped of sink.buffers()) {
-        chunks.push(wrapped.buffer)
-    }
-    const first = chunks[0]
-    if (!first) {
-        return null
-    }
-    if (chunks.length === 1) {
-        return first
-    }
-    const channels = first.numberOfChannels
-    let length = 0
-    for (const chunk of chunks) {
-        length += chunk.length
-    }
-    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
-    let offset = 0
-    for (const chunk of chunks) {
-        for (let channel = 0; channel < channels; channel += 1) {
-            full.getChannelData(channel).set(
-                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
-                offset,
-            )
-        }
-        offset += chunk.length
-    }
-    return full
 }
 
 export async function render_rescale(input: Blob, options: RenderRescaleOptions): Promise<Blob> {
@@ -173,26 +116,8 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
         await ensure_aac_encoder(mb)
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const canvas = document.createElement("canvas")
-        canvas.width = width
-        canvas.height = height
-        const crf = parse_crf_override(options.crf ?? null)
-        const video_config = quality_to_video_config(quality, width, height, fps, crf)
-        const video_quality =
-            video_config.quantizer !== null
-                ? new mb.Quality({
-                      quantizer: video_config.quantizer,
-                      bitrate: video_config.bitrate,
-                      bitrateMode: "variable",
-                  })
-                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
-        const video_source = new mb.CanvasSource(canvas, {
-            codec: "avc",
-            quality: video_quality,
-            latencyMode: "quality",
-            hardwareAcceleration: "no-preference",
-            bitrateMode: "variable",
-        })
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
         output.addVideoTrack(video_source)
         const audio_tracks = await source.getAudioTracks()
         const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null
@@ -213,7 +138,7 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
         if (audio_source && decoded) {
             await audio_source.add(decoded)
         }
-        const ctx = canvas.getContext("2d")
+        const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
@@ -240,7 +165,7 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
             if (wrapped?.canvas) {
                 draw_contain_fit(ctx, wrapped.canvas, width, height)
             }
-            await video_source.add(i / fps, 1 / fps)
+            await add_canvas_frame(mb, video_source, canvas, i / fps, 1 / fps)
             on_progress?.(i + 1, total_frames)
         }
         try {

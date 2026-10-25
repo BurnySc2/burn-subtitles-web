@@ -1,6 +1,8 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
+import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type MergeNodeData } from "$lib/media/compose-types"
+import { compose_node_durations } from "$lib/media/compose-validation"
 
 let {
     id = "",
@@ -16,6 +18,9 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("merge", data.label))
+
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
 
 function on_count_input(raw: string): void {
     const parsed = Number(raw)
@@ -93,5 +98,6 @@ let handles = $derived(Array.from({ length: data.input_count }, (_, index) => `i
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>
+        <p class="text-xs text-gray-600">Result: {result_duration?.toFixed(2) ?? "—"}s</p>
     </div>
 </div>

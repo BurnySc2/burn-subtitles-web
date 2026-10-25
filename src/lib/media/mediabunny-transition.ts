@@ -1,22 +1,39 @@
-import type { AudioBufferSink, Output } from "mediabunny"
+import type { Output } from "mediabunny"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import { premix_transition_audio } from "./transition-audio"
-import type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
+import type {
+    TransitionAudioMode,
+    TransitionAudioQuality,
+    TransitionEasing,
+    TransitionQuality,
+} from "./transition-utils"
 import {
+    add_canvas_frame,
+    CRF_INVALID_MESSAGE,
+    create_encode_canvas,
+    create_encode_video_source,
+    decode_full_audio,
+    draw_contain_fit,
+    ensure_aac_encoder,
     parse_crf_override,
     phase_at,
-    quality_to_video_config,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
     TRANSITION_AUDIO_BITRATE_MIN,
+    TRANSITION_AUDIO_MODES,
     total_transition_duration,
     total_transition_frames,
 } from "./transition-utils"
 
 export type { ProbeResult } from "./mediabunny-clip"
 export { ClipError } from "./mediabunny-clip"
-export type { TransitionAudioQuality, TransitionEasing, TransitionQuality } from "./transition-utils"
+export type {
+    TransitionAudioMode,
+    TransitionAudioQuality,
+    TransitionEasing,
+    TransitionQuality,
+} from "./transition-utils"
 
 export interface RenderTransitionOptions {
     file_a: File
@@ -35,6 +52,7 @@ export interface RenderTransitionOptions {
     audio_quality?: TransitionAudioQuality
     audio_bitrate?: number
     easing: TransitionEasing
+    audio_mode?: TransitionAudioMode
     on_progress?: (progress: number) => void
     signal?: AbortSignal
 }
@@ -70,7 +88,7 @@ function resolve_render_crf(options: RenderTransitionOptions): number | null {
     try {
         return parse_crf_override(options.crf ?? null)
     } catch {
-        throw new ClipError("INVALID_RANGE", "CRF override must be a number from 0 to 51.")
+        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
 }
 
@@ -103,6 +121,9 @@ function validate_transition_options(options: RenderTransitionOptions): void {
     }
     if (easing !== "linear" && easing !== "exponential") {
         throw new ClipError("INVALID_RANGE", "Unknown transition easing.")
+    }
+    if (options.audio_mode !== undefined && !TRANSITION_AUDIO_MODES.includes(options.audio_mode)) {
+        throw new ClipError("INVALID_RANGE", "Unknown transition audio mode.")
     }
     resolve_render_crf(options)
     if (options.audio_bitrate !== undefined) {
@@ -169,35 +190,6 @@ export function resolve_transition_timeline(
     return { total, total_frames, frame_duration: 1 / fps }
 }
 
-let aac_encoder_promise: Promise<void> | null = null
-
-async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
-    aac_encoder_promise ??= (async () => {
-        if (!(await mb.canEncodeAudio("aac"))) {
-            const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
-            registerAacEncoder()
-        }
-    })()
-    return aac_encoder_promise
-}
-
-function draw_contain_fit(
-    ctx: CanvasRenderingContext2D,
-    source: HTMLCanvasElement | OffscreenCanvas,
-    width: number,
-    height: number,
-): void {
-    const source_width = source.width
-    const source_height = source.height
-    if (source_width <= 0 || source_height <= 0) {
-        return
-    }
-    const scale = Math.min(width / source_width, height / source_height)
-    const draw_width = source_width * scale
-    const draw_height = source_height * scale
-    ctx.drawImage(source, (width - draw_width) / 2, (height - draw_height) / 2, draw_width, draw_height)
-}
-
 function draw_transition_frame(
     ctx: CanvasRenderingContext2D,
     frame_a: HTMLCanvasElement | OffscreenCanvas | null,
@@ -217,37 +209,6 @@ function draw_transition_frame(
         draw_contain_fit(ctx, frame_b, width, height)
         ctx.globalAlpha = 1
     }
-}
-
-async function decode_full_audio(sink: AudioBufferSink): Promise<AudioBuffer | null> {
-    const chunks: AudioBuffer[] = []
-    for await (const wrapped of sink.buffers()) {
-        chunks.push(wrapped.buffer)
-    }
-    const first = chunks[0]
-    if (!first) {
-        return null
-    }
-    if (chunks.length === 1) {
-        return first
-    }
-    const channels = first.numberOfChannels
-    let length = 0
-    for (const chunk of chunks) {
-        length += chunk.length
-    }
-    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
-    let offset = 0
-    for (const chunk of chunks) {
-        for (let channel = 0; channel < channels; channel += 1) {
-            full.getChannelData(channel).set(
-                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
-                offset,
-            )
-        }
-        offset += chunk.length
-    }
-    return full
 }
 
 export async function render_transition(options: RenderTransitionOptions): Promise<RenderTransitionResult> {
@@ -301,26 +262,8 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         await ensure_aac_encoder(mb)
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const canvas = document.createElement("canvas")
-        canvas.width = width
-        canvas.height = height
-        const crf = resolve_render_crf(options)
-        const video_config = quality_to_video_config(quality, width, height, fps, crf)
-        const video_quality =
-            video_config.quantizer !== null
-                ? new mb.Quality({
-                      quantizer: video_config.quantizer,
-                      bitrate: video_config.bitrate,
-                      bitrateMode: "variable",
-                  })
-                : new mb.Quality({ bitrate: video_config.bitrate, bitrateMode: "variable" })
-        const video_source = new mb.CanvasSource(canvas, {
-            codec: "avc",
-            quality: video_quality,
-            latencyMode: "quality",
-            hardwareAcceleration: "no-preference",
-            bitrateMode: "variable",
-        })
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
         output.addVideoTrack(video_source)
         const [audio_tracks_a, audio_tracks_b] = await Promise.all([input_a.getAudioTracks(), input_b.getAudioTracks()])
         const audio_a = resolved_a.has_audio ? (audio_tracks_a[0] ?? null) : null
@@ -351,6 +294,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
                       blend_duration: duration,
                       total_duration: total,
                       easing,
+                      audio_mode: options.audio_mode,
                   })
         await output.start()
         if (signal?.aborted) {
@@ -360,27 +304,45 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         if (audio_source && premixed) {
             await audio_source.add(premixed)
         }
-        const ctx = canvas.getContext("2d")
+        const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
         const sink_a = new mb.CanvasSink(video_a, { poolSize: 1 })
         const sink_b = new mb.CanvasSink(video_b, { poolSize: 1 })
+        const forward_a = resolved_a.display_width === width && resolved_a.display_height === height
+        const forward_b = resolved_b.display_width === width && resolved_b.display_height === height
         // S full timeline output=total: solo-a from A only, blend A+B, solo-b from B only
-        const timestamps_a: number[] = []
-        const timestamps_b: number[] = []
+        const canvas_timestamps_a: number[] = []
+        const canvas_timestamps_b: number[] = []
+        const sample_timestamps_a: number[] = []
+        const sample_timestamps_b: number[] = []
         for (let i = 0; i < total_frames; i += 1) {
             const output_t = i / fps
             const { phase } = phase_at(output_t, start_a, duration, total, easing)
-            if (phase !== "solo-b") {
-                timestamps_a.push(output_t)
-            }
-            if (phase !== "solo-a") {
-                timestamps_b.push(output_t - start_a)
+            if (phase === "solo-a") {
+                if (forward_a) {
+                    sample_timestamps_a.push(output_t)
+                } else {
+                    canvas_timestamps_a.push(output_t)
+                }
+            } else if (phase === "solo-b") {
+                if (forward_b) {
+                    sample_timestamps_b.push(output_t - start_a)
+                } else {
+                    canvas_timestamps_b.push(output_t - start_a)
+                }
+            } else {
+                canvas_timestamps_a.push(output_t)
+                canvas_timestamps_b.push(output_t - start_a)
             }
         }
-        const frames_a = sink_a.canvasesAtTimestamps(timestamps_a)[Symbol.asyncIterator]()
-        const frames_b = sink_b.canvasesAtTimestamps(timestamps_b)[Symbol.asyncIterator]()
+        const frames_a = sink_a.canvasesAtTimestamps(canvas_timestamps_a)[Symbol.asyncIterator]()
+        const frames_b = sink_b.canvasesAtTimestamps(canvas_timestamps_b)[Symbol.asyncIterator]()
+        const sink_samples_a = forward_a ? new mb.VideoSampleSink(video_a) : null
+        const sink_samples_b = forward_b ? new mb.VideoSampleSink(video_b) : null
+        const samples_a = sink_samples_a?.samplesAtTimestamps(sample_timestamps_a)[Symbol.asyncIterator]() ?? null
+        const samples_b = sink_samples_b?.samplesAtTimestamps(sample_timestamps_b)[Symbol.asyncIterator]() ?? null
         for (let i = 0; i < total_frames; i += 1) {
             if (signal?.aborted) {
                 await output.cancel()
@@ -388,10 +350,28 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             }
             const output_t = i / fps
             const { phase, alpha } = phase_at(output_t, start_a, duration, total, easing)
+            if ((phase === "solo-a" && forward_a) || (phase === "solo-b" && forward_b)) {
+                const iterator = phase === "solo-a" ? samples_a : samples_b
+                const sample = iterator ? (await iterator.next()).value : null
+                if (sample) {
+                    try {
+                        sample.setTimestamp(output_t)
+                        sample.setDuration(frame_duration)
+                        await video_source.add(sample)
+                    } finally {
+                        sample.close()
+                    }
+                } else {
+                    draw_transition_frame(ctx, null, null, width, height, alpha)
+                    await add_canvas_frame(mb, video_source, canvas, output_t, frame_duration)
+                }
+                on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
+                continue
+            }
             const wrapped_a = phase === "solo-b" ? null : (await frames_a.next()).value
             const wrapped_b = phase === "solo-a" ? null : (await frames_b.next()).value
             draw_transition_frame(ctx, wrapped_a?.canvas ?? null, wrapped_b?.canvas ?? null, width, height, alpha)
-            await video_source.add(output_t, frame_duration)
+            await add_canvas_frame(mb, video_source, canvas, output_t, frame_duration)
             on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
         }
         try {

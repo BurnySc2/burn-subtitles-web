@@ -11,7 +11,12 @@ import type {
     TransitionNodeData,
     TrimNodeData,
 } from "$lib/media/compose-types"
-import { validate_compose } from "$lib/media/compose-validation"
+import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
+import {
+    QUALITY_QUANTIZER,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODE_HINTS,
+} from "$lib/media/transition-utils"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
@@ -37,6 +42,8 @@ let selected_edge_id: string | null = $derived(
         : null,
 )
 let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
@@ -148,7 +155,7 @@ function patch_label(label: string): void {
 }
 
 function patch_output_name(file_name: string): void {
-    patch_output({ file_name: file_name === "" ? null : file_name })
+    patch_output({ file_name: file_name.trim() === "" ? null : file_name.trim() })
 }
 
 function on_number_input(raw: string, apply: (value: number) => void): void {
@@ -239,7 +246,7 @@ function probe_summary(node: ComposeNode): string {
 </script>
 
 <svelte:window onkeydown={on_inspector_keydown} />
-<div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
+<div class="flex h-full w-full flex-col gap-2 overflow-y-auto rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Inspector</h2>
     {#if selected_edge_id}
         <p class="text-sm text-gray-600">
@@ -337,6 +344,7 @@ function probe_summary(node: ComposeNode): string {
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
             </label>
+            <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
             <label class="flex flex-col gap-1 text-sm font-medium">
                 Easing
                 <select
@@ -348,6 +356,74 @@ function probe_summary(node: ComposeNode): string {
                     <option value="linear">linear</option>
                     <option value="exponential">exponential</option>
                 </select>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Audio
+                <select
+                    value={selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT}
+                    onchange={(e) =>
+                        patch_transition({ audio_mode: e.currentTarget.value as TransitionNodeData["audio_mode"] })}
+                    title={TRANSITION_AUDIO_MODE_HINTS[selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT]}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option
+                        value="crossfade"
+                        title={TRANSITION_AUDIO_MODE_HINTS.crossfade}
+                    >
+                        crossfade
+                    </option>
+                    <option
+                        value="a-flat"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-flat"]}
+                    >
+                        a-flat
+                    </option>
+                    <option
+                        value="a-fadeout"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-fadeout"]}
+                    >
+                        a-fadeout
+                    </option>
+                    <option
+                        value="b-flat"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-flat"]}
+                    >
+                        b-flat
+                    </option>
+                    <option
+                        value="b-fadein"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-fadein"]}
+                    >
+                        b-fadein
+                    </option>
+                    <option
+                        value="mute"
+                        title={TRANSITION_AUDIO_MODE_HINTS.mute}
+                    >
+                        mute
+                    </option>
+                    <option
+                        value="dip"
+                        title={TRANSITION_AUDIO_MODE_HINTS.dip}
+                    >
+                        dip
+                    </option>
+                    <option
+                        value="a-only"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-only"]}
+                    >
+                        a-only
+                    </option>
+                    <option
+                        value="b-only"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-only"]}
+                    >
+                        b-only
+                    </option>
+                </select>
+                <small class="text-xs font-normal text-gray-500">
+                    {TRANSITION_AUDIO_MODE_HINTS[selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT]}
+                </small>
             </label>
         {:else if selected.type === "merge"}
             <label class="flex flex-col gap-1 text-sm font-medium">
@@ -689,8 +765,11 @@ function probe_summary(node: ComposeNode): string {
                     <option value="ultra">ultra</option>
                 </select>
             </label>
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                Audio quality
+            <label
+                class="flex flex-col gap-1 text-sm font-medium"
+                title="AAC bitrate"
+            >
+                Audio quality (AAC)
                 <select
                     value={selected.data.audio_quality ?? "source-max"}
                     onchange={(e) =>
@@ -714,10 +793,16 @@ function probe_summary(node: ComposeNode): string {
                     step="1"
                     value={selected.data.crf ?? ""}
                     oninput={(e) => on_crf_input(e.currentTarget.value)}
-                    placeholder="auto"
+                    placeholder={`auto (${QUALITY_QUANTIZER[selected.data.quality] ?? "bitrate"})`}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
+                {#if selected.data.quality === "ultra"}
+                    <small class="text-xs font-normal text-gray-500">
+                        Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.
+                    </small>
+                {/if}
             </label>
+            <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
         {/if}
         {#key selected.id}
             <ComposeNodePreview

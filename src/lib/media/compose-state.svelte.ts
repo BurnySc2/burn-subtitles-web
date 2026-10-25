@@ -1,7 +1,12 @@
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
-import { parse_crf_override } from "./transition-utils"
+import {
+    parse_crf_override,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODES,
+    type TransitionAudioMode,
+} from "./transition-utils"
 
 export type ComposeRunStatus = "idle" | "running" | "done" | "error"
 
@@ -20,6 +25,7 @@ export interface ComposeState {
     run_status: ComposeRunStatus
     run_progress: number
     run_error: string | null
+    run_elapsed_ms: number | null
     result: ComposeResult | null
 }
 
@@ -32,6 +38,7 @@ function initial_state(): ComposeState {
         run_status: "idle",
         run_progress: 0,
         run_error: null,
+        run_elapsed_ms: null,
         result: null,
     }
 }
@@ -117,6 +124,7 @@ export function reset_compose(): void {
     compose_state.run_error = null
     compose_state.run_status = "idle"
     compose_state.run_progress = 0
+    compose_state.run_elapsed_ms = null
 }
 
 export function remove_compose_nodes(node_ids: string[]): void {
@@ -264,6 +272,7 @@ export function revoke_all(): void {
     compose_state.run_status = fresh.run_status
     compose_state.run_progress = fresh.run_progress
     compose_state.run_error = fresh.run_error
+    compose_state.run_elapsed_ms = fresh.run_elapsed_ms
     compose_state.result = fresh.result
 }
 
@@ -418,6 +427,11 @@ function parse_node(raw: unknown): ComposeNode {
             if (typeof raw.data.easing !== "string" || !EASINGS.has(raw.data.easing)) {
                 throw new Error(`Node "${raw.id}": unknown transition easing`)
             }
+            const raw_mode =
+                typeof raw.data.audio_mode === "string" ? raw.data.audio_mode : TRANSITION_AUDIO_MODE_DEFAULT
+            const audio_mode: TransitionAudioMode = TRANSITION_AUDIO_MODES.includes(raw_mode as TransitionAudioMode)
+                ? (raw_mode as TransitionAudioMode)
+                : TRANSITION_AUDIO_MODE_DEFAULT
             return {
                 id: raw.id,
                 type: "transition",
@@ -426,6 +440,7 @@ function parse_node(raw: unknown): ComposeNode {
                     start: raw.data.start,
                     duration: raw.data.duration,
                     easing: raw.data.easing as "linear" | "exponential",
+                    audio_mode,
                     label: parse_label(raw.data.label, raw.id),
                 },
             }

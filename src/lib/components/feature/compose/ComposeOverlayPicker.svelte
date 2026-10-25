@@ -1,7 +1,8 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
+import { first_dropped_file, is_accepted } from "$lib/media/compose-drop"
 import { compose_state } from "$lib/media/compose-state.svelte"
-import { type ImageProbe, probe_image } from "$lib/media/mediabunny-overlay"
+import type { ImageProbe } from "$lib/media/mediabunny-overlay"
 
 let { node_id }: { node_id: string } = $props()
 
@@ -9,6 +10,7 @@ let thumb_url = $state<string | null>(null)
 let probe = $state<ImageProbe | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
+let is_dragging = $state(false)
 let token = 0
 
 let node = $derived(compose_state.nodes.find((candidate) => candidate.id === node_id) ?? null)
@@ -25,9 +27,7 @@ function revoke_thumb(): void {
     }
 }
 
-async function handle_file(event: Event): Promise<void> {
-    const input = event.currentTarget as HTMLInputElement
-    const file = input.files?.[0]
+async function handle_file(file: File | null): Promise<void> {
     if (!file) {
         return
     }
@@ -40,16 +40,16 @@ async function handle_file(event: Event): Promise<void> {
     error = null
     probe = null
     revoke_thumb()
-    if (!file.type.startsWith("image/")) {
+    if (!is_accepted(file, "overlay")) {
         target.data.image = null
         error = "Please select an image file."
         probing = false
-        input.value = ""
         return
     }
     thumb_url = URL.createObjectURL(file)
     target.data.image = file
     try {
+        const { probe_image } = await import("$lib/media/mediabunny-overlay")
         const result = await probe_image(file)
         if (mine !== token) {
             return
@@ -66,7 +66,18 @@ async function handle_file(event: Event): Promise<void> {
         if (mine === token) {
             probing = false
         }
-        input.value = ""
+    }
+}
+
+function handle_remove(): void {
+    token += 1
+    probing = false
+    error = null
+    probe = null
+    revoke_thumb()
+    const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (target && target.type === "overlay") {
+        target.data.image = null
     }
 }
 
@@ -78,14 +89,41 @@ onDestroy(() => {
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Overlay image</h2>
-    <input
-        type="file"
-        accept="image/*"
-        onchange={(e) => void handle_file(e)}
-        aria-describedby="compose-overlay-status"
-        disabled={probing}
-        class="w-full rounded border border-gray-300 bg-white p-2 text-transparent file:mr-4 file:rounded file:border-0 file:bg-gray-700 file:px-3 file:py-1 file:text-white hover:file:bg-gray-800"
+    <!-- svelte-ignore a11y_no_static_element_interactions: inner input is the keyboard path; drop is enhancement only, so no role=button -->
+    <div
+        class="drop-zone nodrag"
+        class:drag-over={is_dragging}
+        ondragover={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            is_dragging = true
+        }}
+        ondragleave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                return
+            }
+            is_dragging = false
+        }}
+        ondrop={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            is_dragging = false
+            void handle_file(first_dropped_file(e))
+        }}
     >
+        <input
+            type="file"
+            accept="image/*"
+            onchange={(e) => {
+                const file = e.currentTarget.files?.[0] ?? null
+                e.currentTarget.value = ""
+                void handle_file(file)
+            }}
+            aria-describedby="compose-overlay-status"
+            disabled={probing}
+            class="w-full rounded border border-gray-300 bg-white p-2 text-transparent file:mr-4 file:rounded file:border-0 file:bg-gray-700 file:px-3 file:py-1 file:text-white hover:file:bg-gray-800"
+        >
+    </div>
     {#if thumb_url}
         <img
             src={thumb_url}
@@ -108,4 +146,14 @@ onDestroy(() => {
             No file chosen — select an image
         {/if}
     </p>
+    {#if file_name}
+        <button
+            type="button"
+            onclick={handle_remove}
+            aria-label={`Remove overlay image ${file_name}`}
+            class="self-start text-sm text-red-700 underline"
+        >
+            Remove
+        </button>
+    {/if}
 </div>

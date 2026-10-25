@@ -1,3 +1,4 @@
+import type { AudioBufferSink } from "mediabunny"
 import { TimecodeError } from "./timecode"
 
 export type TransitionResSource = "a" | "b"
@@ -10,6 +11,43 @@ export type TransitionAudioQuality = "96k" | "128k" | "192k" | "256k" | "320k" |
 
 export type TransitionEasing = "linear" | "exponential"
 
+export type TransitionAudioMode =
+    | "crossfade"
+    | "a-flat"
+    | "a-fadeout"
+    | "b-flat"
+    | "b-fadein"
+    | "mute"
+    | "dip"
+    | "a-only"
+    | "b-only"
+
+export const TRANSITION_AUDIO_MODES: readonly TransitionAudioMode[] = [
+    "crossfade",
+    "a-flat",
+    "a-fadeout",
+    "b-flat",
+    "b-fadein",
+    "mute",
+    "dip",
+    "a-only",
+    "b-only",
+]
+
+export const TRANSITION_AUDIO_MODE_DEFAULT: TransitionAudioMode = "crossfade"
+
+export const TRANSITION_AUDIO_MODE_HINTS: Record<TransitionAudioMode, string> = {
+    crossfade: "Fade A out while B fades in.",
+    "a-flat": "Keep A loud until blend ends, then switch to B.",
+    "a-fadeout": "Fade A out during blend; B starts after.",
+    "b-flat": "Play B under blend while A fades out.",
+    "b-fadein": "Cut A at blend start, then fade B in.",
+    mute: "Silence during blend; B starts after.",
+    dip: "Dip both to silence mid-blend.",
+    "a-only": "Play only A for the whole output; B is muted. Renders silence if that side has no audio.",
+    "b-only":
+        "Play only B from the start; B audio leads picture by the A-offset. Renders silence if that side has no audio.",
+}
 export type TransitionFn = (u: number) => number
 
 export const EASING_REGISTRY: Record<TransitionEasing, TransitionFn> = {
@@ -141,7 +179,7 @@ const QUALITY_LABEL: Record<TransitionQuality, string> = {
     ultra: "Ultra (~50 Mbps, high-bitrate for further processing, not bit-exact)",
 }
 
-const QUALITY_QUANTIZER: Record<TransitionQuality, number | null> = {
+export const QUALITY_QUANTIZER: Record<TransitionQuality, number | null> = {
     low: 30,
     medium: 26,
     high: 22,
@@ -261,4 +299,155 @@ export function total_transition_duration(start_a: number, duration_b: number | 
 
 export function total_transition_frames(total_duration: number, fps: number): number {
     return Math.round(total_duration * fps)
+}
+
+export async function add_canvas_frame(
+    mb: typeof import("mediabunny"),
+    video_source: InstanceType<typeof mb.VideoSampleSource>,
+    canvas: HTMLCanvasElement,
+    timestamp: number,
+    duration: number,
+): Promise<void> {
+    const frame = new VideoFrame(canvas, {
+        timestamp: Math.trunc(timestamp * 1_000_000),
+        duration: Math.trunc(duration * 1_000_000),
+    })
+    try {
+        const sample = new mb.VideoSample(frame, { timestamp, duration })
+        try {
+            await video_source.add(sample)
+        } finally {
+            sample.close()
+        }
+    } finally {
+        frame.close()
+    }
+}
+
+export const CRF_INVALID_MESSAGE = "CRF override must be a number from 0 to 51."
+
+let aac_encoder_promise: Promise<void> | null = null
+
+export async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
+    aac_encoder_promise ??= (async () => {
+        try {
+            if (!(await mb.canEncodeAudio("aac"))) {
+                const { registerAacEncoder } = await import("@mediabunny/aac-encoder")
+                registerAacEncoder()
+            }
+        } catch (error) {
+            aac_encoder_promise = null
+            throw error
+        }
+    })()
+    return aac_encoder_promise
+}
+
+export interface EncodeCanvas {
+    canvas: HTMLCanvasElement
+    ctx: CanvasRenderingContext2D | null
+}
+
+export function create_encode_canvas(width: number, height: number): EncodeCanvas {
+    const canvas = document.createElement("canvas")
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext("2d", { colorSpace: "srgb", alpha: false })
+    if (ctx) {
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = "high"
+    }
+    return { canvas, ctx }
+}
+
+export function resolve_video_encode_config(
+    quality: TransitionQuality,
+    width: number,
+    height: number,
+    fps: number,
+    crf_raw: number | string | null | undefined,
+): TransitionVideoConfig {
+    return quality_to_video_config(quality, width, height, fps, parse_crf_override(crf_raw ?? null))
+}
+
+export function create_video_sample_source(
+    mb: typeof import("mediabunny"),
+    config: TransitionVideoConfig,
+    overrides?: {
+        hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+    },
+): InstanceType<typeof mb.VideoSampleSource> {
+    const quality =
+        config.quantizer !== null
+            ? new mb.Quality({ quantizer: config.quantizer, bitrate: config.bitrate, bitrateMode: "variable" })
+            : new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
+    return new mb.VideoSampleSource({
+        codec: "avc",
+        quality,
+        latencyMode: "quality",
+        hardwareAcceleration: overrides?.hardware_acceleration ?? "no-preference",
+        bitrateMode: "variable",
+    })
+}
+
+export function create_encode_video_source(
+    mb: typeof import("mediabunny"),
+    quality: TransitionQuality,
+    width: number,
+    height: number,
+    fps: number,
+    crf_raw: number | string | null | undefined,
+    overrides?: {
+        hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+    },
+): InstanceType<typeof mb.VideoSampleSource> {
+    return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw), overrides)
+}
+
+export function draw_contain_fit(
+    ctx: CanvasRenderingContext2D,
+    source: HTMLCanvasElement | OffscreenCanvas,
+    width: number,
+    height: number,
+): void {
+    const source_width = source.width
+    const source_height = source.height
+    if (source_width <= 0 || source_height <= 0) {
+        return
+    }
+    const scale = Math.min(width / source_width, height / source_height)
+    const draw_width = source_width * scale
+    const draw_height = source_height * scale
+    ctx.drawImage(source, (width - draw_width) / 2, (height - draw_height) / 2, draw_width, draw_height)
+}
+
+export async function decode_full_audio(sink: AudioBufferSink): Promise<AudioBuffer | null> {
+    const chunks: AudioBuffer[] = []
+    for await (const wrapped of sink.buffers()) {
+        chunks.push(wrapped.buffer)
+    }
+    const first = chunks[0]
+    if (!first) {
+        return null
+    }
+    if (chunks.length === 1) {
+        return first
+    }
+    const channels = first.numberOfChannels
+    let length = 0
+    for (const chunk of chunks) {
+        length += chunk.length
+    }
+    const full = new AudioBuffer({ numberOfChannels: channels, length, sampleRate: first.sampleRate })
+    let offset = 0
+    for (const chunk of chunks) {
+        for (let channel = 0; channel < channels; channel += 1) {
+            full.getChannelData(channel).set(
+                chunk.getChannelData(Math.min(channel, chunk.numberOfChannels - 1)),
+                offset,
+            )
+        }
+        offset += chunk.length
+    }
+    return full
 }
