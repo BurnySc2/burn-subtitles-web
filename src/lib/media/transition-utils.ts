@@ -394,6 +394,11 @@ export function create_video_sample_source(
         latencyMode: "quality",
         hardwareAcceleration: "no-preference",
         bitrateMode: "variable",
+        onEncodedPacket: (_packet, meta) => {
+            if (meta?.decoderConfig) {
+                meta.decoderConfig = { ...meta.decoderConfig, colorSpace: OUTPUT_COLOR_SPACE }
+            }
+        },
     })
 }
 
