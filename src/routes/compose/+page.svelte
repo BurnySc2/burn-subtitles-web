@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
+import ComposeBrowserWarning from "$lib/components/feature/compose/ComposeBrowserWarning.svelte"
 import ComposeCanvas from "$lib/components/feature/compose/ComposeCanvas.svelte"
 import ComposeInspector from "$lib/components/feature/compose/ComposeInspector.svelte"
 import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPanel.svelte"
@@ -248,6 +249,7 @@ onDestroy(() => {
 </script>
 
 <div class="flex w-full flex-col gap-2 p-3">
+    <ComposeBrowserWarning />
     <ComposeJsonBar />
     <div class="flex h-[calc(100vh-320px)] w-full items-start gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>

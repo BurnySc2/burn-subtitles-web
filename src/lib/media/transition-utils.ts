@@ -301,14 +301,6 @@ export function total_transition_frames(total_duration: number, fps: number): nu
     return Math.round(total_duration * fps)
 }
 
-export const OUTPUT_COLOR_SPACE: Readonly<VideoColorSpaceInit> = Object.freeze({
-    primaries: "bt709",
-    transfer: "bt709",
-    matrix: "bt709",
-    fullRange: false,
-})
-
-// WHY vui-pin: the encoder derives MP4 VUI from each frame, and canvas frames default to full-range sRGB.
 export async function add_canvas_frame(
     mb: typeof import("mediabunny"),
     video_source: InstanceType<typeof mb.VideoSampleSource>,
@@ -316,12 +308,10 @@ export async function add_canvas_frame(
     timestamp: number,
     duration: number,
 ): Promise<void> {
-    const init: VideoFrameInit & { colorSpace: VideoColorSpaceInit } = {
+    const frame = new VideoFrame(canvas, {
         timestamp: Math.trunc(timestamp * 1_000_000),
         duration: Math.trunc(duration * 1_000_000),
-        colorSpace: OUTPUT_COLOR_SPACE,
-    }
-    const frame = new VideoFrame(canvas, init)
+    })
     try {
         const sample = new mb.VideoSample(frame, { timestamp, duration })
         try {
@@ -384,28 +374,19 @@ export function create_video_sample_source(
     mb: typeof import("mediabunny"),
     config: TransitionVideoConfig,
     overrides?: {
-        color_space?: VideoColorSpaceInit
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
-        on_encoder_config?: (config: unknown) => void
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
     const quality =
         config.quantizer !== null
             ? new mb.Quality({ quantizer: config.quantizer, bitrate: config.bitrate, bitrateMode: "variable" })
             : new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
-    const color_space = overrides?.color_space ?? OUTPUT_COLOR_SPACE
     return new mb.VideoSampleSource({
         codec: "avc",
         quality,
         latencyMode: "quality",
         hardwareAcceleration: overrides?.hardware_acceleration ?? "no-preference",
         bitrateMode: "variable",
-        onEncodedPacket: (_packet, meta) => {
-            if (meta?.decoderConfig) {
-                meta.decoderConfig = { ...meta.decoderConfig, colorSpace: color_space }
-            }
-        },
-        ...(overrides?.on_encoder_config ? { onEncoderConfig: overrides.on_encoder_config } : {}),
     })
 }
 
@@ -417,9 +398,7 @@ export function create_encode_video_source(
     fps: number,
     crf_raw: number | string | null | undefined,
     overrides?: {
-        color_space?: VideoColorSpaceInit
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
-        on_encoder_config?: (config: unknown) => void
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
     return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw), overrides)

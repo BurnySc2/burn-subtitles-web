@@ -4,7 +4,6 @@ import { FFmpeg } from "@ffmpeg/ffmpeg"
 // @ts-expect-error
 import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg/dist/esm/types"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
-import type { DecodeProbeResult, RedPatchCalibrationResult } from "$lib/media/color-calibration"
 
 let ffmpeg = $state<FFmpeg | null>(null)
 let is_processing = $state(false)
@@ -12,46 +11,6 @@ let progress = $state(0)
 let output_blob = $state<Blob | null>(null)
 let output_url = $state<string | null>(null)
 let message = $state("Click Convert Video to start")
-let calib_result = $state<RedPatchCalibrationResult | null>(null)
-let calib_running = $state(false)
-let probe_file = $state<File | null>(null)
-let probe_timestamp = $state(0.001)
-let probe_result = $state<DecodeProbeResult | null>(null)
-let probe_running = $state(false)
-
-async function run_calibration() {
-    calib_running = true
-    calib_result = null
-    try {
-        const [mb, { run_red_patch_calibration }] = await Promise.all([
-            import("mediabunny"),
-            import("$lib/media/color-calibration"),
-        ])
-        calib_result = await run_red_patch_calibration(mb)
-    } finally {
-        calib_running = false
-    }
-}
-
-function on_probe_file(event: Event) {
-    const input = event.currentTarget as HTMLInputElement
-    probe_file = input.files?.[0] ?? null
-    probe_result = null
-}
-
-async function run_probe(conversion?: "none" | "default", timestamp_sec: number = probe_timestamp) {
-    if (!probe_file || probe_running) {
-        return
-    }
-    probe_running = true
-    probe_result = null
-    try {
-        const [mb, calib] = await Promise.all([import("mediabunny"), import("$lib/media/color-calibration")])
-        probe_result = await calib.run_decode_probe_with_conversion(mb, probe_file, conversion, timestamp_sec)
-    } finally {
-        probe_running = false
-    }
-}
 
 const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
 const video_url = "https://raw.githubusercontent.com/ffmpegwasm/testdata/master/Big_Buck_Bunny_180_10s.webm"
@@ -220,90 +179,6 @@ function download_video() {
             </button>
         </div>
     {/if}
-
-    <div class="section mt-10">
-        <h2 class="section-title">Color calibration (prod)</h2>
-        <p class="mb-4 text-sm text-gray-600">
-            Encodes a pure-red patch through the app pin and decodes the first frame back. Run in Chromium vs Firefox
-            and compare the delta.
-        </p>
-        <button
-            onclick={run_calibration}
-            disabled={calib_running}
-            class="btn btn-secondary btn-md"
-        >
-            {calib_running ? "Running red-patch…" : "Run red-patch"}
-        </button>
-        {#if calib_result}
-            {@const decoded = calib_result.decoded_rgb}
-            {@const delta = decoded
-                ? [
-                      decoded[0] - calib_result.canvas_rgb[0],
-                      decoded[1] - calib_result.canvas_rgb[1],
-                      decoded[2] - calib_result.canvas_rgb[2],
-                  ]
-                : null}
-            <p class="mt-4 text-sm">
-                canvas_rgb {calib_result.canvas_rgb.join(", ")} vs decoded_rgb {decoded ? decoded.join(", ") : "n/a"}
-                {#if delta}
-                    (delta {delta.join(", ")})
-                {/if}
-            </p>
-            <pre
-                class="mt-2 overflow-x-auto rounded bg-gray-100 p-4 text-xs"
-            >{JSON.stringify(calib_result, null, 2)}</pre>
-        {/if}
-    </div>
-
-    <div class="section mt-10">
-        <h2 class="section-title">Decode probe (prod)</h2>
-        <p class="mb-4 text-sm text-gray-600">
-            Decode the first frame of any video file and read the center pixel plus the raw frame colorSpace. Use the
-            same file in Chromium vs Firefox and compare against the red-patch result above.
-        </p>
-        <input
-            type="file"
-            accept="video/*"
-            onchange={on_probe_file}
-            class="mb-4 block text-sm"
-        >
-        <label class="mb-4 flex items-center gap-2 text-sm text-gray-600">
-            Timestamp (s)
-            <input
-                type="number"
-                min="0"
-                step="0.1"
-                bind:value={probe_timestamp}
-                class="w-28 rounded border px-2 py-1 text-sm"
-            >
-        </label>
-        <div class="flex gap-2">
-            <button
-                onclick={() => run_probe(undefined, probe_timestamp)}
-                disabled={!probe_file || probe_running}
-                class="btn btn-secondary btn-md"
-            >
-                {probe_running ? "Probing…" : "Run decode (default)"}
-            </button>
-            <button
-                onclick={() => run_probe("none", probe_timestamp)}
-                disabled={!probe_file || probe_running}
-                class="btn btn-secondary btn-md"
-            >
-                Run decode no-conversion
-            </button>
-        </div>
-        {#if probe_result}
-            <p class="mt-4 text-sm">
-                rgb {probe_result.rgb ? probe_result.rgb.join(", ") : "n/a"} · frame_color_space
-                {JSON.stringify(probe_result.frame_color_space)}
-                · probe_vui {probe_result.probe_vui ?? "n/a"} · {probe_result.width}x{probe_result.height}
-            </p>
-            <pre
-                class="mt-2 overflow-x-auto rounded bg-gray-100 p-4 text-xs"
-            >{JSON.stringify(probe_result, null, 2)}</pre>
-        {/if}
-    </div>
 </div>
 
 <style>

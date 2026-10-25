@@ -6,7 +6,6 @@ import {
     decode_full_audio,
     EASING_REGISTRY,
     estimate_frame_count,
-    OUTPUT_COLOR_SPACE,
     parse_crf_override,
     phase_at,
     quality_to_video_config,
@@ -257,18 +256,6 @@ describe("TRANSITION_AUDIO_MODE_HINTS", () => {
 
     it.each(["a-only", "b-only"] as const)("ends %s hint with the silence suffix", (mode) => {
         expect(TRANSITION_AUDIO_MODE_HINTS[mode].endsWith("Renders silence if that side has no audio.")).toBe(true)
-    })
-})
-
-describe("OUTPUT_COLOR_SPACE", () => {
-    it("pins bt709 VUI with BT.709 transfer and stays frozen", () => {
-        expect(OUTPUT_COLOR_SPACE).toEqual({
-            primaries: "bt709",
-            transfer: "bt709",
-            matrix: "bt709",
-            fullRange: false,
-        })
-        expect(Object.isFrozen(OUTPUT_COLOR_SPACE)).toBe(true)
     })
 })
 
