@@ -4,7 +4,7 @@ import { FFmpeg } from "@ffmpeg/ffmpeg"
 // @ts-expect-error
 import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg/dist/esm/types"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
-import type { RedPatchCalibrationResult } from "$lib/media/color-calibration"
+import type { DecodeProbeResult, RedPatchCalibrationResult } from "$lib/media/color-calibration"
 
 let ffmpeg = $state<FFmpeg | null>(null)
 let is_processing = $state(false)
@@ -14,6 +14,9 @@ let output_url = $state<string | null>(null)
 let message = $state("Click Convert Video to start")
 let calib_result = $state<RedPatchCalibrationResult | null>(null)
 let calib_running = $state(false)
+let probe_file = $state<File | null>(null)
+let probe_result = $state<DecodeProbeResult | null>(null)
+let probe_running = $state(false)
 
 async function run_calibration() {
     calib_running = true
@@ -26,6 +29,26 @@ async function run_calibration() {
         calib_result = await run_red_patch_calibration(mb)
     } finally {
         calib_running = false
+    }
+}
+
+function on_probe_file(event: Event) {
+    const input = event.currentTarget as HTMLInputElement
+    probe_file = input.files?.[0] ?? null
+    probe_result = null
+}
+
+async function run_probe(conversion?: "none" | "default") {
+    if (!probe_file || probe_running) {
+        return
+    }
+    probe_running = true
+    probe_result = null
+    try {
+        const [mb, calib] = await Promise.all([import("mediabunny"), import("$lib/media/color-calibration")])
+        probe_result = await calib.run_decode_probe_with_conversion(mb, probe_file, conversion)
+    } finally {
+        probe_running = false
     }
 }
 
@@ -228,6 +251,46 @@ function download_video() {
             <pre
                 class="mt-2 overflow-x-auto rounded bg-gray-100 p-4 text-xs"
             >{JSON.stringify(calib_result, null, 2)}</pre>
+        {/if}
+    </div>
+
+    <div class="section mt-10">
+        <h2 class="section-title">Decode probe (prod)</h2>
+        <p class="mb-4 text-sm text-gray-600">
+            Decode the first frame of any video file and read the center pixel plus the raw frame colorSpace. Use the
+            same file in Chromium vs Firefox and compare against the red-patch result above.
+        </p>
+        <input
+            type="file"
+            accept="video/*"
+            onchange={on_probe_file}
+            class="mb-4 block text-sm"
+        >
+        <div class="flex gap-2">
+            <button
+                onclick={() => run_probe()}
+                disabled={!probe_file || probe_running}
+                class="btn btn-secondary btn-md"
+            >
+                {probe_running ? "Probing…" : "Run decode (default)"}
+            </button>
+            <button
+                onclick={() => run_probe("none")}
+                disabled={!probe_file || probe_running}
+                class="btn btn-secondary btn-md"
+            >
+                Run decode no-conversion
+            </button>
+        </div>
+        {#if probe_result}
+            <p class="mt-4 text-sm">
+                rgb {probe_result.rgb ? probe_result.rgb.join(", ") : "n/a"} · frame_color_space
+                {JSON.stringify(probe_result.frame_color_space)}
+                · probe_vui {probe_result.probe_vui ?? "n/a"} · {probe_result.width}x{probe_result.height}
+            </p>
+            <pre
+                class="mt-2 overflow-x-auto rounded bg-gray-100 p-4 text-xs"
+            >{JSON.stringify(probe_result, null, 2)}</pre>
         {/if}
     </div>
 </div>
