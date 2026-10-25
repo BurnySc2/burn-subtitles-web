@@ -310,21 +310,39 @@ export async function render_transition(options: RenderTransitionOptions): Promi
         }
         const sink_a = new mb.CanvasSink(video_a, { poolSize: 1 })
         const sink_b = new mb.CanvasSink(video_b, { poolSize: 1 })
+        const forward_a = resolved_a.display_width === width && resolved_a.display_height === height
+        const forward_b = resolved_b.display_width === width && resolved_b.display_height === height
         // S full timeline output=total: solo-a from A only, blend A+B, solo-b from B only
-        const timestamps_a: number[] = []
-        const timestamps_b: number[] = []
+        const canvas_timestamps_a: number[] = []
+        const canvas_timestamps_b: number[] = []
+        const sample_timestamps_a: number[] = []
+        const sample_timestamps_b: number[] = []
         for (let i = 0; i < total_frames; i += 1) {
             const output_t = i / fps
             const { phase } = phase_at(output_t, start_a, duration, total, easing)
-            if (phase !== "solo-b") {
-                timestamps_a.push(output_t)
-            }
-            if (phase !== "solo-a") {
-                timestamps_b.push(output_t - start_a)
+            if (phase === "solo-a") {
+                if (forward_a) {
+                    sample_timestamps_a.push(output_t)
+                } else {
+                    canvas_timestamps_a.push(output_t)
+                }
+            } else if (phase === "solo-b") {
+                if (forward_b) {
+                    sample_timestamps_b.push(output_t - start_a)
+                } else {
+                    canvas_timestamps_b.push(output_t - start_a)
+                }
+            } else {
+                canvas_timestamps_a.push(output_t)
+                canvas_timestamps_b.push(output_t - start_a)
             }
         }
-        const frames_a = sink_a.canvasesAtTimestamps(timestamps_a)[Symbol.asyncIterator]()
-        const frames_b = sink_b.canvasesAtTimestamps(timestamps_b)[Symbol.asyncIterator]()
+        const frames_a = sink_a.canvasesAtTimestamps(canvas_timestamps_a)[Symbol.asyncIterator]()
+        const frames_b = sink_b.canvasesAtTimestamps(canvas_timestamps_b)[Symbol.asyncIterator]()
+        const sink_samples_a = forward_a ? new mb.VideoSampleSink(video_a) : null
+        const sink_samples_b = forward_b ? new mb.VideoSampleSink(video_b) : null
+        const samples_a = sink_samples_a?.samplesAtTimestamps(sample_timestamps_a)[Symbol.asyncIterator]() ?? null
+        const samples_b = sink_samples_b?.samplesAtTimestamps(sample_timestamps_b)[Symbol.asyncIterator]() ?? null
         for (let i = 0; i < total_frames; i += 1) {
             if (signal?.aborted) {
                 await output.cancel()
@@ -332,6 +350,24 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             }
             const output_t = i / fps
             const { phase, alpha } = phase_at(output_t, start_a, duration, total, easing)
+            if ((phase === "solo-a" && forward_a) || (phase === "solo-b" && forward_b)) {
+                const iterator = phase === "solo-a" ? samples_a : samples_b
+                const sample = iterator ? (await iterator.next()).value : null
+                if (sample) {
+                    try {
+                        sample.setTimestamp(output_t)
+                        sample.setDuration(frame_duration)
+                        await video_source.add(sample)
+                    } finally {
+                        sample.close()
+                    }
+                } else {
+                    draw_transition_frame(ctx, null, null, width, height, alpha)
+                    await add_canvas_frame(mb, video_source, canvas, output_t, frame_duration)
+                }
+                on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
+                continue
+            }
             const wrapped_a = phase === "solo-b" ? null : (await frames_a.next()).value
             const wrapped_b = phase === "solo-a" ? null : (await frames_b.next()).value
             draw_transition_frame(ctx, wrapped_a?.canvas ?? null, wrapped_b?.canvas ?? null, width, height, alpha)

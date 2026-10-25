@@ -254,33 +254,65 @@ export async function render_overlay(options: RenderOverlayOptions): Promise<Ren
         if (!track) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
         }
+        const show_end = options.show_end ?? null
+        const image_missing = !(options.image instanceof File)
+        const window_closed = show_end !== null && (show_end <= 0 || options.show_start >= duration)
+        const forward_samples =
+            (image_missing || window_closed) && probe.display_width === width && probe.display_height === height
         const timestamps: number[] = []
         for (let i = 0; i < total_frames; i += 1) {
             timestamps.push(i / fps)
         }
-        const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
-        const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
-        const show_end = options.show_end ?? null
-        for (let i = 0; i < total_frames; i += 1) {
-            if (signal?.aborted) {
-                await output.cancel()
-                throw new ClipError("CANCELLED", "Cancelled.")
+        if (forward_samples) {
+            const sample_sink = new mb.VideoSampleSink(track)
+            const samples = sample_sink.samplesAtTimestamps(timestamps)[Symbol.asyncIterator]()
+            for (let i = 0; i < total_frames; i += 1) {
+                if (signal?.aborted) {
+                    await output.cancel()
+                    throw new ClipError("CANCELLED", "Cancelled.")
+                }
+                const sample = (await samples.next()).value
+                const output_t = i / fps
+                if (sample) {
+                    try {
+                        sample.setTimestamp(output_t)
+                        sample.setDuration(1 / fps)
+                        await video_source.add(sample)
+                    } finally {
+                        sample.close()
+                    }
+                } else {
+                    ctx.globalAlpha = 1
+                    ctx.fillStyle = "#000"
+                    ctx.fillRect(0, 0, width, height)
+                    await add_canvas_frame(mb, video_source, canvas, output_t, 1 / fps)
+                }
+                on_progress?.(total_frames <= 1 ? 1 : (i + 1) / total_frames)
             }
-            const wrapped = (await frames.next()).value
-            const t = i / fps
-            ctx.globalAlpha = 1
-            ctx.fillStyle = "#000"
-            ctx.fillRect(0, 0, width, height)
-            if (wrapped?.canvas) {
-                draw_contain_fit(ctx, wrapped.canvas, width, height)
-            }
-            if (t >= options.show_start && (show_end === null || t <= show_end)) {
-                ctx.globalAlpha = options.opacity
-                ctx.drawImage(bitmap, rect.dx, rect.dy, rect.dw, rect.dh)
+        } else {
+            const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
+            const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
+            for (let i = 0; i < total_frames; i += 1) {
+                if (signal?.aborted) {
+                    await output.cancel()
+                    throw new ClipError("CANCELLED", "Cancelled.")
+                }
+                const wrapped = (await frames.next()).value
+                const t = i / fps
                 ctx.globalAlpha = 1
+                ctx.fillStyle = "#000"
+                ctx.fillRect(0, 0, width, height)
+                if (wrapped?.canvas) {
+                    draw_contain_fit(ctx, wrapped.canvas, width, height)
+                }
+                if (t >= options.show_start && (show_end === null || t <= show_end)) {
+                    ctx.globalAlpha = options.opacity
+                    ctx.drawImage(bitmap, rect.dx, rect.dy, rect.dw, rect.dh)
+                    ctx.globalAlpha = 1
+                }
+                await add_canvas_frame(mb, video_source, canvas, t, 1 / fps)
+                on_progress?.(total_frames <= 1 ? 1 : (i + 1) / total_frames)
             }
-            await add_canvas_frame(mb, video_source, canvas, t, 1 / fps)
-            on_progress?.(total_frames <= 1 ? 1 : (i + 1) / total_frames)
         }
         try {
             await output.finalize()
