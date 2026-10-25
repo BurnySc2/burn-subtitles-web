@@ -4,6 +4,7 @@ import { FFmpeg } from "@ffmpeg/ffmpeg"
 // @ts-expect-error
 import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg/dist/esm/types"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
+import type { RedPatchCalibrationResult } from "$lib/media/color-calibration"
 
 let ffmpeg = $state<FFmpeg | null>(null)
 let is_processing = $state(false)
@@ -11,6 +12,22 @@ let progress = $state(0)
 let output_blob = $state<Blob | null>(null)
 let output_url = $state<string | null>(null)
 let message = $state("Click Convert Video to start")
+let calib_result = $state<RedPatchCalibrationResult | null>(null)
+let calib_running = $state(false)
+
+async function run_calibration() {
+    calib_running = true
+    calib_result = null
+    try {
+        const [mb, { run_red_patch_calibration }] = await Promise.all([
+            import("mediabunny"),
+            import("$lib/media/color-calibration"),
+        ])
+        calib_result = await run_red_patch_calibration(mb)
+    } finally {
+        calib_running = false
+    }
+}
 
 const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
 const video_url = "https://raw.githubusercontent.com/ffmpegwasm/testdata/master/Big_Buck_Bunny_180_10s.webm"
@@ -179,6 +196,40 @@ function download_video() {
             </button>
         </div>
     {/if}
+
+    <div class="section mt-10">
+        <h2 class="section-title">Color calibration (prod)</h2>
+        <p class="mb-4 text-sm text-gray-600">
+            Encodes a pure-red patch through the app pin and decodes the first frame back. Run in Chromium vs Firefox
+            and compare the delta.
+        </p>
+        <button
+            onclick={run_calibration}
+            disabled={calib_running}
+            class="btn btn-secondary btn-md"
+        >
+            {calib_running ? "Running red-patch…" : "Run red-patch"}
+        </button>
+        {#if calib_result}
+            {@const decoded = calib_result.decoded_rgb}
+            {@const delta = decoded
+                ? [
+                      decoded[0] - calib_result.canvas_rgb[0],
+                      decoded[1] - calib_result.canvas_rgb[1],
+                      decoded[2] - calib_result.canvas_rgb[2],
+                  ]
+                : null}
+            <p class="mt-4 text-sm">
+                canvas_rgb {calib_result.canvas_rgb.join(", ")} vs decoded_rgb {decoded ? decoded.join(", ") : "n/a"}
+                {#if delta}
+                    (delta {delta.join(", ")})
+                {/if}
+            </p>
+            <pre
+                class="mt-2 overflow-x-auto rounded bg-gray-100 p-4 text-xs"
+            >{JSON.stringify(calib_result, null, 2)}</pre>
+        {/if}
+    </div>
 </div>
 
 <style>

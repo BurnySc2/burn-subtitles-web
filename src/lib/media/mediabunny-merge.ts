@@ -148,7 +148,6 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         await ensure_aac_encoder(mb)
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
         const encode_init_start = performance.now()
         const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null, {
             on_encoder_config: (config) => {
@@ -182,13 +181,14 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
             await audio_source.add(mixed)
         }
         timings.add = performance.now() - add_start
+        let frame_index = 0
+        let elapsed = 0
+        const draw_start = performance.now()
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
         const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
-        let frame_index = 0
-        let elapsed = 0
-        const draw_start = performance.now()
         for (let part = 0; part < inputs.length; part += 1) {
             if (signal?.aborted) {
                 await output.cancel()

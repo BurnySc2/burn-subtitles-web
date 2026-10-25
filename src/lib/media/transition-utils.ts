@@ -303,7 +303,7 @@ export function total_transition_frames(total_duration: number, fps: number): nu
 
 export const OUTPUT_COLOR_SPACE: Readonly<VideoColorSpaceInit> = Object.freeze({
     primaries: "bt709",
-    transfer: "iec61966-2-1",
+    transfer: "bt709",
     matrix: "bt709",
     fullRange: false,
 })
