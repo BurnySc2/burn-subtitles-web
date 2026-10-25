@@ -11,6 +11,8 @@ import {
     decode_full_audio,
     draw_contain_fit,
     ensure_aac_encoder,
+    log_encoder_diagnostics,
+    OUTPUT_COLOR_SPACE,
     parse_crf_override,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
@@ -115,13 +117,23 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         void output?.cancel()
     }
     signal?.addEventListener("abort", on_abort, { once: true })
+    const timings: Record<string, number> = {}
+    let is_dev = false
+    try {
+        is_dev = Boolean((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV)
+    } catch {
+        is_dev = false
+    }
+    let actual_encoder_config: unknown
     try {
         for (const input of inputs) {
             if (!(await input.canRead())) {
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
             }
         }
+        const probe_start = performance.now()
         const probes = await Promise.all(files.map((file) => probe_media(file)))
+        timings.probe = performance.now() - probe_start
         for (const probe of probes) {
             if (!probe || !probe.has_video || !probe.can_play) {
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
@@ -143,13 +155,23 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
         const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
+        const encode_init_start = performance.now()
+        const video_source = is_dev
+            ? create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null, {
+                  on_encoder_config: (config) => {
+                      actual_encoder_config = config
+                  },
+              })
+            : create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
+        timings.encode_init = performance.now() - encode_init_start
         output.addVideoTrack(video_source)
         const audio_tracks = await Promise.all(inputs.map((input) => input.getAudioTracks()))
         const has_audio = probes.some((probe, index) => probe.has_audio && (audio_tracks[index]?.[0] ?? null) !== null)
         const sinks = audio_tracks.map((tracks) => (tracks[0] ? new mb.AudioBufferSink(tracks[0]) : null))
+        const decode_start = performance.now()
         const decoded = await Promise.all(sinks.map((sink) => (sink ? decode_full_audio(sink) : null)))
         const mixed = await concat_audio_buffers({ buffers: decoded })
+        timings.decode = performance.now() - decode_start
         let audio_source: InstanceType<typeof mb.AudioBufferSource> | null = null
         if (has_audio && mixed) {
             audio_source = new mb.AudioBufferSource({
@@ -163,15 +185,18 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
             await output.cancel()
             throw new ClipError("CANCELLED", "Cancelled.")
         }
+        const add_start = performance.now()
         if (audio_source && mixed) {
             await audio_source.add(mixed)
         }
+        timings.add = performance.now() - add_start
         const ctx = encode_ctx
         if (!ctx) {
             throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
         }
         let frame_index = 0
         let elapsed = 0
+        const draw_start = performance.now()
         for (let part = 0; part < inputs.length; part += 1) {
             if (signal?.aborted) {
                 await output.cancel()
@@ -203,12 +228,16 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
                 if (wrapped?.canvas) {
                     draw_contain_fit(ctx, wrapped.canvas, width, height)
                 }
+                const video_add_start = performance.now()
                 await add_canvas_frame(mb, video_source, canvas, elapsed, 1 / fps)
+                timings.add += performance.now() - video_add_start
                 elapsed += 1 / fps
                 frame_index += 1
                 on_progress?.(total_frames <= 1 ? 1 : frame_index / total_frames)
             }
         }
+        timings.draw = performance.now() - draw_start
+        const finalize_start = performance.now()
         try {
             await output.finalize()
         } catch (error) {
@@ -220,6 +249,28 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
                 throw new ClipError("CANCELLED", "Cancelled.")
             }
             throw error
+        }
+        timings.finalize = performance.now() - finalize_start
+        if (is_dev) {
+            try {
+                let ua: string | undefined
+                if (typeof navigator !== "undefined") {
+                    const brands = (
+                        navigator as unknown as {
+                            userAgentData?: { brands?: Array<{ brand: string; version: string }> }
+                        }
+                    ).userAgentData?.brands
+                    ua = brands?.map((item) => `${item.brand}/${item.version}`).join(" ") ?? navigator.userAgent
+                }
+                log_encoder_diagnostics({
+                    requested: { quality, width, height, fps },
+                    actual: actual_encoder_config,
+                    timings,
+                    source_vui: probes[0]?.video_color_space ?? null,
+                    output_vui: OUTPUT_COLOR_SPACE,
+                    ua,
+                })
+            } catch {}
         }
         if (!target.buffer) {
             throw new ClipError("FAILED", "Merge rendering produced no output.")

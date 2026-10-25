@@ -308,6 +308,32 @@ export const OUTPUT_COLOR_SPACE: Readonly<VideoColorSpaceInit> = Object.freeze({
     fullRange: false,
 })
 
+export const OUTPUT_COLOR_SPACE_BT709: Readonly<VideoColorSpaceInit> = Object.freeze({
+    primaries: "bt709",
+    transfer: "bt709",
+    matrix: "bt709",
+    fullRange: false,
+})
+
+export interface EncoderDiagnostics {
+    requested?: unknown
+    actual?: unknown
+    timings?: Record<string, number>
+    source_vui?: string | null
+    output_vui?: unknown
+    ua?: string
+}
+
+export function log_encoder_diagnostics(event: EncoderDiagnostics): void {
+    try {
+        const env = (import.meta as unknown as { env?: { DEV?: boolean } }).env
+        if (env && !env.DEV) {
+            return
+        }
+    } catch {}
+    console.debug(event)
+}
+
 // WHY vui-pin: the encoder derives MP4 VUI from each frame, and canvas frames default to full-range sRGB.
 export async function add_canvas_frame(
     mb: typeof import("mediabunny"),
@@ -383,22 +409,29 @@ export function resolve_video_encode_config(
 export function create_video_sample_source(
     mb: typeof import("mediabunny"),
     config: TransitionVideoConfig,
+    overrides?: {
+        color_space?: VideoColorSpaceInit
+        hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+        on_encoder_config?: (config: unknown) => void
+    },
 ): InstanceType<typeof mb.VideoSampleSource> {
     const quality =
         config.quantizer !== null
             ? new mb.Quality({ quantizer: config.quantizer, bitrate: config.bitrate, bitrateMode: "variable" })
             : new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
+    const color_space = overrides?.color_space ?? OUTPUT_COLOR_SPACE
     return new mb.VideoSampleSource({
         codec: "avc",
         quality,
         latencyMode: "quality",
-        hardwareAcceleration: "no-preference",
+        hardwareAcceleration: overrides?.hardware_acceleration ?? "no-preference",
         bitrateMode: "variable",
         onEncodedPacket: (_packet, meta) => {
             if (meta?.decoderConfig) {
-                meta.decoderConfig = { ...meta.decoderConfig, colorSpace: OUTPUT_COLOR_SPACE }
+                meta.decoderConfig = { ...meta.decoderConfig, colorSpace: color_space }
             }
         },
+        ...(overrides?.on_encoder_config ? { onEncoderConfig: overrides.on_encoder_config } : {}),
     })
 }
 
@@ -409,8 +442,13 @@ export function create_encode_video_source(
     height: number,
     fps: number,
     crf_raw: number | string | null | undefined,
+    overrides?: {
+        color_space?: VideoColorSpaceInit
+        hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+        on_encoder_config?: (config: unknown) => void
+    },
 ): InstanceType<typeof mb.VideoSampleSource> {
-    return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw))
+    return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw), overrides)
 }
 
 export function draw_contain_fit(
