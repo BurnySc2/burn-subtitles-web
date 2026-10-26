@@ -106,8 +106,8 @@ function handle_add(kind: ComposeNodeKind): void {
                 position,
                 data: {
                     file_name: null,
-                    width: 1280,
-                    height: 720,
+                    width: 1920,
+                    height: 1080,
                     fps: 30,
                     quality: "medium",
                     audio_quality: "source-max",
