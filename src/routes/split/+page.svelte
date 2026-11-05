@@ -41,6 +41,11 @@ async function handle_srt_upload(event: Event) {
     if (!file) {
         return
     }
+    if (!/\.srt$/i.test(file.name)) {
+        upload_error = `Only .srt files are supported (got ${file.name})`
+        input.value = ""
+        return
+    }
     try {
         const text = await file.text()
         const validation = validate_srt(text)
@@ -142,7 +147,7 @@ function download_splits() {
     result_url = URL.createObjectURL(new Blob([build_output_srt()], { type: "text/plain;charset=utf-8" }))
     const link = document.createElement("a")
     link.href = result_url
-    link.download = "split-prototype.srt"
+    link.download = "split.srt"
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -151,12 +156,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
 </script>
 
 <div class="mx-auto max-w-5xl p-6">
-    <a
-        href="/dev"
-        class="text-sm text-blue-600 hover:underline"
-        >← Back to /dev</a
-    >
-    <h1 class="mt-2 text-2xl font-bold">Split diff + option tabs</h1>
+    <h1 class="mt-2 text-2xl font-bold">Split Subtitles</h1>
     <p class="mt-1 text-sm text-gray-600">Pick a split per cue, then accept and download.</p>
     <ol class="mt-3 flex items-center gap-2 text-sm">
         <li
@@ -197,7 +197,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             Subtitles file
             <input
                 type="file"
-                accept=".srt,.vtt,text/plain"
+                accept=".srt"
                 onchange={handle_srt_upload}
                 class="ml-2 text-sm"
             >

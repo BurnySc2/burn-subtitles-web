@@ -15,6 +15,15 @@ describe("Navigation", () => {
         expect(links[0]?.getAttribute("href")).toBe("/clip")
     })
 
+    it("renders a single Split Subtitles link to /split", async () => {
+        const screen = await render(Navigation)
+        const links = [...screen.container.querySelectorAll("a")].filter(
+            (link) => link.textContent?.trim() === "Split Subtitles",
+        )
+        expect(links.length).toBe(1)
+        expect(links[0]?.getAttribute("href")).toBe("/split")
+    })
+
     it("never links to /transition", async () => {
         const screen = await render(Navigation)
         const hrefs = [...screen.container.querySelectorAll("a")].map((link) => link.getAttribute("href") ?? "")
