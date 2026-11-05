@@ -42,8 +42,6 @@ export interface MergeNodeData {
     label?: string | null
 }
 
-export type SubtitleRenderMode = "mux" | "burn" | "sidecar"
-
 export type SubtitleVerticalAnchor = "top" | "center" | "bottom"
 
 export const SUBTITLE_BURN_DEFAULTS = {
@@ -61,8 +59,10 @@ export const SUBTITLE_BURN_DEFAULTS = {
 
 export interface SubtitlesNodeData {
     file: File | null
+    /** @deprecated Paste removed; legacy JSON only, never read. */
     content: string | null
-    mode: SubtitleRenderMode
+    /** @deprecated Burn-only; legacy JSON only, never read. */
+    mode?: "burn"
     font_file?: File | null
     font_size?: number
     text_color?: string
@@ -178,7 +178,6 @@ export interface ComposeRunOutput {
     mime: string
     ext: string
     size_bytes: number
-    sidecar_url: string | null
 }
 
 export interface ComposeRunResult {

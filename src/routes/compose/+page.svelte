@@ -74,7 +74,8 @@ function handle_add(kind: ComposeNodeKind): void {
                 id,
                 type: "subtitles",
                 position,
-                data: { file: null, content: null, mode: "mux", ...SUBTITLE_BURN_DEFAULTS },
+                // WHY content stays null: inline SRT deprecated, attach an .srt file instead
+                data: { file: null, content: null, ...SUBTITLE_BURN_DEFAULTS },
             }
             break
         case "overlay":
@@ -141,9 +142,6 @@ async function handle_render(): Promise<void> {
     aborter?.abort()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
-        if (compose_state.result.sidecar_url) {
-            URL.revokeObjectURL(compose_state.result.sidecar_url)
-        }
         compose_state.result = null
     }
     compose_state.run_status = "running"
@@ -171,7 +169,6 @@ async function handle_render(): Promise<void> {
             url: result.output.url,
             mime: result.output.mime,
             ext: result.output.ext,
-            sidecar_url: result.output.sidecar_url,
         }
         compose_state.run_elapsed_ms = Math.round(performance.now() - started_at)
         compose_state.run_status = "done"
@@ -229,26 +226,10 @@ let download_name = $derived.by(() => {
     return compose_filename(stem, compose_state.result.ext)
 })
 
-let sidecar_name = $derived.by(() => {
-    if (!compose_state.result?.sidecar_url) {
-        return compose_filename("composition", "vtt")
-    }
-    let stem = "composition"
-    for (const node of compose_state.nodes) {
-        if (node.type === "output" && node.data.file_name?.trim()) {
-            stem = node.data.file_name
-        }
-    }
-    return compose_filename(stem, "vtt")
-})
-
 onDestroy(() => {
     aborter?.abort()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
-        if (compose_state.result.sidecar_url) {
-            URL.revokeObjectURL(compose_state.result.sidecar_url)
-        }
         compose_state.result = null
     }
 })
@@ -312,12 +293,7 @@ onDestroy(() => {
                 controls
                 class="w-full rounded"
             >
-                <track
-                    kind="captions"
-                    src={compose_state.result.sidecar_url}
-                    srclang="en"
-                    label="English"
-                >
+                <track kind="captions">
             </video>
             <a
                 href={compose_state.result.url}
@@ -326,15 +302,6 @@ onDestroy(() => {
             >
                 Download {download_name}
             </a>
-            {#if compose_state.result.sidecar_url}
-                <a
-                    href={compose_state.result.sidecar_url}
-                    download={sidecar_name}
-                    class="btn btn-secondary inline-flex items-center justify-center"
-                >
-                    Download {sidecar_name}
-                </a>
-            {/if}
         </div>
     {/if}
 </div>

@@ -1,5 +1,5 @@
 import { find_output_node, topo_sort_compose } from "./compose-graph"
-import { normalize_subtitle_style, srt_to_vtt } from "./compose-subtitles"
+import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
@@ -150,7 +150,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     const incoming = incoming_by_target(edges)
     const output_node = find_output_node(nodes)
     const memo = new Map<string, Blob>()
-    let sidecar_vtt: string | null = null
     const total = Math.max(1, order.length)
     let done = 0
     for (const node_id of order) {
@@ -278,38 +277,40 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             }
             case "subtitles": {
                 const input = single_input(node.id, incoming, memo)
-                const srt_content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
-                if (srt_content === null || srt_content.trim() === "") {
-                    throw new ClipError("FAILED", "Subtitle content is empty.")
+                const srt_content = node.data.file ? await node.data.file.text() : null
+                if (srt_content === null) {
+                    throw new ClipError("FAILED", "Subtitle file is required.")
                 }
-                const vtt = srt_to_vtt(srt_content)
-                if (node.data.mode === "burn") {
-                    const style = normalize_subtitle_style(node.data)
-                    memo.set(
-                        node.id,
-                        await render_subtitles_burn(
-                            blob_to_file(input, "burn-input.mp4"),
-                            {
-                                srt_content,
-                                ...style,
-                                width: output_node?.data.width ?? 1920,
-                                height: output_node?.data.height ?? 1080,
-                                fps: output_node?.data.fps ?? 30,
-                                quality: output_node?.data.quality ?? "medium",
-                                crf: output_node?.data.crf ?? null,
-                                audio_quality: output_node?.data.audio_quality ?? "source-max",
-                                on_progress: slice,
-                            },
-                            signal,
-                        ),
-                    )
-                } else {
-                    memo.set(node.id, input)
-                    // WHY mux shares sidecar output: mp4 text-track mux unsupported in-browser
-                    if (node.data.mode === "sidecar" || node.data.mode === "mux") {
-                        sidecar_vtt ??= vtt
+                if (srt_content.trim() === "") {
+                    throw new ClipError("FAILED", "Subtitle file is empty.")
+                }
+                try {
+                    srt_to_vtt(srt_content)
+                } catch (error) {
+                    if (error instanceof SubtitleError) {
+                        throw new ClipError("FAILED", error.message)
                     }
+                    throw error
                 }
+                const style = normalize_subtitle_style(node.data)
+                memo.set(
+                    node.id,
+                    await render_subtitles_burn(
+                        blob_to_file(input, "burn-input.mp4"),
+                        {
+                            srt_content,
+                            ...style,
+                            width: output_node?.data.width ?? 1920,
+                            height: output_node?.data.height ?? 1080,
+                            fps: output_node?.data.fps ?? 30,
+                            quality: output_node?.data.quality ?? "medium",
+                            crf: output_node?.data.crf ?? null,
+                            audio_quality: output_node?.data.audio_quality ?? "source-max",
+                            on_progress: slice,
+                        },
+                        signal,
+                    ),
+                )
                 break
             }
             case "output": {
@@ -325,7 +326,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     if (!final_blob) {
         throw new ClipError("FAILED", "Composition produced no output.")
     }
-    const sidecar_url = sidecar_vtt === null ? null : URL.createObjectURL(new Blob([sidecar_vtt], { type: "text/vtt" }))
     return {
         ok: true,
         issues: [],
@@ -334,7 +334,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             mime: "video/mp4",
             ext: "mp4",
             size_bytes: final_blob.size,
-            sidecar_url,
         },
     }
 }

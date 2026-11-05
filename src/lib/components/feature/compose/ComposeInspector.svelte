@@ -531,21 +531,8 @@ function probe_summary(node: ComposeNode): string {
                 <p class="text-sm text-gray-500">Connect 2 or more inputs using handles in0, in1, …</p>
             {/if}
         {:else if selected.type === "subtitles"}
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                SRT content
-                <textarea
-                    value={selected.data.content ?? ""}
-                    oninput={(e) => patch_subtitles({ content: e.currentTarget.value })}
-                    placeholder={"1\n00:00:00,000 --> 00:00:02,000\nHello"}
-                    rows="6"
-                    class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
-                ></textarea>
-                {#if subtitle_field_message("content")}
-                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("content")}</small>
-                {/if}
-            </label>
             <div class="flex flex-col gap-1 text-sm font-medium">
-                SRT file (optional)
+                SRT file (required)
                 <input
                     type="file"
                     accept=".srt"
@@ -554,30 +541,11 @@ function probe_summary(node: ComposeNode): string {
                 >
                 {#if selected.data.file}
                     <p class="text-xs font-normal text-gray-500">File: {selected.data.file.name}</p>
-                    <button
-                        type="button"
-                        onclick={() => patch_subtitles({ file: null })}
-                        class="self-start text-sm font-normal text-red-700 underline"
-                    >
-                        Remove
-                    </button>
+                {/if}
+                {#if subtitle_field_message("file")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("file")}</small>
                 {/if}
             </div>
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                Mode
-                <select
-                    value={selected.data.mode}
-                    onchange={(e) => patch_subtitles({ mode: e.currentTarget.value as SubtitlesNodeData["mode"] })}
-                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
-                >
-                    <option value="mux">mux</option>
-                    <option value="burn">burn</option>
-                    <option value="sidecar">sidecar</option>
-                </select>
-                {#if subtitle_field_message("mode")}
-                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("mode")}</small>
-                {/if}
-            </label>
             <div class="flex flex-col gap-1 text-sm font-medium">
                 Font file (optional)
                 <input
@@ -694,7 +662,7 @@ function probe_summary(node: ComposeNode): string {
                     {/if}
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium">
-                    Margin (0-2000)
+                    Horizontal margin (both sides) (0-2000)
                     <input
                         type="number"
                         min="0"

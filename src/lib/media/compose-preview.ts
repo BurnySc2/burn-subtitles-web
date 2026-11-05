@@ -1,5 +1,5 @@
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
-import { normalize_subtitle_style } from "./compose-subtitles"
+import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
@@ -38,8 +38,6 @@ function serialize_node(node: ComposeNode): string {
             node.id,
             node.type,
             file_stub_key(node.data.file),
-            node.data.content ?? "",
-            node.data.mode,
             file_stub_key(font_file),
             JSON.stringify(style_rest),
         ].join(":")
@@ -314,33 +312,40 @@ export async function get_node_preview_blob(
             }
             case "subtitles": {
                 const input = single_input(node.id, incoming, blobs)
-                const srt_content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
-                if (srt_content === null || srt_content.trim() === "") {
-                    throw new ClipError("FAILED", "Subtitle content is empty.")
+                const srt_content = node.data.file ? await node.data.file.text() : null
+                if (srt_content === null) {
+                    throw new ClipError("FAILED", "Subtitle file is required.")
                 }
-                if (node.data.mode === "burn") {
-                    const style = normalize_subtitle_style(node.data)
-                    store(
-                        node.id,
-                        await render_subtitles_burn(
-                            blob_to_file(input, "burn-input.mp4"),
-                            {
-                                srt_content,
-                                ...style,
-                                width: output_node?.data.width ?? 1920,
-                                height: output_node?.data.height ?? 1080,
-                                fps: output_node?.data.fps ?? 30,
-                                quality: output_node?.data.quality ?? "medium",
-                                crf: output_node?.data.crf ?? null,
-                                audio_quality: output_node?.data.audio_quality ?? "source-max",
-                                on_progress: slice,
-                            },
-                            signal,
-                        ),
-                    )
-                } else {
-                    store(node.id, input)
+                if (srt_content.trim() === "") {
+                    throw new ClipError("FAILED", "Subtitle file is empty.")
                 }
+                try {
+                    srt_to_vtt(srt_content)
+                } catch (error) {
+                    if (error instanceof SubtitleError) {
+                        throw new ClipError("FAILED", error.message)
+                    }
+                    throw error
+                }
+                const style = normalize_subtitle_style(node.data)
+                store(
+                    node.id,
+                    await render_subtitles_burn(
+                        blob_to_file(input, "burn-input.mp4"),
+                        {
+                            srt_content,
+                            ...style,
+                            width: output_node?.data.width ?? 1920,
+                            height: output_node?.data.height ?? 1080,
+                            fps: output_node?.data.fps ?? 30,
+                            quality: output_node?.data.quality ?? "medium",
+                            crf: output_node?.data.crf ?? null,
+                            audio_quality: output_node?.data.audio_quality ?? "source-max",
+                            on_progress: slice,
+                        },
+                        signal,
+                    ),
+                )
                 break
             }
             case "merge": {

@@ -15,7 +15,6 @@ export interface ComposeResult {
     url: string
     mime: string
     ext: string
-    sidecar_url: string | null
 }
 
 export interface ComposeState {
@@ -138,9 +137,6 @@ export function upsert_probe(node_id: string, file: File, probe: ProbeResult | n
 export function reset_compose(): void {
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
-        if (compose_state.result.sidecar_url) {
-            URL.revokeObjectURL(compose_state.result.sidecar_url)
-        }
     }
     compose_state.result = null
     compose_state.run_error = null
@@ -291,9 +287,6 @@ export function revoke_all(): void {
     font_file_urls.clear()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
-        if (compose_state.result.sidecar_url) {
-            URL.revokeObjectURL(compose_state.result.sidecar_url)
-        }
     }
     const fresh = initial_state()
     compose_state.nodes = fresh.nodes
@@ -338,8 +331,8 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                     data: {
                         file: file_stub(node.data.file),
                         font_file: file_stub(node.data.font_file ?? null),
+                        // WHY keep legacy content: old JSON round-trips verbatim
                         content: node.data.content,
-                        mode: node.data.mode,
                         font_size: node.data.font_size ?? SUBTITLE_BURN_DEFAULTS.font_size,
                         text_color: node.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color,
                         stroke_color: node.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color,
@@ -425,7 +418,6 @@ function parse_vertical_anchor(value: unknown): "top" | "center" | "bottom" {
 const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-max"])
 const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra"])
 const EASINGS = new Set(["linear", "exponential"])
-const SUBTITLE_MODES = new Set(["mux", "burn", "sidecar"])
 const OVERLAY_POSITIONS = new Set([
     "top-left",
     "top-center",
@@ -516,11 +508,9 @@ function parse_node(raw: unknown): ComposeNode {
         }
         case "subtitles": {
             parse_stub(raw.data.file, raw.id)
+            // WHY accept legacy content: old JSON parses, file hydrates null, validation flags re-attach
             if (raw.data.content !== null && typeof raw.data.content !== "string") {
                 throw new Error(`Node "${raw.id}": invalid subtitle content`)
-            }
-            if (typeof raw.data.mode !== "string" || !SUBTITLE_MODES.has(raw.data.mode)) {
-                throw new Error(`Node "${raw.id}": unknown subtitle mode`)
             }
             if (raw.data.font_file !== undefined) {
                 parse_stub(raw.data.font_file, raw.id)
@@ -533,7 +523,6 @@ function parse_node(raw: unknown): ComposeNode {
                     file: null,
                     font_file: null,
                     content: raw.data.content,
-                    mode: raw.data.mode as "mux" | "burn" | "sidecar",
                     font_size: parse_finite_number(raw.data.font_size, SUBTITLE_BURN_DEFAULTS.font_size),
                     text_color: parse_string_or(raw.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color),
                     stroke_color: parse_string_or(raw.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color),

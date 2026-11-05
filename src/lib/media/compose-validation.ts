@@ -1,6 +1,6 @@
 import { is_chromium } from "../utils/browser-detect"
 import { topo_sort_compose } from "./compose-graph"
-import { HEX_RE, normalize_subtitle_style, validate_srt } from "./compose-subtitles"
+import { HEX_RE, normalize_subtitle_style } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
 import {
@@ -477,19 +477,27 @@ export function validate_compose(
         } else if (node.type === "subtitles") {
             const wired = ins(node.id).length > 0 || outs(node.id).length > 0
             if (wired) {
-                const content = node.data.content
-                if (content === null || content.trim() === "") {
-                    if (!node.data.file) {
+                const subtitle_file = node.data.file
+                if (!subtitle_file) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "file",
+                        message: "SRT file is required — attach an .srt file.",
+                    })
+                } else {
+                    if (!/\.srt$/i.test(subtitle_file.name)) {
                         issues.push({
                             node_id: node.id,
-                            field: "content",
-                            message: "Subtitle content must not be empty",
+                            field: "file",
+                            message: "Subtitle file must be an .srt file",
                         })
                     }
-                } else {
-                    const check = validate_srt(content)
-                    for (const error of check.errors) {
-                        issues.push({ node_id: node.id, field: "content", message: error })
+                    if (subtitle_file.size > 5 * 1024 * 1024) {
+                        issues.push({
+                            node_id: node.id,
+                            field: "file",
+                            message: "Subtitle file must not exceed 5 MiB",
+                        })
                     }
                 }
                 for (const field of ["text_color", "stroke_color"] as const) {
@@ -541,7 +549,7 @@ export function validate_compose(
                         })
                     }
                 }
-                if (node.data.mode === "burn" && !is_chromium_browser) {
+                if (!is_chromium_browser) {
                     issues.push({
                         node_id: node.id,
                         field: "mode",

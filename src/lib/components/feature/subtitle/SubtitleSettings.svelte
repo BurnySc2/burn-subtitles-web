@@ -176,7 +176,7 @@ let has_custom = $derived(!!temp_state.ffmpeg.custom_font)
                     <label
                         for="margin-h"
                         class="form-label-lg mb-0 mr-auto"
-                        >Horizontal Margin</label
+                        >Horizontal margin (both sides)</label
                     >
                     <input
                         id="margin-h"

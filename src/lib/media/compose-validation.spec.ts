@@ -33,6 +33,12 @@ function probe_with(duration: number | null): ProbeResult {
     }
 }
 
+const VALID_SRT = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"
+
+function srt_file(text: string = VALID_SRT): File {
+    return new File([text], "test.srt", { type: "text/plain" })
+}
+
 function source(id: string, duration: number | null = 120): ComposeNode {
     return {
         id,
@@ -46,8 +52,8 @@ function trim(id: string, start = 10, end = 20): ComposeNode {
     return { id, type: "trim", position: { x: 0, y: 0 }, data: { start, end } }
 }
 
-function subtitles(id: string, content: string | null = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"): ComposeNode {
-    return { id, type: "subtitles", position: { x: 0, y: 0 }, data: { file: null, content, mode: "mux" } }
+function subtitles(id: string, file: File | null = srt_file()): ComposeNode {
+    return { id, type: "subtitles", position: { x: 0, y: 0 }, data: { file, content: null } }
 }
 
 function styled_subtitles(overrides: Partial<SubtitlesNodeData>): ComposeNode {
@@ -55,7 +61,7 @@ function styled_subtitles(overrides: Partial<SubtitlesNodeData>): ComposeNode {
         id: "sub",
         type: "subtitles",
         position: { x: 0, y: 0 },
-        data: { file: null, content: "1\n00:00:01,000 --> 00:00:02,000\nHi\n", mode: "mux", ...overrides },
+        data: { file: srt_file(), content: null, ...overrides },
     }
 }
 
@@ -190,20 +196,36 @@ describe("validate_compose", () => {
         })
     })
 
-    it("flags empty subtitles only when wired", () => {
-        const wired = [source("src"), subtitles("sub", "  "), output()]
+    it("flags a missing subtitle file only when wired", () => {
+        const wired = [source("src"), subtitles("sub", null), output()]
         const wired_edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
         expect(validate_compose(wired, wired_edges)).toContainEqual({
             node_id: "sub",
-            field: "content",
-            message: "Subtitle content must not be empty",
+            field: "file",
+            message: "SRT file is required — attach an .srt file.",
         })
 
         const idle = [source("src"), subtitles("sub", null), trim("trim"), output()]
         const idle_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
         const idle_issues = validate_compose(idle, idle_edges)
-        expect(idle_issues.some((issue) => issue.field === "content")).toBe(false)
+        expect(idle_issues.some((issue) => issue.field === "file")).toBe(false)
         expect(idle_issues.length).toBeGreaterThan(0)
+    })
+
+    it("flags legacy content without a file", () => {
+        const legacy: ComposeNode = {
+            id: "sub",
+            type: "subtitles",
+            position: { x: 0, y: 0 },
+            data: { file: null, content: VALID_SRT },
+        }
+        const nodes = [source("src"), legacy, output()]
+        const edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "sub",
+            field: "file",
+            message: "SRT file is required — attach an .srt file.",
+        })
     })
 
     it("flags duplicate connections on the same handles", () => {
@@ -348,17 +370,16 @@ describe("validate_compose", () => {
         })
     })
 
-    it("warns about burn mode only outside Chromium browsers", () => {
-        expect(wired_subtitle_issues({ mode: "burn" }, false)).toContainEqual({
+    it("warns about burn-in outside Chromium browsers", () => {
+        expect(wired_subtitle_issues({}, false)).toContainEqual({
             node_id: "sub",
             field: "mode",
             message: "Burn mode subtitles render best in a Chromium browser such as Chrome or Edge",
         })
-        expect(wired_subtitle_issues({ mode: "burn" }, true).filter((issue) => issue.field === "mode")).toEqual([])
-        expect(wired_subtitle_issues({ mode: "mux" }, false).filter((issue) => issue.field === "mode")).toEqual([])
+        expect(wired_subtitle_issues({}, true).filter((issue) => issue.field === "mode")).toEqual([])
     })
 
-    it("accepts legacy subtitle nodes with only file, content, and mode", () => {
+    it("accepts subtitle nodes with an attached file", () => {
         const nodes = [source("src"), subtitles("sub"), output()]
         const edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
         expect(validate_compose(nodes, edges, true)).toEqual([])
