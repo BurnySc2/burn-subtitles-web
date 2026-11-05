@@ -203,23 +203,25 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </li>
     </ol>
     <div class="mt-3 flex flex-wrap items-center gap-2">
-        <label
-            for="gap-ms"
-            class="text-sm"
-        >
-            Pause between parts (ms)
-        </label>
-        <input
-            id="gap-ms"
-            type="number"
-            min="0"
-            max="500"
-            step="1"
-            bind:value={gap_ms}
-            inputmode="numeric"
-            aria-describedby="gap-hint gap-example"
-            class="w-20 rounded border p-1"
-        >
+        <div class="flex items-center gap-2">
+            <label
+                for="gap-ms"
+                class="text-sm"
+            >
+                Pause between parts (ms)
+            </label>
+            <input
+                id="gap-ms"
+                type="number"
+                min="0"
+                max="500"
+                step="1"
+                bind:value={gap_ms}
+                inputmode="numeric"
+                aria-describedby="gap-hint gap-example"
+                class="w-20 max-w-[5rem] rounded border p-1 text-right"
+            >
+        </div>
         <p
             id="gap-hint"
             class="w-full text-xs text-gray-500"
