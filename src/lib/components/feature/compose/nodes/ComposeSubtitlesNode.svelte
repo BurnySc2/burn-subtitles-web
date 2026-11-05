@@ -16,6 +16,21 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("subtitles", data.label))
+
+let cue_count = $derived.by(() => {
+    const text = data.file ? null : (data.content ?? "")
+    if (!text || text.trim() === "") {
+        return data.file ? null : 0
+    }
+    return text.split(/\r?\n\s*\r?\n/).filter((block) => block.includes("-->")).length
+})
+let has_custom_font = $derived(data.font_file !== null && data.font_file !== undefined)
+let badge = $derived.by(() => {
+    const mode = data.mode ?? "mux"
+    const count = cue_count === null ? "file" : `${cue_count} cue${cue_count === 1 ? "" : "s"}`
+    return has_custom_font ? `${mode} · ${count} · font` : `${mode} · ${count}`
+})
+let font_name = $derived(data.font_file ? data.font_file.name : null)
 </script>
 
 <div
@@ -65,6 +80,16 @@ let title = $derived(compose_node_title("subtitles", data.label))
             class="nodrag mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
         >
     {/if}
+    <p
+        id={id ? `${id}-badge` : undefined}
+        class="mt-1 text-xs text-gray-500"
+        title={font_name ? `Custom font: ${font_name}` : undefined}
+    >
+        {badge}
+        {#if has_custom_font}
+            <span aria-hidden="true"> ●</span>
+        {/if}
+    </p>
     <label class="mt-2 flex flex-col gap-1 text-xs text-gray-600">
         SRT content
         <textarea

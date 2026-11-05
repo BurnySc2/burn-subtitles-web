@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { ComposeEdge, ComposeNode } from "./compose-types"
+import type { ComposeEdge, ComposeNode, SubtitlesNodeData } from "./compose-types"
 import { compose_node_durations, validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 
@@ -48,6 +48,25 @@ function trim(id: string, start = 10, end = 20): ComposeNode {
 
 function subtitles(id: string, content: string | null = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"): ComposeNode {
     return { id, type: "subtitles", position: { x: 0, y: 0 }, data: { file: null, content, mode: "mux" } }
+}
+
+function styled_subtitles(overrides: Partial<SubtitlesNodeData>): ComposeNode {
+    return {
+        id: "sub",
+        type: "subtitles",
+        position: { x: 0, y: 0 },
+        data: { file: null, content: "1\n00:00:01,000 --> 00:00:02,000\nHi\n", mode: "mux", ...overrides },
+    }
+}
+
+function wired_subtitle_issues(overrides: Partial<SubtitlesNodeData>, is_chromium_browser = true) {
+    const nodes = [source("src"), styled_subtitles(overrides), output()]
+    const edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
+    return validate_compose(nodes, edges, is_chromium_browser)
+}
+
+function font_file(name: string, size: number): File {
+    return { name, size } as unknown as File
 }
 
 function transition(id: string, start = 0, duration = 1): ComposeNode {
@@ -255,6 +274,94 @@ describe("validate_compose", () => {
             field: "audio_quality",
             message: "Unknown output audio quality.",
         })
+    })
+
+    it("accepts shorthand and full hex colors but rejects names and malformed hex", () => {
+        for (const color of ["#fff", "#ffff7f"]) {
+            const issues = wired_subtitle_issues({ text_color: color })
+            expect(issues.filter((issue) => issue.field === "text_color")).toEqual([])
+        }
+        for (const color of ["red", "#gggggg"]) {
+            expect(wired_subtitle_issues({ text_color: color })).toContainEqual({
+                node_id: "sub",
+                field: "text_color",
+                message: "Subtitle text_color must be a hex color like #ffffff",
+            })
+        }
+    })
+
+    it("enforces subtitle numeric boundaries and tolerates unset or NaN values", () => {
+        const cases = [
+            { field: "font_size", min: 8, max: 160 },
+            { field: "outline_size", min: 0, max: 10 },
+            { field: "shadow_size", min: 0, max: 10 },
+            { field: "horizontal_margin", min: 0, max: 2000 },
+            { field: "vertical_offset", min: 0, max: 2000 },
+        ] as const
+        for (const { field, min, max } of cases) {
+            for (const value of [min, max]) {
+                const issues = wired_subtitle_issues({ [field]: value } as unknown as Partial<SubtitlesNodeData>)
+                expect(issues.filter((issue) => issue.field === field)).toEqual([])
+            }
+            for (const value of [min - 1, max + 1]) {
+                const issues = wired_subtitle_issues({ [field]: value } as unknown as Partial<SubtitlesNodeData>)
+                expect(issues).toContainEqual({
+                    node_id: "sub",
+                    field,
+                    message: `Subtitle ${field} must be between ${min} and ${max}`,
+                })
+            }
+        }
+        expect(wired_subtitle_issues({}).filter((issue) => issue.field === "font_size")).toEqual([])
+        expect(wired_subtitle_issues({ font_size: Number.NaN }).filter((issue) => issue.field === "font_size")).toEqual(
+            [],
+        )
+        expect(
+            wired_subtitle_issues({ font_size: null } as unknown as Partial<SubtitlesNodeData>).filter(
+                (issue) => issue.field === "font_size",
+            ),
+        ).toEqual([])
+    })
+
+    it("accepts subtitle font extensions and enforces the 10 MiB cap", () => {
+        const mib = 1024 * 1024
+        for (const name of ["font.ttf", "font.otf", "font.woff", "font.woff2", "font.TTF"]) {
+            const issues = wired_subtitle_issues({ font_file: font_file(name, 1024) })
+            expect(issues.filter((issue) => issue.field === "font_file")).toEqual([])
+        }
+        for (const name of ["font.txt", "font.eot", "font", "font.ttf.exe"]) {
+            expect(wired_subtitle_issues({ font_file: font_file(name, 1024) })).toContainEqual({
+                node_id: "sub",
+                field: "font_file",
+                message: "Subtitle font must be a ttf, otf, woff, or woff2 file",
+            })
+        }
+        expect(
+            wired_subtitle_issues({ font_file: font_file("font.ttf", 10 * mib) }).filter(
+                (issue) => issue.field === "font_file",
+            ),
+        ).toEqual([])
+        expect(wired_subtitle_issues({ font_file: font_file("font.ttf", 10 * mib + 1) })).toContainEqual({
+            node_id: "sub",
+            field: "font_file",
+            message: "Subtitle font must not exceed 10 MiB",
+        })
+    })
+
+    it("warns about burn mode only outside Chromium browsers", () => {
+        expect(wired_subtitle_issues({ mode: "burn" }, false)).toContainEqual({
+            node_id: "sub",
+            field: "mode",
+            message: "Burn mode subtitles render best in a Chromium browser such as Chrome or Edge",
+        })
+        expect(wired_subtitle_issues({ mode: "burn" }, true).filter((issue) => issue.field === "mode")).toEqual([])
+        expect(wired_subtitle_issues({ mode: "mux" }, false).filter((issue) => issue.field === "mode")).toEqual([])
+    })
+
+    it("accepts legacy subtitle nodes with only file, content, and mode", () => {
+        const nodes = [source("src"), subtitles("sub"), output()]
+        const edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
+        expect(validate_compose(nodes, edges, true)).toEqual([])
     })
 })
 

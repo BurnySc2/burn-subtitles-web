@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { parse_srt, SubtitleError, srt_to_vtt, validate_srt, vtt_to_srt } from "./compose-subtitles"
+import {
+    active_cues_at,
+    clamp_number,
+    HEX_RE,
+    normalize_subtitle_style,
+    parse_srt,
+    resolve_burn_font_px,
+    SubtitleError,
+    srt_to_vtt,
+    validate_srt,
+    vtt_to_srt,
+} from "./compose-subtitles"
+import { SUBTITLE_BURN_DEFAULTS } from "./compose-types"
 
 const SAMPLE_SRT =
     "1\n00:00:01,000 --> 00:00:02,500\nHello world\n\n2\n00:01:02,250 --> 00:01:04,000\nSecond line\nsplit across two\n"
@@ -93,5 +105,126 @@ describe("validate_srt", () => {
         const inverted = validate_srt("1\n00:00:02,000 --> 00:00:01,000\nHi\n")
         expect(inverted.valid).toBe(false)
         expect(inverted.errors.join(" ")).toContain("greater than start")
+    })
+})
+
+describe("HEX_RE", () => {
+    it.each(["#fff", "#FFF", "#abc", "#000000", "#ffff7f", "#ABCDEF"])("accepts %s", (hex) => {
+        expect(HEX_RE.test(hex)).toBe(true)
+    })
+
+    it.each([
+        "fff",
+        "#ff",
+        "#ffff",
+        "#fffffff",
+        "#ggg",
+        "#12345g",
+        "",
+        "red",
+        "#fff ",
+        "##fff",
+    ])("rejects %s", (hex) => {
+        expect(HEX_RE.test(hex)).toBe(false)
+    })
+})
+
+describe("normalize_subtitle_style", () => {
+    it("returns burn defaults for an empty partial", () => {
+        expect(normalize_subtitle_style({})).toEqual({ ...SUBTITLE_BURN_DEFAULTS })
+    })
+
+    it("falls back for bad colors, NaN sizes, and unknown anchor", () => {
+        const style = normalize_subtitle_style({
+            font_size: Number.NaN,
+            text_color: "red",
+            stroke_color: "#12345g",
+            outline_size: Number.NaN,
+            vertical_anchor: "middle" as never,
+        })
+        expect(style.font_size).toBe(SUBTITLE_BURN_DEFAULTS.font_size)
+        expect(style.text_color).toBe(SUBTITLE_BURN_DEFAULTS.text_color)
+        expect(style.stroke_color).toBe(SUBTITLE_BURN_DEFAULTS.stroke_color)
+        expect(style.outline_size).toBe(SUBTITLE_BURN_DEFAULTS.outline_size)
+        expect(style.vertical_anchor).toBe(SUBTITLE_BURN_DEFAULTS.vertical_anchor)
+    })
+
+    it("keeps valid custom values", () => {
+        const style = normalize_subtitle_style({ text_color: "#123abc", vertical_anchor: "top", font_size: 48 })
+        expect(style.text_color).toBe("#123abc")
+        expect(style.vertical_anchor).toBe("top")
+        expect(style.font_size).toBe(48)
+    })
+})
+
+describe("clamp_number", () => {
+    it("clamps to min and max edges", () => {
+        expect(clamp_number(-5, 0, 10)).toBe(0)
+        expect(clamp_number(99, 0, 10)).toBe(10)
+        expect(clamp_number(0, 0, 10)).toBe(0)
+        expect(clamp_number(10, 0, 10)).toBe(10)
+        expect(clamp_number(4, 0, 10)).toBe(4)
+    })
+
+    it("returns min for non-finite input", () => {
+        expect(clamp_number(Number.NaN, 2, 10)).toBe(2)
+        expect(clamp_number(Number.POSITIVE_INFINITY, 2, 10)).toBe(2)
+        expect(clamp_number(Number.NEGATIVE_INFINITY, 2, 10)).toBe(2)
+    })
+
+    it("clamps style sizes through normalize_subtitle_style", () => {
+        const style = normalize_subtitle_style({ font_size: 5000, outline_size: -3, shadow_size: 99 })
+        expect(style.font_size).toBe(1000)
+        expect(style.outline_size).toBe(0)
+        expect(style.shadow_size).toBe(10)
+    })
+})
+
+describe("active_cues_at", () => {
+    const cues = [
+        { index: 1, start: 1, end: 2.5, text: "Hello" },
+        { index: 2, start: 2.5, end: 4, text: "World" },
+    ]
+
+    it("includes t == start and excludes t == end", () => {
+        expect(active_cues_at(cues, 1).map((cue) => cue.index)).toEqual([1])
+        expect(active_cues_at(cues, 2.5).map((cue) => cue.index)).toEqual([2])
+        expect(active_cues_at(cues, 4)).toEqual([])
+    })
+
+    it("returns cues strictly inside the range and nothing outside", () => {
+        expect(active_cues_at(cues, 2).map((cue) => cue.index)).toEqual([1])
+        expect(active_cues_at(cues, 0.999)).toEqual([])
+        expect(active_cues_at(cues, 9)).toEqual([])
+    })
+
+    it("returns [] for non-finite t", () => {
+        expect(active_cues_at(cues, Number.NaN)).toEqual([])
+        expect(active_cues_at(cues, Number.POSITIVE_INFINITY)).toEqual([])
+        expect(active_cues_at(cues, Number.NEGATIVE_INFINITY)).toEqual([])
+    })
+})
+
+describe("resolve_burn_font_px", () => {
+    it("is identity at 1080p height", () => {
+        expect(resolve_burn_font_px(24, 1080)).toBe(24)
+    })
+
+    it("halves at 540p height", () => {
+        expect(resolve_burn_font_px(24, 540)).toBe(12)
+    })
+
+    it("falls back to the default size for invalid font sizes", () => {
+        expect(resolve_burn_font_px(Number.NaN, 1080)).toBe(SUBTITLE_BURN_DEFAULTS.font_size)
+        expect(resolve_burn_font_px(0, 1080)).toBe(SUBTITLE_BURN_DEFAULTS.font_size)
+        expect(resolve_burn_font_px(-8, 1080)).toBe(SUBTITLE_BURN_DEFAULTS.font_size)
+    })
+
+    it("returns unscaled size for invalid heights and floors at 1px", () => {
+        expect(resolve_burn_font_px(24, 0)).toBe(24)
+        expect(resolve_burn_font_px(24, -5)).toBe(24)
+        expect(resolve_burn_font_px(24, Number.NaN)).toBe(24)
+        expect(resolve_burn_font_px(24, Number.POSITIVE_INFINITY)).toBe(24)
+        expect(resolve_burn_font_px(1, 10)).toBe(1)
     })
 })

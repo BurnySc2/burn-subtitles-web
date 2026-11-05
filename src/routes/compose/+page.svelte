@@ -11,6 +11,7 @@ import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
 import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
 import type { ComposeNode, ComposeNodeKind } from "$lib/media/compose-types"
+import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
 import { ClipError } from "$lib/media/mediabunny-clip"
 import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
@@ -69,7 +70,12 @@ function handle_add(kind: ComposeNodeKind): void {
             node = { id, type: "merge", position, data: { input_count: 2 } }
             break
         case "subtitles":
-            node = { id, type: "subtitles", position, data: { file: null, content: null, mode: "mux" } }
+            node = {
+                id,
+                type: "subtitles",
+                position,
+                data: { file: null, content: null, mode: "mux", ...SUBTITLE_BURN_DEFAULTS },
+            }
             break
         case "overlay":
             node = {

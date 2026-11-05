@@ -1,4 +1,5 @@
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
+import { SUBTITLE_BURN_DEFAULTS } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 import {
@@ -61,9 +62,30 @@ export function flow_center_position(): { x: number; y: number } {
 }
 
 const preview_urls = new Map<string, string>()
+const font_file_urls = new Map<string, string>()
 
 export function preview_url(node_id: string): string | null {
     return preview_urls.get(node_id) ?? null
+}
+
+export function font_file_url(node_id: string): string | null {
+    return font_file_urls.get(node_id) ?? null
+}
+
+export function set_subtitles_font_file(node_id: string, file: File | null, url: string | null): void {
+    const previous = font_file_urls.get(node_id)
+    if (previous && previous !== url) {
+        URL.revokeObjectURL(previous)
+    }
+    if (url === null) {
+        font_file_urls.delete(node_id)
+    } else {
+        font_file_urls.set(node_id, url)
+    }
+    const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (node && node.type === "subtitles") {
+        node.data.font_file = file
+    }
 }
 
 export function set_source_file(node_id: string, file: File, url: string): void {
@@ -137,6 +159,11 @@ export function remove_compose_nodes(node_ids: string[]): void {
         if (url !== undefined) {
             URL.revokeObjectURL(url)
             preview_urls.delete(id)
+        }
+        const font_url = font_file_urls.get(id)
+        if (font_url !== undefined) {
+            URL.revokeObjectURL(font_url)
+            font_file_urls.delete(id)
         }
     }
     compose_state.nodes = compose_state.nodes.filter((node) => !ids.has(node.id))
@@ -258,6 +285,10 @@ export function revoke_all(): void {
         URL.revokeObjectURL(url)
     }
     preview_urls.clear()
+    for (const url of font_file_urls.values()) {
+        URL.revokeObjectURL(url)
+    }
+    font_file_urls.clear()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
         if (compose_state.result.sidecar_url) {
@@ -306,8 +337,18 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                     position: node.position,
                     data: {
                         file: file_stub(node.data.file),
+                        font_file: file_stub(node.data.font_file ?? null),
                         content: node.data.content,
                         mode: node.data.mode,
+                        font_size: node.data.font_size ?? SUBTITLE_BURN_DEFAULTS.font_size,
+                        text_color: node.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color,
+                        stroke_color: node.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color,
+                        outline_size: node.data.outline_size ?? SUBTITLE_BURN_DEFAULTS.outline_size,
+                        shadow_size: node.data.shadow_size ?? SUBTITLE_BURN_DEFAULTS.shadow_size,
+                        horizontal_margin: node.data.horizontal_margin ?? SUBTITLE_BURN_DEFAULTS.horizontal_margin,
+                        vertical_anchor: node.data.vertical_anchor ?? SUBTITLE_BURN_DEFAULTS.vertical_anchor,
+                        vertical_offset: node.data.vertical_offset ?? SUBTITLE_BURN_DEFAULTS.vertical_offset,
+                        right_to_left: node.data.right_to_left ?? SUBTITLE_BURN_DEFAULTS.right_to_left,
                         label: node.data.label ?? null,
                     },
                 }
@@ -367,6 +408,18 @@ function parse_label(value: unknown, node_id: string): string | null {
         return value
     }
     throw new Error(`Node "${node_id}": invalid label`)
+}
+
+function parse_finite_number(value: unknown, fallback: number): number {
+    return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
+function parse_string_or(value: unknown, fallback: string): string {
+    return typeof value === "string" ? value : fallback
+}
+
+function parse_vertical_anchor(value: unknown): "top" | "center" | "bottom" {
+    return value === "top" || value === "center" || value === "bottom" ? value : SUBTITLE_BURN_DEFAULTS.vertical_anchor
 }
 
 const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-max"])
@@ -469,14 +522,36 @@ function parse_node(raw: unknown): ComposeNode {
             if (typeof raw.data.mode !== "string" || !SUBTITLE_MODES.has(raw.data.mode)) {
                 throw new Error(`Node "${raw.id}": unknown subtitle mode`)
             }
+            if (raw.data.font_file !== undefined) {
+                parse_stub(raw.data.font_file, raw.id)
+            }
             return {
                 id: raw.id,
                 type: "subtitles",
                 position,
                 data: {
                     file: null,
+                    font_file: null,
                     content: raw.data.content,
                     mode: raw.data.mode as "mux" | "burn" | "sidecar",
+                    font_size: parse_finite_number(raw.data.font_size, SUBTITLE_BURN_DEFAULTS.font_size),
+                    text_color: parse_string_or(raw.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color),
+                    stroke_color: parse_string_or(raw.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color),
+                    outline_size: parse_finite_number(raw.data.outline_size, SUBTITLE_BURN_DEFAULTS.outline_size),
+                    shadow_size: parse_finite_number(raw.data.shadow_size, SUBTITLE_BURN_DEFAULTS.shadow_size),
+                    horizontal_margin: parse_finite_number(
+                        raw.data.horizontal_margin,
+                        SUBTITLE_BURN_DEFAULTS.horizontal_margin,
+                    ),
+                    vertical_anchor: parse_vertical_anchor(raw.data.vertical_anchor),
+                    vertical_offset: parse_finite_number(
+                        raw.data.vertical_offset,
+                        SUBTITLE_BURN_DEFAULTS.vertical_offset,
+                    ),
+                    right_to_left:
+                        typeof raw.data.right_to_left === "boolean"
+                            ? raw.data.right_to_left
+                            : SUBTITLE_BURN_DEFAULTS.right_to_left,
                     label: parse_label(raw.data.label, raw.id),
                 },
             }

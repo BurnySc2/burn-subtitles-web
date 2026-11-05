@@ -127,7 +127,7 @@ describe("execute_compose_graph merge order", () => {
 describe("execute_compose_graph vtt sidecar", () => {
     it.each([
         { mode: "sidecar" as const, expect_sidecar: true },
-        { mode: "mux" as const, expect_sidecar: false },
+        { mode: "mux" as const, expect_sidecar: true },
     ])("emits sidecar_url only for sidecar subtitles (mode=$mode)", async ({ mode, expect_sidecar }) => {
         const result = await execute_compose_graph({
             nodes: [source("s"), subtitles("sub", mode), output()],

@@ -1,5 +1,6 @@
+import { is_chromium } from "../utils/browser-detect"
 import { topo_sort_compose } from "./compose-graph"
-import { validate_srt } from "./compose-subtitles"
+import { HEX_RE, normalize_subtitle_style, validate_srt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
 import {
@@ -164,7 +165,11 @@ export function compose_node_durations(nodes: ComposeNode[], edges: ComposeEdge[
     return duration_memo
 }
 
-export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): ValidationIssue[] {
+export function validate_compose(
+    nodes: ComposeNode[],
+    edges: ComposeEdge[],
+    is_chromium_browser: boolean = is_chromium(),
+): ValidationIssue[] {
     const issues: ValidationIssue[] = []
     const by_id = new Map(nodes.map((node) => [node.id, node]))
     const incoming = new Map<string, ComposeEdge[]>()
@@ -486,6 +491,62 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                     for (const error of check.errors) {
                         issues.push({ node_id: node.id, field: "content", message: error })
                     }
+                }
+                for (const field of ["text_color", "stroke_color"] as const) {
+                    const value = node.data[field]
+                    if (value !== undefined && value !== null && !HEX_RE.test(value)) {
+                        issues.push({
+                            node_id: node.id,
+                            field,
+                            message: `Subtitle ${field} must be a hex color like #ffffff`,
+                        })
+                    }
+                }
+                const style = normalize_subtitle_style(node.data)
+                const range_checks = [
+                    { field: "font_size", raw: node.data.font_size, min: 8, max: 160 },
+                    { field: "outline_size", raw: node.data.outline_size, min: 0, max: 10 },
+                    { field: "shadow_size", raw: node.data.shadow_size, min: 0, max: 10 },
+                    { field: "horizontal_margin", raw: node.data.horizontal_margin, min: 0, max: 2000 },
+                    { field: "vertical_offset", raw: node.data.vertical_offset, min: 0, max: 2000 },
+                ] as const
+                for (const check of range_checks) {
+                    if (
+                        check.raw !== undefined &&
+                        check.raw !== null &&
+                        Number.isFinite(check.raw) &&
+                        (check.raw < check.min || check.raw > check.max)
+                    ) {
+                        issues.push({
+                            node_id: node.id,
+                            field: check.field,
+                            message: `Subtitle ${check.field} must be between ${check.min} and ${check.max}`,
+                        })
+                    }
+                }
+                const font_file = style.font_file
+                if (font_file !== null && font_file !== undefined) {
+                    if (!/\.(ttf|otf|woff|woff2)$/i.test(font_file.name)) {
+                        issues.push({
+                            node_id: node.id,
+                            field: "font_file",
+                            message: "Subtitle font must be a ttf, otf, woff, or woff2 file",
+                        })
+                    }
+                    if (font_file.size > 10 * 1024 * 1024) {
+                        issues.push({
+                            node_id: node.id,
+                            field: "font_file",
+                            message: "Subtitle font must not exceed 10 MiB",
+                        })
+                    }
+                }
+                if (node.data.mode === "burn" && !is_chromium_browser) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "mode",
+                        message: "Burn mode subtitles render best in a Chromium browser such as Chrome or Edge",
+                    })
                 }
             }
         } else if (node.type === "overlay") {

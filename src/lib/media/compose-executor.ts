@@ -1,5 +1,5 @@
 import { find_output_node, topo_sort_compose } from "./compose-graph"
-import { srt_to_vtt } from "./compose-subtitles"
+import { normalize_subtitle_style, srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
@@ -7,6 +7,7 @@ import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
+import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_transition } from "./mediabunny-transition"
 
 export interface ExecuteComposeGraphOptions {
@@ -134,45 +135,6 @@ async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> 
     } finally {
         signal?.removeEventListener("abort", on_abort)
         input.dispose()
-    }
-}
-
-async function burn_subtitles_into_video(video: Blob, srt_content: string, signal?: AbortSignal): Promise<Blob> {
-    throw_if_aborted(signal)
-    const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([import("@ffmpeg/ffmpeg"), import("@ffmpeg/util")])
-    const ffmpeg = new FFmpeg()
-    const on_abort = () => {
-        ffmpeg.terminate()
-    }
-    signal?.addEventListener("abort", on_abort, { once: true })
-    try {
-        const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
-        await ffmpeg.load({
-            coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
-            wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
-        })
-        throw_if_aborted(signal)
-        await ffmpeg.writeFile("compose-input.mp4", await fetchFile(video))
-        await ffmpeg.writeFile("compose-subtitles.srt", srt_content)
-        await ffmpeg.exec([
-            "-i",
-            "compose-input.mp4",
-            "-vf",
-            "subtitles=compose-subtitles.srt",
-            "-c:a",
-            "copy",
-            "compose-output.mp4",
-        ])
-        throw_if_aborted(signal)
-        const output_data = await ffmpeg.readFile("compose-output.mp4")
-        // @ts-expect-error
-        return new Blob([(output_data as Uint8Array).buffer], { type: "video/mp4" })
-    } finally {
-        signal?.removeEventListener("abort", on_abort)
-        await ffmpeg.deleteFile("compose-input.mp4").catch(() => {})
-        await ffmpeg.deleteFile("compose-subtitles.srt").catch(() => {})
-        await ffmpeg.deleteFile("compose-output.mp4").catch(() => {})
-        ffmpeg.terminate()
     }
 }
 
@@ -316,16 +278,35 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             }
             case "subtitles": {
                 const input = single_input(node.id, incoming, memo)
-                const content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
-                if (content === null || content.trim() === "") {
+                const srt_content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
+                if (srt_content === null || srt_content.trim() === "") {
                     throw new ClipError("FAILED", "Subtitle content is empty.")
                 }
-                const vtt = srt_to_vtt(content)
+                const vtt = srt_to_vtt(srt_content)
                 if (node.data.mode === "burn") {
-                    memo.set(node.id, await burn_subtitles_into_video(input, content, signal))
+                    const style = normalize_subtitle_style(node.data)
+                    memo.set(
+                        node.id,
+                        await render_subtitles_burn(
+                            blob_to_file(input, "burn-input.mp4"),
+                            {
+                                srt_content,
+                                ...style,
+                                width: output_node?.data.width ?? 1920,
+                                height: output_node?.data.height ?? 1080,
+                                fps: output_node?.data.fps ?? 30,
+                                quality: output_node?.data.quality ?? "medium",
+                                crf: output_node?.data.crf ?? null,
+                                audio_quality: output_node?.data.audio_quality ?? "source-max",
+                                on_progress: slice,
+                            },
+                            signal,
+                        ),
+                    )
                 } else {
                     memo.set(node.id, input)
-                    if (node.data.mode === "sidecar") {
+                    // WHY mux shares sidecar output: mp4 text-track mux unsupported in-browser
+                    if (node.data.mode === "sidecar" || node.data.mode === "mux") {
                         sidecar_vtt ??= vtt
                     }
                 }
