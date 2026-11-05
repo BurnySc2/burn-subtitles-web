@@ -125,16 +125,20 @@ let gap_example = $derived.by(() => {
     const preset_label = BALANCE_PRESETS.find((p) => p.id === balance_preset)?.label ?? balance_preset
     return `e.g. Part 1 ends ${format_srt_timestamp(end_a)} → ${gap_safe} ms pause → Part 2 starts ${format_srt_timestamp(start_b)} (${preset_label})`
 })
-function apply_custom(cue: SubtitleCue) {
+function derive_custom(cue: SubtitleCue) {
     const first = (custom_text[cue.index] ?? "").trim()
-    const rest = first ? cue.text.replace(first, "").trim() : ""
-    if (!first || !rest || !cue.text.includes(first)) {
-        custom_error[cue.index] = "First part must be shorter than the original text."
+    if (!first) {
+        custom_error[cue.index] = ""
+        delete custom_parts[cue.index]
+        return
+    }
+    const rest = cue.text.replace(first, "").trim()
+    if (!rest || !cue.text.includes(first)) {
+        custom_error[cue.index] = "Keep typing — first part must appear in the original text."
         return
     }
     custom_error[cue.index] = ""
     custom_parts[cue.index] = [first, rest]
-    selected_tab[cue.index] = "custom"
 }
 function reset_cue(cue: SubtitleCue) {
     selected_tab[cue.index] = "recommended"
@@ -449,32 +453,24 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                         open
                     >
                         <summary class="cursor-pointer text-sm text-gray-600">Custom split</summary>
-                        <p class="mt-1 text-xs text-gray-500">Type the first part — the rest becomes Part 2.</p>
                         <label
                             for="custom-first-{cue.index}"
                             class="form-label mt-1"
                         >
                             First part
                         </label>
-                        <textarea
+                        <input
                             id="custom-first-{cue.index}"
+                            type="text"
                             class="mt-1 w-full rounded border p-2 text-sm"
-                            rows="2"
                             dir="auto"
-                            placeholder="First part"
+                            placeholder="First part, rest becomes Part 2"
                             bind:value={custom_text[cue.index]}
-                        ></textarea>
-                        <div class="mt-1 flex items-center gap-2">
-                            <button
-                                class="btn btn-secondary btn-sm"
-                                onclick={() => apply_custom(cue)}
-                            >
-                                Apply custom
-                            </button>
-                            {#if custom_error[cue.index]}
-                                <span class="text-sm text-red-600">{custom_error[cue.index]}</span>
-                            {/if}
-                        </div>
+                            oninput={() => derive_custom(cue)}
+                        >
+                        {#if custom_error[cue.index]}
+                            <p class="mt-1 text-xs text-gray-400">{custom_error[cue.index]}</p>
+                        {/if}
                     </details>
                 {/if}
                 <div
