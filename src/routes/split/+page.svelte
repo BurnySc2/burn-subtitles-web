@@ -7,7 +7,7 @@ import {
     SubtitleError,
     validate_srt,
 } from "$lib/media/compose-subtitles"
-import { CUE_LOCALES, preview_parts, SAMPLE_LOCALES, SAMPLE_SRT, type TabKind } from "$lib/media/split-prototype"
+import { preview_parts, SAMPLE_LOCALES, type TabKind } from "$lib/media/split-prototype"
 import { clamp_gap, DEFAULT_GAP_MS, split_times } from "$lib/media/split-timing"
 import { cps, is_long, truncate } from "$lib/media/split-triage-helpers"
 
@@ -16,16 +16,15 @@ const TABS: Array<{ kind: TabKind; label: string }> = [
     { kind: "alternative", label: "Alternative" },
     { kind: "custom", label: "Custom" },
 ]
-const initial_cues = parse_srt(SAMPLE_SRT)
-let cues = $state<SubtitleCue[]>(initial_cues)
-let file_name = $state("Sample subtitles")
+let cues = $state<SubtitleCue[]>([])
+let file_name = $state("")
 let upload_error = $state("")
 let selected_tab = $state<Record<number, TabKind>>({})
 let custom_text = $state<Record<number, string>>({})
 let custom_parts = $state<Record<number, string[]>>({})
 let custom_error = $state<Record<number, string>>({})
 let included = $state<Set<number>>(new Set())
-let cue_locale = $state<Record<number, string>>({ ...CUE_LOCALES })
+let page_locale = $state("en")
 let result_url = $state<string | null>(null)
 let gap_ms = $state<number>(DEFAULT_GAP_MS)
 let char_threshold = $state(80)
@@ -58,7 +57,6 @@ async function handle_srt_upload(event: Event) {
         custom_parts = {}
         custom_error = {}
         included = new Set()
-        cue_locale = Object.fromEntries(next.map((cue) => [cue.index, CUE_LOCALES[cue.index] ?? "en"]))
         file_name = file.name
         upload_error = ""
         step = 1
@@ -98,7 +96,7 @@ function preview_for(cue: SubtitleCue): string[] {
     if (!included.has(cue.index)) {
         return [cue.text]
     }
-    return preview_parts(cue, tab_of(cue.index), custom_parts[cue.index], cue_locale[cue.index] ?? "en")
+    return preview_parts(cue, tab_of(cue.index), custom_parts[cue.index], page_locale)
 }
 let gap_safe = $derived(clamp_gap(gap_ms))
 let gap_example = $derived.by(() => {
@@ -223,6 +221,28 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         >
             {gap_example}
         </p>
+        <label
+            for="page-locale"
+            class="text-sm"
+        >
+            Language
+        </label>
+        <select
+            id="page-locale"
+            bind:value={page_locale}
+            aria-describedby="locale-hint"
+            class="rounded border p-1 text-sm"
+        >
+            {#each SAMPLE_LOCALES as locale (locale)}
+                <option value={locale}>{locale}</option>
+            {/each}
+        </select>
+        <p
+            id="locale-hint"
+            class="w-full text-xs text-gray-500"
+        >
+            Tokenizer language for all cues.
+        </p>
     </div>
     <hr class="my-4 border-t border-gray-200">
     <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -235,7 +255,11 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 class="ml-2 text-sm"
             >
         </label>
-        <span class="text-xs text-gray-500">{file_name} · {cues.length} cues</span>
+        {#if cues.length === 0}
+            <span class="text-xs text-gray-500">No file loaded</span>
+        {:else}
+            <span class="text-xs text-gray-500">{file_name} · {cues.length} cues</span>
+        {/if}
     </div>
     {#if upload_error}
         <p
@@ -246,80 +270,89 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </p>
     {/if}
     {#if step === 1}
-        <div class="mt-4 flex flex-wrap items-center gap-2">
-            <label class="text-sm">
-                Long over (chars)
-                <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    step="1"
-                    bind:value={char_threshold}
-                    class="w-20 rounded border p-1"
+        {#if cues.length === 0}
+            <p class="section mt-4 text-sm text-gray-600">
+                Upload an .srt file to begin — your cues will appear here for triage.
+            </p>
+        {:else}
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+                <label class="text-sm">
+                    Long over (chars)
+                    <input
+                        type="number"
+                        min="1"
+                        max="500"
+                        step="1"
+                        bind:value={char_threshold}
+                        class="w-20 rounded border p-1"
+                    >
+                </label>
+                <button
+                    class="btn btn-secondary btn-sm"
+                    onclick={select_all_long}
                 >
-            </label>
-            <button
-                class="btn btn-secondary btn-sm"
-                onclick={select_all_long}
-            >
-                Select all long
-            </button>
-            <button
-                class="btn btn-sm"
-                onclick={clear_selection}
-            >
-                Clear
-            </button>
-            <span class="ml-auto text-xs text-gray-500">{progress}</span>
-        </div>
-        <ul class="mt-3 divide-y rounded border">
-            {#each cues as cue (cue.index)}
-                {@const rate = cps(cue)}
-                {@const hot = rate > 17}
-                <li>
-                    <label class="flex cursor-pointer items-center gap-3 p-2 hover:bg-gray-50">
-                        <input
-                            type="checkbox"
-                            checked={included.has(cue.index)}
-                            onchange={() => toggle_cue(cue.index)}
-                        >
-                        <span class="w-10 shrink-0 text-sm font-semibold">#{cue.index}</span>
-                        <span class="w-44 shrink-0 text-xs text-gray-500">
-                            {format_srt_timestamp(cue.start)}
-                            --> {format_srt_timestamp(cue.end)}
-                        </span>
-                        <span
-                            class="shrink-0 rounded px-1.5 py-0.5 text-xs {hot
+                    Select all long
+                </button>
+                <button
+                    class="btn btn-sm"
+                    onclick={clear_selection}
+                >
+                    Clear
+                </button>
+                <span class="ml-auto text-xs text-gray-500">{progress}</span>
+            </div>
+            <ul class="mt-3 divide-y rounded border">
+                {#each cues as cue (cue.index)}
+                    {@const rate = cps(cue)}
+                    {@const hot = rate > 17}
+                    <li>
+                        <label class="flex cursor-pointer items-center gap-3 p-2 hover:bg-gray-50">
+                            <input
+                                type="checkbox"
+                                checked={included.has(cue.index)}
+                                onchange={() => toggle_cue(cue.index)}
+                            >
+                            <span class="w-10 shrink-0 text-sm font-semibold">#{cue.index}</span>
+                            <span class="w-44 shrink-0 text-xs text-gray-500">
+                                {format_srt_timestamp(cue.start)}
+                                --> {format_srt_timestamp(cue.end)}
+                            </span>
+                            <span
+                                class="shrink-0 rounded px-1.5 py-0.5 text-xs {hot
                                 ? 'bg-amber-100 text-amber-800'
                                 : 'bg-green-100 text-green-800'}"
-                        >
-                            {rate.toFixed(1)}
-                            cps
-                            {#if rate > 20}
-                                ⚠
-                            {/if}
-                        </span>
-                        <span class="w-16 shrink-0 text-xs text-gray-500"> {Array.from(cue.text).length} chars </span>
-                        <span
-                            class="min-w-0 flex-1 truncate text-sm"
-                            dir="auto"
-                            title={cue.text}
-                        >
-                            {truncate(cue.text, 80)}
-                        </span>
-                    </label>
-                </li>
-            {/each}
-        </ul>
-        <div class="sticky bottom-0 mt-6 border-t bg-white p-4">
-            <button
-                class="btn btn-primary w-full"
-                disabled={included.size === 0}
-                onclick={() => { step = 2 }}
-            >
-                Continue with {included.size} selected →
-            </button>
-        </div>
+                            >
+                                {rate.toFixed(1)}
+                                cps
+                                {#if rate > 20}
+                                    ⚠
+                                {/if}
+                            </span>
+                            <span class="w-16 shrink-0 text-xs text-gray-500">
+                                {Array.from(cue.text).length}
+                                chars
+                            </span>
+                            <span
+                                class="min-w-0 flex-1 truncate text-sm"
+                                dir="auto"
+                                title={cue.text}
+                            >
+                                {truncate(cue.text, 80)}
+                            </span>
+                        </label>
+                    </li>
+                {/each}
+            </ul>
+            <div class="sticky bottom-0 mt-6 border-t bg-white p-4">
+                <button
+                    class="btn btn-primary w-full"
+                    disabled={included.size === 0}
+                    onclick={() => { step = 2 }}
+                >
+                    Continue with {included.size} selected →
+                </button>
+            </div>
+        {/if}
     {:else}
         <div class="mt-4">
             <button
@@ -361,17 +394,8 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                         {format_srt_timestamp(cue.start)}
                         --> {format_srt_timestamp(cue.end)}
                     </span>
-                    <select
-                        class="ml-auto rounded border p-1 text-sm"
-                        aria-label="Locale for cue {cue.index}"
-                        bind:value={cue_locale[cue.index]}
-                    >
-                        {#each SAMPLE_LOCALES as locale (locale)}
-                            <option value={locale}>{locale}</option>
-                        {/each}
-                    </select>
                     <button
-                        class="btn btn-sm"
+                        class="btn btn-sm ml-auto"
                         onclick={() => reset_cue(cue)}
                     >
                         Reset
