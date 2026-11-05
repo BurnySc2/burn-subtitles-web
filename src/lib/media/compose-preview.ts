@@ -33,7 +33,16 @@ function serialize_node(node: ComposeNode): string {
         return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(node.data.probe ?? null)].join(":")
     }
     if (node.type === "subtitles") {
-        return [node.id, node.type, file_stub_key(node.data.file), node.data.content ?? "", node.data.mode].join(":")
+        const { font_file, ...style_rest } = normalize_subtitle_style(node.data)
+        return [
+            node.id,
+            node.type,
+            file_stub_key(node.data.file),
+            node.data.content ?? "",
+            node.data.mode,
+            file_stub_key(font_file),
+            JSON.stringify(style_rest),
+        ].join(":")
     }
     if (node.type === "overlay") {
         return [
