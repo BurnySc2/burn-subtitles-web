@@ -9,7 +9,7 @@ import {
 } from "$lib/media/compose-subtitles"
 import { CUE_LOCALES, preview_parts, SAMPLE_LOCALES, SAMPLE_SRT, type TabKind } from "$lib/media/split-prototype"
 import { clamp_gap, DEFAULT_GAP_MS, split_times } from "$lib/media/split-timing"
-import { cps, filter_cues, is_long, truncate } from "$lib/media/split-triage-helpers"
+import { cps, is_long, truncate } from "$lib/media/split-triage-helpers"
 
 const TABS: Array<{ kind: TabKind; label: string }> = [
     { kind: "recommended", label: "Recommended" },
@@ -28,10 +28,8 @@ let included = $state<Set<number>>(new Set())
 let cue_locale = $state<Record<number, string>>({ ...CUE_LOCALES })
 let result_url = $state<string | null>(null)
 let gap_ms = $state<number>(DEFAULT_GAP_MS)
-let search = $state("")
 let char_threshold = $state(80)
 let step = $state<1 | 2>(1)
-let filtered_cues = $derived(filter_cues(cues, search))
 let selected_cues = $derived(cues.filter((cue) => included.has(cue.index)))
 let progress = $derived(`${included.size} selected`)
 const tab_of = (index: number): TabKind => selected_tab[index] ?? "recommended"
@@ -86,7 +84,7 @@ function remove_cue(index: number) {
 }
 function select_all_long() {
     const next = new Set(included)
-    for (const cue of filtered_cues) {
+    for (const cue of cues) {
         if (is_long(cue, char_threshold)) {
             next.add(cue.index)
         }
@@ -215,15 +213,6 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
     {#if step === 1}
         <div class="mt-4 flex flex-wrap items-center gap-2">
             <label class="text-sm">
-                Search
-                <input
-                    type="search"
-                    bind:value={search}
-                    placeholder="Filter cues…"
-                    class="ml-2 rounded border p-1 text-sm"
-                >
-            </label>
-            <label class="text-sm">
                 Long over (chars)
                 <input
                     type="number"
@@ -246,13 +235,10 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             >
                 Clear
             </button>
-            <span class="ml-auto text-xs text-gray-500">
-                Showing {filtered_cues.length}/{cues.length}
-                · {progress}
-            </span>
+            <span class="ml-auto text-xs text-gray-500">{progress}</span>
         </div>
         <ul class="mt-3 divide-y rounded border">
-            {#each filtered_cues as cue (cue.index)}
+            {#each cues as cue (cue.index)}
                 {@const rate = cps(cue)}
                 {@const hot = rate > 17}
                 <li>
