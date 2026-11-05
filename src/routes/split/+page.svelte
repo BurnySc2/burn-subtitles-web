@@ -87,7 +87,7 @@ function remove_cue(index: number) {
 function select_all_long() {
     const next = new Set(included)
     for (const cue of filtered_cues) {
-        if (is_long(cue, char_threshold) || cps(cue) > 20) {
+        if (is_long(cue, char_threshold)) {
             next.add(cue.index)
         }
     }
