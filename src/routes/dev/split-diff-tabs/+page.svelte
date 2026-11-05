@@ -1,25 +1,63 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
-import { format_srt_timestamp, parse_srt, type SubtitleCue } from "$lib/media/compose-subtitles"
+import {
+    format_srt_timestamp,
+    parse_srt,
+    type SubtitleCue,
+    SubtitleError,
+    validate_srt,
+} from "$lib/media/compose-subtitles"
 import { CUE_LOCALES, preview_parts, SAMPLE_LOCALES, SAMPLE_SRT, type TabKind } from "$lib/media/split-prototype"
-import { clamp_gap, DEFAULT_GAP_MS, GAP_PRESETS, split_times } from "$lib/media/split-timing"
+import { clamp_gap, DEFAULT_GAP_MS, split_times } from "$lib/media/split-timing"
 
 const TABS: Array<{ kind: TabKind; label: string }> = [
     { kind: "recommended", label: "Recommended" },
     { kind: "alternative", label: "Alternative" },
     { kind: "custom", label: "Custom" },
 ]
-const cues: SubtitleCue[] = parse_srt(SAMPLE_SRT)
+const initial_cues = parse_srt(SAMPLE_SRT)
+let cues = $state<SubtitleCue[]>(initial_cues)
+let file_name = $state("Sample subtitles")
+let upload_error = $state("")
 let selected_tab = $state<Record<number, TabKind>>({})
 let custom_text = $state<Record<number, string>>({})
 let custom_parts = $state<Record<number, string[]>>({})
 let custom_error = $state<Record<number, string>>({})
-let included = $state<Record<number, boolean>>(Object.fromEntries(cues.map((cue) => [cue.index, true])))
+let included = $state<Record<number, boolean>>(Object.fromEntries(initial_cues.map((cue) => [cue.index, true])))
 let cue_locale = $state<Record<number, string>>({ ...CUE_LOCALES })
 let result_url = $state<string | null>(null)
 let gap_ms = $state<number>(DEFAULT_GAP_MS)
 let included_count = $derived(cues.filter((cue) => included[cue.index] !== false).length)
 const tab_of = (index: number): TabKind => selected_tab[index] ?? "recommended"
+async function handle_srt_upload(event: Event) {
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) {
+        return
+    }
+    try {
+        const text = await file.text()
+        const validation = validate_srt(text)
+        if (!validation.valid) {
+            upload_error = validation.errors.join("\n")
+            return
+        }
+        const next = parse_srt(text)
+        cues = next
+        selected_tab = {}
+        custom_text = {}
+        custom_parts = {}
+        custom_error = {}
+        included = Object.fromEntries(next.map((cue) => [cue.index, true]))
+        cue_locale = Object.fromEntries(next.map((cue) => [cue.index, CUE_LOCALES[cue.index] ?? "en"]))
+        file_name = file.name
+        upload_error = ""
+    } catch (error) {
+        upload_error = error instanceof SubtitleError ? error.message : `Could not read ${file.name}`
+    } finally {
+        input.value = ""
+    }
+}
 function preview_for(cue: SubtitleCue): string[] {
     if (included[cue.index] === false) {
         return [cue.text]
@@ -98,16 +136,28 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 class="w-20 rounded border p-1"
             >
         </label>
-        {#each GAP_PRESETS as preset (preset)}
-            <button
-                class="btn btn-sm"
-                onclick={() => { gap_ms = preset }}
-            >
-                {preset}
-            </button>
-        {/each}
         <span class="text-xs text-gray-500">{gap_ms} ms pause</span>
     </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+        <label class="text-sm">
+            Subtitles file
+            <input
+                type="file"
+                accept=".srt,.vtt,text/plain"
+                onchange={handle_srt_upload}
+                class="ml-2 text-sm"
+            >
+        </label>
+        <span class="text-xs text-gray-500">{file_name} · {cues.length} cues</span>
+    </div>
+    {#if upload_error}
+        <p
+            role="alert"
+            class="mt-2 whitespace-pre-line text-sm text-red-600"
+        >
+            {upload_error}
+        </p>
+    {/if}
     {#each cues as cue (cue.index)}
         {@const tab = tab_of(cue.index)}
         {@const preview = preview_for(cue)}
