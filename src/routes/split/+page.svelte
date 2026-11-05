@@ -215,7 +215,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             id="gap-hint"
             class="w-full text-xs text-gray-500"
         >
-            Brief blank between the two halves so they don't overlap. 10 ms ≈ 1/100 s — not noticeable.
+            Brief blank between the two halves so they don't overlap.
         </p>
         <p
             id="gap-example"
@@ -224,6 +224,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             {gap_example}
         </p>
     </div>
+    <hr class="my-4 border-t border-gray-200">
     <div class="mt-3 flex flex-wrap items-center gap-2">
         <label class="text-sm">
             Subtitles file
