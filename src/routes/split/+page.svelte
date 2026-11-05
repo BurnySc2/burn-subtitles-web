@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
+import { clip_basename } from "$lib/media/clip-filename"
 import {
     format_srt_timestamp,
     parse_srt,
@@ -171,7 +172,8 @@ function download_splits() {
     result_url = URL.createObjectURL(new Blob([build_output_srt()], { type: "text/plain;charset=utf-8" }))
     const link = document.createElement("a")
     link.href = result_url
-    link.download = "split.srt"
+    const stem = file_name ? clip_basename(file_name) : "split"
+    link.download = `${stem}_split.srt`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

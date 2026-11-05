@@ -21,28 +21,6 @@ export function is_long(cue: SubtitleCue, max_chars = 80): boolean {
 }
 
 /**
- * Filter cues by index marker, text, or time range.
- * @param cues Cues to search.
- * @param query Raw user query; empty returns all cues.
- * @returns Matching cues in original order.
- */
-export function filter_cues(cues: SubtitleCue[], query: string): SubtitleCue[] {
-    const normalized = query.trim().toLowerCase()
-    if (normalized === "") {
-        return cues
-    }
-    return cues.filter((cue) => {
-        if (`#${cue.index}`.includes(normalized)) {
-            return true
-        }
-        if (cue.text.toLowerCase().includes(normalized)) {
-            return true
-        }
-        return `${cue.start} --> ${cue.end}`.toLowerCase().includes(normalized)
-    })
-}
-
-/**
  * Shorten text without splitting surrogate pairs.
  * @param text Text to shorten.
  * @param max Maximum characters to keep.
