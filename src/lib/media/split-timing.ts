@@ -7,6 +7,38 @@ export const MIN_PART = 0.2
 
 export const MAX_GAP_MS = 500
 
+export type BalancePreset = "equal" | "proportional" | "long_boost"
+
+export const LONG_BOOST_GAMMA = 2
+
+export const BALANCE_PRESETS: Array<{ id: BalancePreset; label: string; hint: string }> = [
+    { id: "equal", label: "Equal", hint: "Both halves get equal time" },
+    { id: "proportional", label: "Proportional", hint: "Time matches text length" },
+    { id: "long_boost", label: "Long-first boost", hint: "Longer half gets extra time" },
+]
+
+/** Power-weighted balance curve; r is the proportional text share. */
+export function balance_ratio(r: number, gamma: number = 1): number {
+    const clamped = Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : 0.5
+    if (clamped === 0.5) {
+        return 0.5
+    }
+    const g = Number.isFinite(gamma) ? Math.min(3, Math.max(0.25, gamma)) : 1
+    const rg = clamped ** g
+    return rg / (rg + (1 - clamped) ** g)
+}
+
+/** Map a text share to an effective split ratio for the given preset. */
+export function balance_effective_ratio(r: number, preset: BalancePreset): number {
+    if (preset === "equal") {
+        return 0.5
+    }
+    if (preset === "long_boost") {
+        return balance_ratio(r, LONG_BOOST_GAMMA)
+    }
+    return Number.isFinite(r) ? Math.min(1, Math.max(0, r)) : 0.5
+}
+
 /** Quantize seconds to centisecond precision. */
 export function quantize_cs(x: number): number {
     return Math.round(x * 100) / 100

@@ -8,7 +8,14 @@ import {
     validate_srt,
 } from "$lib/media/compose-subtitles"
 import { preview_parts, SAMPLE_LOCALES, type TabKind } from "$lib/media/split-prototype"
-import { clamp_gap, DEFAULT_GAP_MS, split_times } from "$lib/media/split-timing"
+import {
+    BALANCE_PRESETS,
+    type BalancePreset,
+    balance_effective_ratio,
+    clamp_gap,
+    DEFAULT_GAP_MS,
+    split_times,
+} from "$lib/media/split-timing"
 import { cps, is_long, truncate } from "$lib/media/split-triage-helpers"
 
 const TABS: Array<{ kind: TabKind; label: string }> = [
@@ -27,6 +34,7 @@ let included = $state<Set<number>>(new Set())
 let page_locale = $state("en")
 let result_url = $state<string | null>(null)
 let gap_ms = $state<number>(DEFAULT_GAP_MS)
+let balance_preset = $state<BalancePreset>("proportional")
 let char_threshold = $state(80)
 let step = $state<1 | 2>(1)
 let selected_cues = $derived(cues.filter((cue) => included.has(cue.index)))
@@ -109,25 +117,23 @@ let gap_example = $derived.by(() => {
         const total = parts[0].length + (parts.length > 1 ? parts[1].length : 0)
         ratio = total === 0 ? 0.5 : parts[0].length / total
     }
-    const { end_a, start_b } = split_times(start, end, ratio, gap_safe)
+    const r_eff = balance_effective_ratio(ratio, balance_preset)
+    const { end_a, start_b } = split_times(start, end, r_eff, gap_safe)
     if (end_a === start_b) {
         return "Too big for short cues — those stay unsplit."
     }
-    return `e.g. Part 1 ends ${format_srt_timestamp(end_a)} → ${gap_safe} ms pause → Part 2 starts ${format_srt_timestamp(start_b)}`
+    const preset_label = BALANCE_PRESETS.find((p) => p.id === balance_preset)?.label ?? balance_preset
+    return `e.g. Part 1 ends ${format_srt_timestamp(end_a)} → ${gap_safe} ms pause → Part 2 starts ${format_srt_timestamp(start_b)} (${preset_label})`
 })
-function parse_custom(raw: string): string[] | null {
-    const chunks = raw.includes("//") ? raw.split("//") : raw.split(/\n\s*\n/)
-    const parts = chunks.map((part) => part.trim()).filter((part) => part !== "")
-    return parts.length === 2 ? parts : null
-}
 function apply_custom(cue: SubtitleCue) {
-    const parsed = parse_custom(custom_text[cue.index] ?? "")
-    if (!parsed) {
-        custom_error[cue.index] = "Write two parts separated by a blank line or //"
+    const first = (custom_text[cue.index] ?? "").trim()
+    const rest = first ? cue.text.replace(first, "").trim() : ""
+    if (!first || !rest || !cue.text.includes(first)) {
+        custom_error[cue.index] = "First part must be shorter than the original text."
         return
     }
     custom_error[cue.index] = ""
-    custom_parts[cue.index] = parsed
+    custom_parts[cue.index] = [first, rest]
     selected_tab[cue.index] = "custom"
 }
 function reset_cue(cue: SubtitleCue) {
@@ -143,7 +149,8 @@ function build_output_srt(): string {
         const parts = preview_for(cue)
         const total = parts[0].length + (parts.length > 1 ? parts[1].length : 0)
         const ratio = total === 0 ? 0.5 : parts[0].length / total
-        const { end_a, start_b } = split_times(cue.start, cue.end, ratio, clamp_gap(gap_ms))
+        const r_eff = balance_effective_ratio(ratio, balance_preset)
+        const { end_a, start_b } = split_times(cue.start, cue.end, r_eff, clamp_gap(gap_ms))
         if (parts.length < 2 || end_a === start_b) {
             out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
         } else {
@@ -220,6 +227,25 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             class="w-full text-xs text-gray-500"
         >
             {gap_example}
+        </p>
+        <label
+            for="balance-preset"
+            class="text-sm"
+        >
+            Timing balance
+            <select
+                id="balance-preset"
+                bind:value={balance_preset}
+                class="ml-2 rounded border p-1 text-sm"
+            >
+                {#each BALANCE_PRESETS as p (p.id)}
+                    <option value={p.id}>{p.label}</option>
+                {/each}
+            </select>
+        </label>
+        <p class="w-full text-xs text-gray-500">
+            Equal = both halves same time. Proportional = time matches text length (default). Boost = longer half gets
+            extra time.
         </p>
         <label
             for="page-locale"
@@ -423,11 +449,19 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                         open
                     >
                         <summary class="cursor-pointer text-sm text-gray-600">Custom split</summary>
+                        <p class="mt-1 text-xs text-gray-500">Type the first part — the rest becomes Part 2.</p>
+                        <label
+                            for="custom-first-{cue.index}"
+                            class="form-label mt-1"
+                        >
+                            First part
+                        </label>
                         <textarea
+                            id="custom-first-{cue.index}"
                             class="mt-1 w-full rounded border p-2 text-sm"
                             rows="2"
                             dir="auto"
-                            placeholder="Two parts separated by a blank line or //"
+                            placeholder="First part"
                             bind:value={custom_text[cue.index]}
                         ></textarea>
                         <div class="mt-1 flex items-center gap-2">
