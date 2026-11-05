@@ -330,9 +330,16 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         {#each selected_cues as cue (cue.index)}
             {@const tab = tab_of(cue.index)}
             {@const preview = preview_for(cue)}
-            <section class="section mt-6">
-                <div class="flex flex-wrap items-center gap-3">
-                    <h2 class="font-semibold">Cue #{cue.index}</h2>
+            <section
+                class="section mt-3"
+                style="padding: 0.75rem"
+            >
+                <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-base font-semibold">Cue #{cue.index}</h2>
+                    <span class="text-xs text-gray-500">
+                        {format_srt_timestamp(cue.start)}
+                        --> {format_srt_timestamp(cue.end)}
+                    </span>
                     <select
                         class="ml-auto rounded border p-1 text-sm"
                         aria-label="Locale for cue {cue.index}"
@@ -352,7 +359,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 <div
                     role="tablist"
                     aria-label="Split options for cue {cue.index}"
-                    class="mt-3 flex gap-2"
+                    class="mt-2 flex gap-1.5"
                 >
                     {#each TABS as option (option.kind)}
                         <button
@@ -366,48 +373,50 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                     {/each}
                 </div>
                 {#if tab === "custom"}
-                    <textarea
-                        class="mt-3 w-full rounded border p-2 text-sm"
-                        rows="3"
-                        dir="auto"
-                        placeholder="Two parts separated by a blank line or //"
-                        bind:value={custom_text[cue.index]}
-                    ></textarea>
-                    <div class="mt-2 flex items-center gap-2">
-                        <button
-                            class="btn btn-secondary btn-sm"
-                            onclick={() => apply_custom(cue)}
-                        >
-                            Apply custom
-                        </button>
-                        {#if custom_error[cue.index]}
-                            <span class="text-sm text-red-600">{custom_error[cue.index]}</span>
-                        {/if}
-                    </div>
+                    <details
+                        class="mt-2 rounded border p-2"
+                        open
+                    >
+                        <summary class="cursor-pointer text-sm text-gray-600">Custom split</summary>
+                        <textarea
+                            class="mt-1 w-full rounded border p-2 text-sm"
+                            rows="2"
+                            dir="auto"
+                            placeholder="Two parts separated by a blank line or //"
+                            bind:value={custom_text[cue.index]}
+                        ></textarea>
+                        <div class="mt-1 flex items-center gap-2">
+                            <button
+                                class="btn btn-secondary btn-sm"
+                                onclick={() => apply_custom(cue)}
+                            >
+                                Apply custom
+                            </button>
+                            {#if custom_error[cue.index]}
+                                <span class="text-sm text-red-600">{custom_error[cue.index]}</span>
+                            {/if}
+                        </div>
+                    </details>
                 {/if}
                 <div
-                    class="mt-3 grid gap-4 md:grid-cols-2"
+                    class="mt-2 grid items-start gap-2 text-sm md:grid-cols-2"
                     dir="auto"
                 >
-                    <div class="rounded bg-gray-50 p-3">
+                    <div class="rounded bg-gray-50 p-2">
                         <p class="form-label">Old</p>
-                        <p class="text-sm">{cue.text}</p>
-                        <p class="mt-1 text-xs text-gray-500">
-                            {format_srt_timestamp(cue.start)}
-                            --> {format_srt_timestamp(cue.end)}
-                        </p>
+                        <p>{cue.text}</p>
                     </div>
-                    <div class="rounded bg-green-50 p-3">
+                    <div class="rounded bg-green-50 p-2">
                         <p class="form-label">New · {tab}{preview.length > 1 ? "" : " · unchanged"}</p>
-                        <p class="text-sm">{preview[0]}</p>
+                        <p>{preview[0]}</p>
                         {#if preview[1]}
-                            <p class="mt-2 text-sm">{preview[1]}</p>
+                            <p class="mt-1">{preview[1]}</p>
                         {/if}
                     </div>
                 </div>
             </section>
         {/each}
-        <div class="sticky bottom-0 mt-6 border-t bg-white p-4">
+        <div class="sticky bottom-0 mt-3 border-t bg-white px-2 py-2">
             <button
                 class="btn btn-primary w-full"
                 disabled={included.size === 0}
