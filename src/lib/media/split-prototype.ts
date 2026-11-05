@@ -16,6 +16,12 @@ export interface SplitOption {
     note: string
 }
 
+export type TabKind = "recommended" | "alternative" | "custom"
+
+export const NO_SPACE_LOCALES = new Set(["ja", "zh", "ko", "th"])
+
+export const CUE_LOCALES: Record<number, string> = { 1: "en", 2: "ar", 3: "ja", 4: "th" }
+
 const CONJUNCTIONS = ["and", "but", "or", "that", "because"]
 
 /** Fixture covering split cases: EN long, AR, JA (no spaces), TH (no spaces). */
@@ -111,31 +117,76 @@ export function alternative_split(words: string[], recommended: number, max_char
     return shifted === recommended ? Math.max(1, Math.min(words.length - 1, recommended + 1)) : shifted
 }
 
+export function join_words(words: string[], locale: string): string {
+    const base = locale.split(/[-_]/)[0]?.toLowerCase() ?? locale
+    return NO_SPACE_LOCALES.has(base) ? words.join("") : words.join(" ")
+}
+
+export function tokenize_for_locale(text: string, locale: string): string[] {
+    return tokenize_segmenter(text, locale)
+}
+
+export function split_at_for(text: string, kind: TabKind, locale: string): number {
+    const words = tokenize_for_locale(text, locale)
+    if (words.length < 2) {
+        return 0
+    }
+    if (kind === "alternative") {
+        return alternative_split(words, recommend_split(words))
+    }
+    if (kind === "custom") {
+        return 0
+    }
+    return recommend_split(words)
+}
+
+export function preview_parts(cue: SubtitleCue, tab: TabKind, custom: string[] | undefined, locale: string): string[] {
+    if (custom !== undefined) {
+        return custom
+    }
+    const at = split_at_for(cue.text, tab, locale)
+    if (at <= 0) {
+        return [cue.text]
+    }
+    return apply_split(cue.text, at, locale)
+}
+
 /** Split text into two parts at the given word index. */
-export function apply_split(text: string, split_word: number): string[] {
-    const words = tokenize_whitespace(text)
+export function apply_split(text: string, split_word: number, locale = "en"): string[] {
+    const words = tokenize_for_locale(text, locale)
     if (words.length < 2) {
         return [text]
     }
     const at = Math.min(words.length - 1, Math.max(1, Math.round(split_word)))
-    return [words.slice(0, at).join(" "), words.slice(at).join(" ")]
+    return [join_words(words.slice(0, at), locale), join_words(words.slice(at), locale)]
 }
 
 /** Rebuild SRT, expanding split cues into two proportionally timed cues renumbered 1..N. */
-export function build_split_srt(cues: SubtitleCue[], splits: Map<number, number>): string {
+export function build_split_srt(
+    cues: SubtitleCue[],
+    splits: Map<number, number>,
+    locales?: Record<number, string> | Map<number, string>,
+): string {
+    const locale_for = (index: number): string => {
+        if (locales instanceof Map) {
+            return locales.get(index) ?? "en"
+        }
+        return locales?.[index] ?? "en"
+    }
     const stamp = (start: number, end: number) => `${format_srt_timestamp(start)} --> ${format_srt_timestamp(end)}`
     const out: string[] = []
     for (const cue of cues) {
         const at = splits.get(cue.index)
+        const locale = locale_for(cue.index)
         if (at === undefined) {
             out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
             continue
         }
-        if (at <= 0 || at >= tokenize_whitespace(cue.text).length) {
+        if (at <= 0 || at >= tokenize_for_locale(cue.text, locale).length) {
             out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
             continue
         }
-        const parts = apply_split(cue.text, at)
+        const parts = apply_split(cue.text, at, locale)
         const chars = parts[0].length + parts[1].length
         if (chars === 0) {
             out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
