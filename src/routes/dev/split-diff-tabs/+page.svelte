@@ -2,6 +2,7 @@
 import { onDestroy } from "svelte"
 import { format_srt_timestamp, parse_srt, type SubtitleCue } from "$lib/media/compose-subtitles"
 import { CUE_LOCALES, preview_parts, SAMPLE_LOCALES, SAMPLE_SRT, type TabKind } from "$lib/media/split-prototype"
+import { clamp_gap, DEFAULT_GAP_MS, GAP_PRESETS, split_times } from "$lib/media/split-timing"
 
 const TABS: Array<{ kind: TabKind; label: string }> = [
     { kind: "recommended", label: "Recommended" },
@@ -16,10 +17,9 @@ let custom_error = $state<Record<number, string>>({})
 let included = $state<Record<number, boolean>>(Object.fromEntries(cues.map((cue) => [cue.index, true])))
 let cue_locale = $state<Record<number, string>>({ ...CUE_LOCALES })
 let result_url = $state<string | null>(null)
+let gap_ms = $state<number>(DEFAULT_GAP_MS)
 let included_count = $derived(cues.filter((cue) => included[cue.index] !== false).length)
-function tab_of(index: number): TabKind {
-    return selected_tab[index] ?? "recommended"
-}
+const tab_of = (index: number): TabKind => selected_tab[index] ?? "recommended"
 function preview_for(cue: SubtitleCue): string[] {
     if (included[cue.index] === false) {
         return [cue.text]
@@ -51,28 +51,24 @@ function build_output_srt(): string {
     const stamp = (start: number, end: number) => `${format_srt_timestamp(start)} --> ${format_srt_timestamp(end)}`
     const out: string[] = []
     for (const cue of cues) {
-        if (included[cue.index] === false) {
-            out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
-            continue
-        }
         const parts = preview_for(cue)
-        if (parts.length < 2) {
+        const total = parts[0].length + (parts.length > 1 ? parts[1].length : 0)
+        const ratio = total === 0 ? 0.5 : parts[0].length / total
+        const { end_a, start_b } = split_times(cue.start, cue.end, ratio, clamp_gap(gap_ms))
+        if (parts.length < 2 || end_a === start_b) {
             out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
-            continue
+        } else {
+            out.push(`${out.length + 1}\n${stamp(cue.start, end_a)}\n${parts[0]}`)
+            out.push(`${out.length + 1}\n${stamp(start_b, cue.end)}\n${parts[1]}`)
         }
-        const chars = parts[0].length + parts[1].length
-        const mid = chars === 0 ? cue.start : cue.start + ((cue.end - cue.start) * parts[0].length) / chars
-        out.push(`${out.length + 1}\n${stamp(cue.start, mid)}\n${parts[0]}`)
-        out.push(`${out.length + 1}\n${stamp(mid, cue.end)}\n${parts[1]}`)
     }
     return out.length === 0 ? "" : `${out.join("\n\n")}\n`
 }
 function download_splits() {
-    const blob = new Blob([build_output_srt()], { type: "text/plain;charset=utf-8" })
     if (result_url) {
         URL.revokeObjectURL(result_url)
     }
-    result_url = URL.createObjectURL(blob)
+    result_url = URL.createObjectURL(new Blob([build_output_srt()], { type: "text/plain;charset=utf-8" }))
     const link = document.createElement("a")
     link.href = result_url
     link.download = "split-prototype.srt"
@@ -80,13 +76,8 @@ function download_splits() {
     link.click()
     document.body.removeChild(link)
 }
-onDestroy(() => {
-    if (result_url) {
-        URL.revokeObjectURL(result_url)
-    }
-})
+onDestroy(() => result_url && URL.revokeObjectURL(result_url))
 </script>
-
 <div class="mx-auto max-w-5xl p-6">
     <a
         href="/dev"
@@ -95,6 +86,28 @@ onDestroy(() => {
     >
     <h1 class="mt-2 text-2xl font-bold">Split diff + option tabs</h1>
     <p class="mt-1 text-sm text-gray-600">Pick a split per cue, then accept and download.</p>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+        <label class="text-sm">
+            Gap (ms)
+            <input
+                type="number"
+                min="0"
+                max="500"
+                step="1"
+                bind:value={gap_ms}
+                class="w-20 rounded border p-1"
+            >
+        </label>
+        {#each GAP_PRESETS as preset (preset)}
+            <button
+                class="btn btn-sm"
+                onclick={() => { gap_ms = preset }}
+            >
+                {preset}
+            </button>
+        {/each}
+        <span class="text-xs text-gray-500">{gap_ms} ms pause</span>
+    </div>
     {#each cues as cue (cue.index)}
         {@const tab = tab_of(cue.index)}
         {@const preview = preview_for(cue)}
@@ -134,9 +147,7 @@ onDestroy(() => {
                         role="tab"
                         aria-selected={tab === option.kind}
                         class="btn btn-sm {tab === option.kind ? 'btn-primary' : 'btn-secondary'}"
-                        onclick={() => {
-                            selected_tab[cue.index] = option.kind
-                        }}
+                        onclick={() => { selected_tab[cue.index] = option.kind }}
                     >
                         {option.label}
                     </button>

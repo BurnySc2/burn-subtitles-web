@@ -1,4 +1,5 @@
 import { format_srt_timestamp, type SubtitleCue } from "./compose-subtitles"
+import { split_times } from "./split-timing"
 
 /** Proposed split point for one overlong cue. */
 export interface SplitSuggestion {
@@ -166,6 +167,7 @@ export function build_split_srt(
     cues: SubtitleCue[],
     splits: Map<number, number>,
     locales?: Record<number, string> | Map<number, string>,
+    gap_ms = 10,
 ): string {
     const locale_for = (index: number): string => {
         if (locales instanceof Map) {
@@ -192,9 +194,13 @@ export function build_split_srt(
             out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
             continue
         }
-        const mid = cue.start + ((cue.end - cue.start) * parts[0].length) / chars
-        out.push(`${out.length + 1}\n${stamp(cue.start, mid)}\n${parts[0]}`)
-        out.push(`${out.length + 1}\n${stamp(mid, cue.end)}\n${parts[1]}`)
+        const { end_a, start_b } = split_times(cue.start, cue.end, parts[0].length / chars, gap_ms)
+        if (end_a === start_b) {
+            out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
+            continue
+        }
+        out.push(`${out.length + 1}\n${stamp(cue.start, end_a)}\n${parts[0]}`)
+        out.push(`${out.length + 1}\n${stamp(start_b, cue.end)}\n${parts[1]}`)
     }
     return out.length === 0 ? "" : `${out.join("\n\n")}\n`
 }
