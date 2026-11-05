@@ -100,6 +100,23 @@ function preview_for(cue: SubtitleCue): string[] {
     }
     return preview_parts(cue, tab_of(cue.index), custom_parts[cue.index], cue_locale[cue.index] ?? "en")
 }
+let gap_safe = $derived(clamp_gap(gap_ms))
+let gap_example = $derived.by(() => {
+    const first = selected_cues[0]
+    const start = first?.start ?? 1.0
+    const end = first?.end ?? 4.0
+    let ratio = 0.5
+    if (first) {
+        const parts = preview_for(first)
+        const total = parts[0].length + (parts.length > 1 ? parts[1].length : 0)
+        ratio = total === 0 ? 0.5 : parts[0].length / total
+    }
+    const { end_a, start_b } = split_times(start, end, ratio, gap_safe)
+    if (end_a === start_b) {
+        return "Too big for short cues — those stay unsplit."
+    }
+    return `e.g. Part 1 ends ${format_srt_timestamp(end_a)} → ${gap_safe} ms pause → Part 2 starts ${format_srt_timestamp(start_b)}`
+})
 function parse_custom(raw: string): string[] | null {
     const chunks = raw.includes("//") ? raw.split("//") : raw.split(/\n\s*\n/)
     const parts = chunks.map((part) => part.trim()).filter((part) => part !== "")
@@ -177,18 +194,35 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </li>
     </ol>
     <div class="mt-3 flex flex-wrap items-center gap-2">
-        <label class="text-sm">
-            Gap (ms)
-            <input
-                type="number"
-                min="0"
-                max="500"
-                step="1"
-                bind:value={gap_ms}
-                class="w-20 rounded border p-1"
-            >
+        <label
+            for="gap-ms"
+            class="text-sm"
+        >
+            Pause between parts (ms)
         </label>
-        <span class="text-xs text-gray-500">{gap_ms} ms pause</span>
+        <input
+            id="gap-ms"
+            type="number"
+            min="0"
+            max="500"
+            step="1"
+            bind:value={gap_ms}
+            inputmode="numeric"
+            aria-describedby="gap-hint gap-example"
+            class="w-20 rounded border p-1"
+        >
+        <p
+            id="gap-hint"
+            class="w-full text-xs text-gray-500"
+        >
+            Brief blank between the two halves so they don't overlap. 10 ms ≈ 1/100 s — not noticeable.
+        </p>
+        <p
+            id="gap-example"
+            class="w-full text-xs text-gray-500"
+        >
+            {gap_example}
+        </p>
     </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
         <label class="text-sm">
