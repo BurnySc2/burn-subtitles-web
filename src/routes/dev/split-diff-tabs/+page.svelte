@@ -9,6 +9,7 @@ import {
 } from "$lib/media/compose-subtitles"
 import { CUE_LOCALES, preview_parts, SAMPLE_LOCALES, SAMPLE_SRT, type TabKind } from "$lib/media/split-prototype"
 import { clamp_gap, DEFAULT_GAP_MS, split_times } from "$lib/media/split-timing"
+import { cps, filter_cues, is_long, truncate } from "$lib/media/split-triage-helpers"
 
 const TABS: Array<{ kind: TabKind; label: string }> = [
     { kind: "recommended", label: "Recommended" },
@@ -23,11 +24,16 @@ let selected_tab = $state<Record<number, TabKind>>({})
 let custom_text = $state<Record<number, string>>({})
 let custom_parts = $state<Record<number, string[]>>({})
 let custom_error = $state<Record<number, string>>({})
-let included = $state<Record<number, boolean>>(Object.fromEntries(initial_cues.map((cue) => [cue.index, true])))
+let included = $state<Set<number>>(new Set())
 let cue_locale = $state<Record<number, string>>({ ...CUE_LOCALES })
 let result_url = $state<string | null>(null)
 let gap_ms = $state<number>(DEFAULT_GAP_MS)
-let included_count = $derived(cues.filter((cue) => included[cue.index] !== false).length)
+let search = $state("")
+let char_threshold = $state(80)
+let step = $state<1 | 2>(1)
+let filtered_cues = $derived(filter_cues(cues, search))
+let selected_cues = $derived(cues.filter((cue) => included.has(cue.index)))
+let progress = $derived(`${included.size} selected`)
 const tab_of = (index: number): TabKind => selected_tab[index] ?? "recommended"
 async function handle_srt_upload(event: Event) {
     const input = event.currentTarget as HTMLInputElement
@@ -48,18 +54,45 @@ async function handle_srt_upload(event: Event) {
         custom_text = {}
         custom_parts = {}
         custom_error = {}
-        included = Object.fromEntries(next.map((cue) => [cue.index, true]))
+        included = new Set()
         cue_locale = Object.fromEntries(next.map((cue) => [cue.index, CUE_LOCALES[cue.index] ?? "en"]))
         file_name = file.name
         upload_error = ""
+        step = 1
     } catch (error) {
         upload_error = error instanceof SubtitleError ? error.message : `Could not read ${file.name}`
     } finally {
         input.value = ""
     }
 }
+function toggle_cue(index: number) {
+    const next = new Set(included)
+    if (next.has(index)) {
+        next.delete(index)
+    } else {
+        next.add(index)
+    }
+    included = next
+}
+function remove_cue(index: number) {
+    const next = new Set(included)
+    next.delete(index)
+    included = next
+}
+function select_all_long() {
+    const next = new Set(included)
+    for (const cue of filtered_cues) {
+        if (is_long(cue, char_threshold) || cps(cue) > 20) {
+            next.add(cue.index)
+        }
+    }
+    included = next
+}
+function clear_selection() {
+    included = new Set()
+}
 function preview_for(cue: SubtitleCue): string[] {
-    if (included[cue.index] === false) {
+    if (!included.has(cue.index)) {
         return [cue.text]
     }
     return preview_parts(cue, tab_of(cue.index), custom_parts[cue.index], cue_locale[cue.index] ?? "en")
@@ -116,6 +149,7 @@ function download_splits() {
 }
 onDestroy(() => result_url && URL.revokeObjectURL(result_url))
 </script>
+
 <div class="mx-auto max-w-5xl p-6">
     <a
         href="/dev"
@@ -124,6 +158,26 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
     >
     <h1 class="mt-2 text-2xl font-bold">Split diff + option tabs</h1>
     <p class="mt-1 text-sm text-gray-600">Pick a split per cue, then accept and download.</p>
+    <ol class="mt-3 flex items-center gap-2 text-sm">
+        <li
+            aria-current={step === 1 ? "step" : undefined}
+            class={step === 1 ? "font-semibold" : "text-gray-500"}
+        >
+            1 Select
+        </li>
+        <li
+            aria-hidden="true"
+            class="text-gray-400"
+        >
+            →
+        </li>
+        <li
+            aria-current={step === 2 ? "step" : undefined}
+            class={step === 2 ? "font-semibold" : "text-gray-500"}
+        >
+            2 Review
+        </li>
+    </ol>
     <div class="mt-3 flex flex-wrap items-center gap-2">
         <label class="text-sm">
             Gap (ms)
@@ -158,100 +212,209 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             {upload_error}
         </p>
     {/if}
-    {#each cues as cue (cue.index)}
-        {@const tab = tab_of(cue.index)}
-        {@const preview = preview_for(cue)}
-        <section class="section mt-6">
-            <div class="flex flex-wrap items-center gap-3">
-                <label class="flex items-center gap-1 text-sm">
-                    <input
-                        type="checkbox"
-                        bind:checked={included[cue.index]}
-                    >
-                    Include
-                </label>
-                <h2 class="font-semibold">Cue #{cue.index}</h2>
-                <select
-                    class="ml-auto rounded border p-1 text-sm"
-                    aria-label="Locale for cue {cue.index}"
-                    bind:value={cue_locale[cue.index]}
+    {#if step === 1}
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+            <label class="text-sm">
+                Search
+                <input
+                    type="search"
+                    bind:value={search}
+                    placeholder="Filter cues…"
+                    class="ml-2 rounded border p-1 text-sm"
                 >
-                    {#each SAMPLE_LOCALES as locale (locale)}
-                        <option value={locale}>{locale}</option>
-                    {/each}
-                </select>
-                <button
-                    class="btn btn-sm"
-                    onclick={() => reset_cue(cue)}
+            </label>
+            <label class="text-sm">
+                Long over (chars)
+                <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    step="1"
+                    bind:value={char_threshold}
+                    class="w-20 rounded border p-1"
                 >
-                    Reset
-                </button>
-            </div>
-            <div
-                role="tablist"
-                aria-label="Split options for cue {cue.index}"
-                class="mt-3 flex gap-2"
+            </label>
+            <button
+                class="btn btn-secondary btn-sm"
+                onclick={select_all_long}
             >
-                {#each TABS as option (option.kind)}
-                    <button
-                        role="tab"
-                        aria-selected={tab === option.kind}
-                        class="btn btn-sm {tab === option.kind ? 'btn-primary' : 'btn-secondary'}"
-                        onclick={() => { selected_tab[cue.index] = option.kind }}
-                    >
-                        {option.label}
-                    </button>
+                Select all long
+            </button>
+            <button
+                class="btn btn-sm"
+                onclick={clear_selection}
+            >
+                Clear
+            </button>
+            <span class="ml-auto text-xs text-gray-500">
+                Showing {filtered_cues.length}/{cues.length}
+                · {progress}
+            </span>
+        </div>
+        <ul class="mt-3 divide-y rounded border">
+            {#each filtered_cues as cue (cue.index)}
+                {@const rate = cps(cue)}
+                {@const hot = rate > 17}
+                <li>
+                    <label class="flex cursor-pointer items-center gap-3 p-2 hover:bg-gray-50">
+                        <input
+                            type="checkbox"
+                            checked={included.has(cue.index)}
+                            onchange={() => toggle_cue(cue.index)}
+                        >
+                        <span class="w-10 shrink-0 text-sm font-semibold">#{cue.index}</span>
+                        <span class="w-44 shrink-0 text-xs text-gray-500">
+                            {format_srt_timestamp(cue.start)}
+                            --> {format_srt_timestamp(cue.end)}
+                        </span>
+                        <span
+                            class="shrink-0 rounded px-1.5 py-0.5 text-xs {hot
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-green-100 text-green-800'}"
+                        >
+                            {rate.toFixed(1)}
+                            cps
+                            {#if rate > 20}
+                                ⚠
+                            {/if}
+                        </span>
+                        <span class="w-16 shrink-0 text-xs text-gray-500"> {Array.from(cue.text).length} chars </span>
+                        <span
+                            class="min-w-0 flex-1 truncate text-sm"
+                            dir="auto"
+                            title={cue.text}
+                        >
+                            {truncate(cue.text, 80)}
+                        </span>
+                    </label>
+                </li>
+            {/each}
+        </ul>
+        <div class="sticky bottom-0 mt-6 border-t bg-white p-4">
+            <button
+                class="btn btn-primary w-full"
+                disabled={included.size === 0}
+                onclick={() => { step = 2 }}
+            >
+                Continue with {included.size} selected →
+            </button>
+        </div>
+    {:else}
+        <div class="mt-4">
+            <button
+                class="btn btn-secondary btn-sm"
+                onclick={() => { step = 1 }}
+            >
+                ← Back to select
+            </button>
+        </div>
+        {#if selected_cues.length > 0}
+            <ul class="mt-3 flex flex-wrap gap-2">
+                {#each selected_cues as cue (cue.index)}
+                    <li class="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-xs">
+                        <span>#{cue.index}</span>
+                        <button
+                            aria-label="Remove cue {cue.index}"
+                            class="rounded-full px-1 hover:bg-gray-200"
+                            onclick={() => remove_cue(cue.index)}
+                        >
+                            ×
+                        </button>
+                    </li>
                 {/each}
-            </div>
-            {#if tab === "custom"}
-                <textarea
-                    class="mt-3 w-full rounded border p-2 text-sm"
-                    rows="3"
-                    dir="auto"
-                    placeholder="Two parts separated by a blank line or //"
-                    bind:value={custom_text[cue.index]}
-                ></textarea>
-                <div class="mt-2 flex items-center gap-2">
-                    <button
-                        class="btn btn-secondary btn-sm"
-                        onclick={() => apply_custom(cue)}
+            </ul>
+        {/if}
+        {#if selected_cues.length === 0}
+            <p class="section mt-6 text-sm text-gray-600">No cues selected. Go back to select cues to split.</p>
+        {/if}
+        {#each selected_cues as cue (cue.index)}
+            {@const tab = tab_of(cue.index)}
+            {@const preview = preview_for(cue)}
+            <section class="section mt-6">
+                <div class="flex flex-wrap items-center gap-3">
+                    <h2 class="font-semibold">Cue #{cue.index}</h2>
+                    <select
+                        class="ml-auto rounded border p-1 text-sm"
+                        aria-label="Locale for cue {cue.index}"
+                        bind:value={cue_locale[cue.index]}
                     >
-                        Apply custom
+                        {#each SAMPLE_LOCALES as locale (locale)}
+                            <option value={locale}>{locale}</option>
+                        {/each}
+                    </select>
+                    <button
+                        class="btn btn-sm"
+                        onclick={() => reset_cue(cue)}
+                    >
+                        Reset
                     </button>
-                    {#if custom_error[cue.index]}
-                        <span class="text-sm text-red-600">{custom_error[cue.index]}</span>
-                    {/if}
                 </div>
-            {/if}
-            <div
-                class="mt-3 grid gap-4 md:grid-cols-2"
-                dir="auto"
+                <div
+                    role="tablist"
+                    aria-label="Split options for cue {cue.index}"
+                    class="mt-3 flex gap-2"
+                >
+                    {#each TABS as option (option.kind)}
+                        <button
+                            role="tab"
+                            aria-selected={tab === option.kind}
+                            class="btn btn-sm {tab === option.kind ? 'btn-primary' : 'btn-secondary'}"
+                            onclick={() => { selected_tab[cue.index] = option.kind }}
+                        >
+                            {option.label}
+                        </button>
+                    {/each}
+                </div>
+                {#if tab === "custom"}
+                    <textarea
+                        class="mt-3 w-full rounded border p-2 text-sm"
+                        rows="3"
+                        dir="auto"
+                        placeholder="Two parts separated by a blank line or //"
+                        bind:value={custom_text[cue.index]}
+                    ></textarea>
+                    <div class="mt-2 flex items-center gap-2">
+                        <button
+                            class="btn btn-secondary btn-sm"
+                            onclick={() => apply_custom(cue)}
+                        >
+                            Apply custom
+                        </button>
+                        {#if custom_error[cue.index]}
+                            <span class="text-sm text-red-600">{custom_error[cue.index]}</span>
+                        {/if}
+                    </div>
+                {/if}
+                <div
+                    class="mt-3 grid gap-4 md:grid-cols-2"
+                    dir="auto"
+                >
+                    <div class="rounded bg-gray-50 p-3">
+                        <p class="form-label">Old</p>
+                        <p class="text-sm">{cue.text}</p>
+                        <p class="mt-1 text-xs text-gray-500">
+                            {format_srt_timestamp(cue.start)}
+                            --> {format_srt_timestamp(cue.end)}
+                        </p>
+                    </div>
+                    <div class="rounded bg-green-50 p-3">
+                        <p class="form-label">New · {tab}{preview.length > 1 ? "" : " · unchanged"}</p>
+                        <p class="text-sm">{preview[0]}</p>
+                        {#if preview[1]}
+                            <p class="mt-2 text-sm">{preview[1]}</p>
+                        {/if}
+                    </div>
+                </div>
+            </section>
+        {/each}
+        <div class="sticky bottom-0 mt-6 border-t bg-white p-4">
+            <button
+                class="btn btn-primary w-full"
+                disabled={included.size === 0}
+                onclick={download_splits}
             >
-                <div class="rounded bg-gray-50 p-3">
-                    <p class="form-label">Old</p>
-                    <p class="text-sm">{cue.text}</p>
-                    <p class="mt-1 text-xs text-gray-500">
-                        {format_srt_timestamp(cue.start)}
-                        --> {format_srt_timestamp(cue.end)}
-                    </p>
-                </div>
-                <div class="rounded bg-green-50 p-3">
-                    <p class="form-label">New · {tab}{preview.length > 1 ? "" : " · unchanged"}</p>
-                    <p class="text-sm">{preview[0]}</p>
-                    {#if preview[1]}
-                        <p class="mt-2 text-sm">{preview[1]}</p>
-                    {/if}
-                </div>
-            </div>
-        </section>
-    {/each}
-    <div class="sticky bottom-0 mt-6 border-t bg-white p-4">
-        <button
-            class="btn btn-primary w-full"
-            disabled={included_count === 0}
-            onclick={download_splits}
-        >
-            Accept {included_count} splits -> Download
-        </button>
-    </div>
+                Accept {included.size} splits -> Download
+            </button>
+        </div>
+    {/if}
 </div>
