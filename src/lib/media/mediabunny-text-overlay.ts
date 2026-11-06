@@ -1,5 +1,5 @@
 import type { Output } from "mediabunny"
-import type { OverlayPosition, TextItem } from "./compose-types"
+import { MAX_TEXT_ITEMS, type OverlayPosition, TEXT_ANCHORS, type TextItem } from "./compose-types"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
@@ -41,26 +41,14 @@ export interface RenderTextOverlayResult {
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser text overlay rendering."
 
-const TEXT_POSITIONS: readonly OverlayPosition[] = [
-    "top-left",
-    "top-center",
-    "top-right",
-    "center-left",
-    "center",
-    "center-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-]
-
-export const MAX_TEXT_ITEMS = 32
+export { MAX_TEXT_ITEMS, TEXT_ANCHORS }
 
 export function is_animated_text(item: TextItem): boolean {
     return item.size_end !== item.size_start
 }
 
 export function animated_text_key(index: number, item: TextItem): string {
-    return `${index}:${item.font}:${item.size_end}:${item.color}`
+    return `${index}:${item.font}:${item.size_start}:${item.size_end}:${item.color}:${item.align}:${item.max_width}:${item.text.length}:${item.text}`
 }
 
 interface AnimatedTextBitmap {
@@ -70,16 +58,30 @@ interface AnimatedTextBitmap {
     cached_size: number
 }
 
-function rasterize_animated_text(item: TextItem, cached_size: number, scale: number): AnimatedTextBitmap | null {
-    const measure_canvas = document.createElement("canvas")
-    const measure_ctx = measure_canvas.getContext("2d")
-    if (!measure_ctx) {
+let shared_measure_context: CanvasRenderingContext2D | null | undefined
+
+function measure_text_width(text: string, font: string): number | null {
+    if (typeof document === "undefined") {
         return null
     }
-    const font_str = `${cached_size}px ${item.font}`
-    measure_ctx.font = font_str
-    const measured = measure_ctx.measureText(item.text).width
+    if (shared_measure_context === undefined) {
+        shared_measure_context = document.createElement("canvas").getContext("2d")
+    }
+    if (!shared_measure_context) {
+        return null
+    }
+    shared_measure_context.font = font
+    const measured = shared_measure_context.measureText(text).width
     if (!Number.isFinite(measured) || measured <= 0) {
+        return null
+    }
+    return measured
+}
+
+function rasterize_animated_text(item: TextItem, cached_size: number, scale: number): AnimatedTextBitmap | null {
+    const font_str = `${cached_size}px ${item.font}`
+    const measured = measure_text_width(item.text, font_str)
+    if (measured === null) {
         return null
     }
     const max_w = item.max_width !== null ? item.max_width * scale : null
@@ -105,10 +107,6 @@ function rasterize_animated_text(item: TextItem, cached_size: number, scale: num
         off_ctx.fillText(item.text, draw_x, bitmap_h / 2)
     }
     return { canvas: bitmap, dx: -draw_x, dy: -bitmap_h / 2, cached_size }
-}
-
-export function visible_items(items: TextItem[], t: number): TextItem[] {
-    return items.filter((item) => t >= item.show_start && (item.show_end === null || t <= item.show_end))
 }
 
 export function item_alpha(item: TextItem, t: number): number {
@@ -167,7 +165,7 @@ export function text_size_at(item: TextItem, t: number, out_h: number): number {
 
 function validate_text_item(item: TextItem, index: number): void {
     const prefix = `Text item ${index + 1}`
-    if (typeof item.text !== "string" || item.text.length === 0) {
+    if (typeof item.text !== "string" || item.text.trim() === "") {
         throw new ClipError("INVALID_RANGE", `${prefix} text must be a non-empty string.`)
     }
     if (typeof item.font !== "string" || item.font.trim() === "") {
@@ -179,13 +177,13 @@ function validate_text_item(item: TextItem, index: number): void {
     if (!Number.isFinite(item.size_end) || item.size_end <= 0) {
         throw new ClipError("INVALID_RANGE", `${prefix} end size must be greater than 0.`)
     }
-    if (typeof item.color !== "string" || item.color.trim() === "") {
-        throw new ClipError("INVALID_RANGE", `${prefix} color must be a non-empty string.`)
+    if (typeof item.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(item.color)) {
+        throw new ClipError("INVALID_RANGE", `${prefix} color must be a hex string like #rrggbb.`)
     }
     if (!Number.isFinite(item.opacity) || item.opacity < 0 || item.opacity > 1) {
         throw new ClipError("INVALID_RANGE", `${prefix} opacity must be between 0 and 1.`)
     }
-    if (!TEXT_POSITIONS.includes(item.anchor)) {
+    if (!TEXT_ANCHORS.includes(item.anchor)) {
         throw new ClipError("INVALID_RANGE", `${prefix} has an unknown anchor.`)
     }
     if (!Number.isFinite(item.offset_x) || !Number.isFinite(item.offset_y)) {
@@ -334,10 +332,10 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
         const scale = height / 1080
         const animated_cache = new Map<string, AnimatedTextBitmap>()
         for (const [index, item] of items.entries()) {
-            if (!is_animated_text(item)) {
+            if (!is_animated_text(item) || item.show_end === null) {
                 continue
             }
-            const cached_size = item.size_end * scale
+            const cached_size = Math.max(item.size_start, item.size_end) * scale
             if (!Number.isFinite(cached_size) || cached_size <= 0) {
                 continue
             }
@@ -346,6 +344,8 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
                 animated_cache.set(animated_text_key(index, item), entry)
             }
         }
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = "high"
         const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
         const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
         for (let i = 0; i < total_frames; i += 1) {
@@ -361,8 +361,6 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
             if (wrapped?.canvas) {
                 draw_contain_fit(ctx, wrapped.canvas, width, height)
             }
-            ctx.imageSmoothingEnabled = true
-            ctx.imageSmoothingQuality = "high"
             for (const [index, item] of items.entries()) {
                 if (t < item.show_start || (item.show_end !== null && t > item.show_end)) {
                     continue
@@ -382,14 +380,12 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
                     item.offset_x * scale,
                     item.offset_y * scale,
                 )
-                const cached = animated_cache.get(animated_text_key(index, item))
+                const cached = item.show_end === null ? undefined : animated_cache.get(animated_text_key(index, item))
                 if (cached) {
                     const factor = size / cached.cached_size
                     if (Number.isFinite(factor) && factor > 0) {
                         ctx.save()
                         ctx.globalAlpha = alpha
-                        ctx.imageSmoothingEnabled = true
-                        ctx.imageSmoothingQuality = "high"
                         ctx.translate(point.x, point.y)
                         ctx.scale(factor, factor)
                         ctx.drawImage(cached.canvas, cached.dx, cached.dy)

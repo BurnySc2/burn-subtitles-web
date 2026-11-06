@@ -110,9 +110,13 @@ function is_valid_preview(connection: Edge | Connection): boolean {
         case "trim":
         case "rescale":
         case "subtitles":
+        case "output":
+            return incoming.length < 1
         case "overlay":
         case "text":
-        case "output":
+            if (target_handle !== null) {
+                return false
+            }
             return incoming.length < 1
         case "transition":
             if (target_handle !== "a" && target_handle !== "b") {

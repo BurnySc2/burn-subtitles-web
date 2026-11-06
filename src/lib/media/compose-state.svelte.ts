@@ -1,4 +1,5 @@
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
+import { TEXT_ANCHORS } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 import {
@@ -387,17 +388,7 @@ const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-
 const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra"])
 const EASINGS = new Set(["linear", "exponential"])
 const SUBTITLE_MODES = new Set(["mux", "burn", "sidecar"])
-const OVERLAY_POSITIONS = new Set([
-    "top-left",
-    "top-center",
-    "top-right",
-    "center-left",
-    "center",
-    "center-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-])
+const OVERLAY_POSITIONS = new Set<string>(TEXT_ANCHORS)
 
 function parse_node(raw: unknown): ComposeNode {
     if (!is_record(raw) || typeof raw.id !== "string" || typeof raw.type !== "string") {

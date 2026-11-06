@@ -10,7 +10,7 @@ import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.s
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
 import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
-import type { ComposeNode, ComposeNodeKind } from "$lib/media/compose-types"
+import { type ComposeNode, type ComposeNodeKind, create_default_text_item } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
 import { ClipError } from "$lib/media/mediabunny-clip"
 import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
@@ -100,33 +100,7 @@ function handle_add(kind: ComposeNodeKind): void {
             }
             break
         case "text":
-            node = {
-                id,
-                type: "text",
-                position,
-                data: {
-                    items: [
-                        {
-                            text: "Hello",
-                            font: "sans-serif",
-                            size_start: 48,
-                            size_end: 48,
-                            color: "#ffffff",
-                            opacity: 1,
-                            anchor: "bottom-center",
-                            offset_x: 0,
-                            offset_y: 48,
-                            align: "center",
-                            max_width: null,
-                            show_start: 0,
-                            show_end: null,
-                            fade_in: 0,
-                            fade_out: 0,
-                        },
-                    ],
-                    label: null,
-                },
-            }
+            node = { id, type: "text", position, data: { items: [create_default_text_item()], label: null } }
             break
         case "output":
             node = {

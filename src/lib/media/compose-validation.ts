@@ -1,6 +1,7 @@
 import { topo_sort_compose } from "./compose-graph"
 import { validate_srt } from "./compose-subtitles"
-import type { ComposeEdge, ComposeNode, OverlayPosition, TextItem, ValidationIssue } from "./compose-types"
+import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
+import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
 import {
     parse_crf_override,
@@ -72,18 +73,6 @@ function gate_duration(value: number | null): number | null {
     }
     return value
 }
-
-const TEXT_ANCHORS: readonly OverlayPosition[] = [
-    "top-left",
-    "top-center",
-    "top-right",
-    "center-left",
-    "center",
-    "center-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-]
 
 function node_duration(
     id: string,
@@ -593,6 +582,13 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
             const items: TextItem[] = Array.isArray(node.data.items) ? node.data.items : []
             if (wired && items.length < 1) {
                 issues.push({ node_id: node.id, field: "items", message: "Text node must have at least 1 item" })
+            }
+            if (items.length > MAX_TEXT_ITEMS) {
+                issues.push({
+                    node_id: node.id,
+                    field: "items",
+                    message: `Text node must have at most ${MAX_TEXT_ITEMS} items`,
+                })
             }
             const duration = upstream_duration(node.id, by_id, incoming)
             for (const [index, item] of items.entries()) {

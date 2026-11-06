@@ -123,6 +123,40 @@ export interface TextNodeData {
     label?: string | null
 }
 
+export const MAX_TEXT_ITEMS = 32 as const
+
+export const TEXT_ANCHORS: readonly OverlayPosition[] = [
+    "top-left",
+    "top-center",
+    "top-right",
+    "center-left",
+    "center",
+    "center-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+]
+
+export function create_default_text_item(): TextItem {
+    return {
+        text: "Hello",
+        font: "sans-serif",
+        size_start: 48,
+        size_end: 48,
+        color: "#ffffff",
+        opacity: 1,
+        anchor: "bottom-center",
+        offset_x: 0,
+        offset_y: 48,
+        align: "center",
+        max_width: null,
+        show_start: 0,
+        show_end: null,
+        fade_in: 0,
+        fade_out: 0,
+    }
+}
+
 export type ComposeNodeData =
     | SourceNodeData
     | TrimNodeData

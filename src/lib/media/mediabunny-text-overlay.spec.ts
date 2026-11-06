@@ -3,11 +3,13 @@ import type { OverlayPosition, TextItem } from "./compose-types"
 import { ClipError } from "./mediabunny-clip"
 import type { RenderTextOverlayOptions } from "./mediabunny-text-overlay"
 import {
+    animated_text_key,
+    is_animated_text,
     item_alpha,
+    MAX_TEXT_ITEMS,
     resolve_text_anchor,
     text_size_at,
     validate_text_options,
-    visible_items,
 } from "./mediabunny-text-overlay"
 
 const base_item = (override: Partial<TextItem> = {}): TextItem => ({
@@ -39,28 +41,39 @@ const base_options = (override: Partial<RenderTextOverlayOptions> = {}): RenderT
     ...override,
 })
 
-describe("visible_items", () => {
-    it("includes boundary timestamps and excludes the outside", () => {
-        const items = [base_item({ show_start: 1, show_end: 5 })]
-        expect(visible_items(items, 0.999)).toEqual([])
-        expect(visible_items(items, 1)).toHaveLength(1)
-        expect(visible_items(items, 3)).toHaveLength(1)
-        expect(visible_items(items, 5)).toHaveLength(1)
-        expect(visible_items(items, 5.001)).toEqual([])
+describe("animated_text_key", () => {
+    it("is stable for identical inputs", () => {
+        const item = base_item({ size_start: 40, size_end: 80 })
+        expect(animated_text_key(0, item)).toBe(animated_text_key(0, base_item({ size_start: 40, size_end: 80 })))
     })
 
-    it("keeps null-end items visible for all t at or after start", () => {
-        const items = [base_item({ show_start: 2, show_end: null })]
-        expect(visible_items(items, 1.999)).toEqual([])
-        expect(visible_items(items, 2)).toHaveLength(1)
-        expect(visible_items(items, 10_000)).toHaveLength(1)
+    it("gives distinct keys when text, align, max_width, or size_start differ", () => {
+        const base = base_item({
+            text: "Hello",
+            font: "sans-serif",
+            size_start: 40,
+            size_end: 80,
+            color: "#ffffff",
+            align: "center",
+            max_width: null,
+        })
+        const key = animated_text_key(0, base)
+        const variants: TextItem[] = [
+            base_item({ ...base, text: "World" }),
+            base_item({ ...base, align: "left" }),
+            base_item({ ...base, max_width: 200 }),
+            base_item({ ...base, size_start: 30 }),
+        ]
+        for (const variant of variants) {
+            expect(animated_text_key(0, variant)).not.toBe(key)
+        }
     })
 
-    it("filters mixed windows independently", () => {
-        const items = [base_item({ show_start: 0, show_end: 2 }), base_item({ show_start: 3, show_end: null })]
-        expect(visible_items(items, 1)).toHaveLength(1)
-        expect(visible_items(items, 2.5)).toEqual([])
-        expect(visible_items(items, 4)).toHaveLength(1)
+    it("distinguishes a shrink (80->40) from items sharing the same end size", () => {
+        const shrink = base_item({ size_start: 80, size_end: 40 })
+        expect(is_animated_text(shrink)).toBe(true)
+        expect(animated_text_key(0, shrink)).not.toBe(animated_text_key(0, base_item({ size_start: 20, size_end: 40 })))
+        expect(animated_text_key(0, shrink)).not.toBe(animated_text_key(0, base_item({ size_start: 40, size_end: 40 })))
     })
 })
 
@@ -256,5 +269,40 @@ describe("validate_text_options", () => {
                 base_options({ items: [base_item({ show_start: 1, show_end: 3, fade_in: 1.5, fade_out: 1.5 })] }),
             ),
         ).toThrow(expect.objectContaining({ code: "INVALID_RANGE" }))
+    })
+
+    it("rejects whitespace-only text and non-hex colors with INVALID_RANGE", () => {
+        const bad_items: Array<Partial<TextItem>> = [
+            { text: "   " },
+            { text: " \t\n " },
+            { color: "red" },
+            { color: "#fff" },
+            { color: "#ffffff00" },
+            { color: " #ffffff" },
+            { color: "#gggggg" },
+        ]
+        for (const override of bad_items) {
+            try {
+                validate_text_options(base_options({ items: [base_item(override)] }))
+                expect.unreachable(`expected INVALID_RANGE for ${JSON.stringify(override)}`)
+            } catch (error) {
+                expect(error).toBeInstanceOf(ClipError)
+                expect((error as ClipError).code).toBe("INVALID_RANGE")
+            }
+        }
+    })
+
+    it("accepts lowercase and uppercase 6-digit hex colors", () => {
+        for (const color of ["#ffffff", "#ABCDEF", "#a1b2c3"]) {
+            expect(() => validate_text_options(base_options({ items: [base_item({ color })] }))).not.toThrow()
+        }
+    })
+
+    it("rejects more than MAX_TEXT_ITEMS with INVALID_RANGE", () => {
+        const items = Array.from({ length: MAX_TEXT_ITEMS + 1 }, () => base_item())
+        expect(() => validate_text_options(base_options({ items }))).toThrow(
+            expect.objectContaining({ code: "INVALID_RANGE" }),
+        )
+        expect(() => validate_text_options(base_options({ items: items.slice(0, MAX_TEXT_ITEMS) }))).not.toThrow()
     })
 })

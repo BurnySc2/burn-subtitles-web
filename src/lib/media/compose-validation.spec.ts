@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ComposeEdge, ComposeNode, TextItem } from "./compose-types"
+import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { compose_node_durations, validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 
@@ -377,6 +378,28 @@ describe("validate_compose", () => {
         expect(
             validate_compose(late_start, late_start_edges).some((issue) => issue.field === "items[0].show_start"),
         ).toBe(true)
+    })
+
+    it("flags text nodes with more than MAX_TEXT_ITEMS items", () => {
+        const items = Array.from({ length: MAX_TEXT_ITEMS + 1 }, () => text_item())
+        const nodes = [source("src"), text("txt", items), output()]
+        const edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        const issues = validate_compose(nodes, edges).filter((issue) => issue.field === "items")
+        expect(issues).toEqual([
+            {
+                node_id: "txt",
+                field: "items",
+                message: `Text node must have at most ${MAX_TEXT_ITEMS} items`,
+            },
+        ])
+    })
+
+    it("accepts all nine text anchors", () => {
+        expect(TEXT_ANCHORS).toHaveLength(9)
+        const items = TEXT_ANCHORS.map((anchor) => text_item({ anchor }))
+        const nodes = [source("src"), text("txt", items), output()]
+        const edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        expect(validate_compose(nodes, edges)).toEqual([])
     })
 })
 

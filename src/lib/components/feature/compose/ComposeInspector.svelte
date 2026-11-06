@@ -9,7 +9,6 @@ import type {
     RescaleNodeData,
     SubtitlesNodeData,
     TextItem,
-    TextNodeData,
     TransitionNodeData,
     TrimNodeData,
 } from "$lib/media/compose-types"
@@ -19,6 +18,7 @@ import {
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
 } from "$lib/media/transition-utils"
+import { create_default_text_item, MAX_TEXT_ITEMS } from "../../../media/compose-types"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
@@ -149,13 +149,6 @@ function patch_rescale(patch: Partial<RescaleNodeData>): void {
     }
 }
 
-function patch_text(patch: Partial<TextNodeData>): void {
-    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
-    if (node && node.type === "text") {
-        Object.assign(node.data, patch)
-    }
-}
-
 function patch_text_item(index: number, patch: Partial<TextItem>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "text") {
@@ -168,25 +161,10 @@ function patch_text_item(index: number, patch: Partial<TextItem>): void {
 
 function add_text_item(): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
-    if (node && node.type === "text") {
-        node.data.items.push({
-            text: "Hello",
-            font: "sans-serif",
-            size_start: 48,
-            size_end: 48,
-            color: "#ffffff",
-            opacity: 1,
-            anchor: "bottom-center",
-            offset_x: 0,
-            offset_y: 48,
-            align: "center",
-            max_width: null,
-            show_start: 0,
-            show_end: null,
-            fade_in: 0,
-            fade_out: 0,
-        })
+    if (!node || node.type !== "text" || node.data.items.length >= MAX_TEXT_ITEMS) {
+        return
     }
+    node.data.items.push(create_default_text_item())
 }
 
 function remove_text_item(index: number): void {
@@ -783,19 +761,16 @@ function probe_summary(node: ComposeNode): string {
             </label>
             <p class="text-xs text-gray-500">v1 supports contain only.</p>
         {:else if selected.type === "text"}
-            <p class="text-sm text-gray-600">
-                {selected.data.items.length}
-                item{selected.data.items.length === 1 ? "" : "s"}
-                (top first)
-            </p>
+            <p class="text-sm text-gray-600">{selected.data.items.length} / {MAX_TEXT_ITEMS} items (top first)</p>
             <button
                 type="button"
                 onclick={add_text_item}
+                disabled={selected.data.items.length >= MAX_TEXT_ITEMS}
                 class="btn btn-secondary btn-sm self-start"
             >
                 Add text item
             </button>
-            {#each selected.data.items as item, i (i)}
+            {#each selected.data.items as item, i (item)}
                 <div class="flex flex-col gap-2 rounded border border-gray-200 bg-white p-2">
                     <div class="flex items-center gap-2">
                         <span class="text-sm font-medium">Item {i + 1}</span>
@@ -1143,7 +1118,7 @@ function probe_summary(node: ComposeNode): string {
         {/key}
         {#if selected_issues.length > 0}
             <ul class="flex flex-col gap-1">
-                {#each selected_issues as issue (issue.field ?? issue.message)}
+                {#each selected_issues as issue, j (j)}
                     <li class="rounded bg-red-100 p-2 text-sm text-red-800">
                         {#if issue.field}
                             {issue.field}:
