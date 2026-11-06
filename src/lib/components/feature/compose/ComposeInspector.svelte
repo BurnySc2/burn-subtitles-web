@@ -853,7 +853,7 @@ function probe_summary(node: ComposeNode): string {
                             <input
                                 type="number"
                                 min="1"
-                                step="1"
+                                step="0.1"
                                 value={item.size_start}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
@@ -866,7 +866,7 @@ function probe_summary(node: ComposeNode): string {
                             <input
                                 type="number"
                                 min="1"
-                                step="1"
+                                step="0.1"
                                 value={item.size_end}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>

@@ -307,7 +307,7 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
                     item.offset_y * scale,
                 )
                 ctx.globalAlpha = alpha
-                ctx.font = `${size}px ${item.font}`
+                ctx.font = `${size.toFixed(2)}px ${item.font}`
                 ctx.textAlign = item.align
                 ctx.textBaseline = "middle"
                 ctx.fillStyle = item.color

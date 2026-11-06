@@ -167,6 +167,20 @@ describe("text_size_at", () => {
         expect(text_size_at(item, 0, 1080)).toBe(40)
         expect(text_size_at(item, 100, 1080)).toBe(80)
     })
+
+    it("preserves fractional sizes at the midpoint", () => {
+        const item = base_item({ show_start: 2, show_end: 6, size_start: 25, size_end: 26 })
+        const size = text_size_at(item, 4, 1080)
+        expect(size).toBeCloseTo(25.5, 6)
+        expect(size % 1).not.toBe(0)
+    })
+
+    it("yields fractional per-frame values for a small delta", () => {
+        const item = base_item({ show_start: 0, show_end: 5, size_start: 25, size_end: 30 })
+        const size = text_size_at(item, 1 / 30, 1080)
+        expect(size).toBeCloseTo(25.033_333, 5)
+        expect(size % 1).not.toBe(0)
+    })
 })
 
 describe("validate_text_options", () => {
