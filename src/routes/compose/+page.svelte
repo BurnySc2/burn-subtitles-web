@@ -2,6 +2,7 @@
 import { onDestroy } from "svelte"
 import ComposeBrowserWarning from "$lib/components/feature/compose/ComposeBrowserWarning.svelte"
 import ComposeCanvas from "$lib/components/feature/compose/ComposeCanvas.svelte"
+import ComposeFontLibrary from "$lib/components/feature/compose/ComposeFontLibrary.svelte"
 import ComposeInspector from "$lib/components/feature/compose/ComposeInspector.svelte"
 import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPanel.svelte"
 import ComposeJsonBar from "$lib/components/feature/compose/ComposeJsonBar.svelte"
@@ -9,6 +10,7 @@ import ComposePalette from "$lib/components/feature/compose/ComposePalette.svelt
 import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.svelte"
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
+import { clear_font_registry } from "$lib/media/compose-font-library"
 import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
 import { type ComposeNode, type ComposeNodeKind, create_default_text_item } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
@@ -241,6 +243,7 @@ let sidecar_name = $derived.by(() => {
 
 onDestroy(() => {
     aborter?.abort()
+    clear_font_registry()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
         if (compose_state.result.sidecar_url) {
@@ -257,7 +260,10 @@ onDestroy(() => {
     <div class="flex h-[calc(100vh-320px)] w-full items-start gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
         <div class="flex h-full min-w-0 flex-1 flex-col rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
-        <div class="h-full w-80 shrink-0 overflow-y-auto"><ComposeInspector on_preview={handle_node_preview} /></div>
+        <div class="flex h-full w-80 shrink-0 flex-col gap-2 overflow-y-auto">
+            <ComposeFontLibrary />
+            <ComposeInspector on_preview={handle_node_preview} />
+        </div>
     </div>
     {#if preview_url && preview_blob}
         <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">

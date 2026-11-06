@@ -1,17 +1,12 @@
-import type { Output } from "mediabunny"
 import { MAX_TEXT_ITEMS, type OverlayPosition, TEXT_ANCHORS, type TextItem } from "./compose-types"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
     add_canvas_frame,
     CRF_INVALID_MESSAGE,
-    create_encode_canvas,
-    create_encode_video_source,
-    decode_full_audio,
     draw_contain_fit,
-    ensure_aac_encoder,
     parse_crf_override,
-    resolve_audio_bitrate,
+    with_canvas_encode,
 } from "./transition-utils"
 
 export interface TextAnchorPoint {
@@ -51,7 +46,7 @@ export function animated_text_key(index: number, item: TextItem): string {
     return `${index}:${item.font}:${item.size_start}:${item.size_end}:${item.color}:${item.align}:${item.max_width}:${item.text.length}:${item.text}`
 }
 
-interface AnimatedTextBitmap {
+export interface AnimatedTextBitmap {
     canvas: HTMLCanvasElement
     dx: number
     dy: number
@@ -60,7 +55,7 @@ interface AnimatedTextBitmap {
 
 let shared_measure_context: CanvasRenderingContext2D | null | undefined
 
-function measure_text_width(text: string, font: string): number | null {
+export function measure_text_width(text: string, font: string): number | null {
     if (typeof document === "undefined") {
         return null
     }
@@ -78,7 +73,10 @@ function measure_text_width(text: string, font: string): number | null {
     return measured
 }
 
-function rasterize_animated_text(item: TextItem, cached_size: number, scale: number): AnimatedTextBitmap | null {
+export function rasterize_animated_text(item: TextItem, cached_size: number, scale: number): AnimatedTextBitmap | null {
+    if (typeof document === "undefined") {
+        return null
+    }
     const font_str = `${cached_size}px ${item.font}`
     const measured = measure_text_width(item.text, font_str)
     if (measured === null) {
@@ -270,11 +268,6 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
     }
     const mb = await import("mediabunny")
     const input = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(video) })
-    let output: Output | null = null
-    const on_abort = () => {
-        void output?.cancel()
-    }
-    signal?.addEventListener("abort", on_abort, { once: true })
     try {
         if (!(await input.canRead())) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
@@ -291,148 +284,125 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
         if (signal?.aborted) {
             throw new ClipError("CANCELLED", "Cancelled.")
         }
-        await ensure_aac_encoder(mb)
-        const target = new mb.BufferTarget()
-        output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
-        output.addVideoTrack(video_source)
-        const audio_tracks = await input.getAudioTracks()
-        const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null
-        const decoded = sink ? await decode_full_audio(sink) : null
-        let audio_source: InstanceType<typeof mb.AudioBufferSource> | null = null
-        if (probe.has_audio && decoded) {
-            audio_source = new mb.AudioBufferSource({
-                codec: "aac",
-                bitrate: resolve_audio_bitrate(probe, null, options.audio_quality ?? "source-max"),
-            })
-            output.addAudioTrack(audio_source)
-        }
-        await output.start()
-        if (signal?.aborted) {
-            await output.cancel()
-            throw new ClipError("CANCELLED", "Cancelled.")
-        }
-        if (audio_source && decoded) {
-            await audio_source.add(decoded)
-        }
-        const ctx = encode_ctx
-        if (!ctx) {
-            throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
-        }
-        const video_tracks = await input.getVideoTracks()
-        const track = video_tracks[0] ?? null
-        if (!track) {
-            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
-        }
-        const timestamps: number[] = []
-        for (let i = 0; i < total_frames; i += 1) {
-            timestamps.push(i / fps)
-        }
-        const scale = height / 1080
-        const animated_cache = new Map<string, AnimatedTextBitmap>()
-        for (const [index, item] of items.entries()) {
-            if (!is_animated_text(item) || item.show_end === null) {
-                continue
-            }
-            const cached_size = Math.max(item.size_start, item.size_end) * scale
-            if (!Number.isFinite(cached_size) || cached_size <= 0) {
-                continue
-            }
-            const entry = rasterize_animated_text(item, cached_size, scale)
-            if (entry) {
-                animated_cache.set(animated_text_key(index, item), entry)
-            }
-        }
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = "high"
-        const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
-        const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
-        for (let i = 0; i < total_frames; i += 1) {
-            if (signal?.aborted) {
-                await output.cancel()
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            const wrapped = (await frames.next()).value
-            const t = i / fps
-            ctx.globalAlpha = 1
-            ctx.fillStyle = "#000"
-            ctx.fillRect(0, 0, width, height)
-            if (wrapped?.canvas) {
-                draw_contain_fit(ctx, wrapped.canvas, width, height)
-            }
-            for (const [index, item] of items.entries()) {
-                if (t < item.show_start || (item.show_end !== null && t > item.show_end)) {
-                    continue
+        const setup = await with_canvas_encode({
+            width,
+            height,
+            fps,
+            quality,
+            crf_raw: options.crf ?? null,
+            audio_probe: probe,
+            audio_quality: options.audio_quality ?? "source-max",
+            needs_audio: true,
+            probe_has_audio: probe.has_audio,
+            head_blob_for_audio: video,
+            signal,
+            body: async (encode_setup, encode_mb) => {
+                const { canvas, ctx, video_source, output } = encode_setup
+                const mb = encode_mb
+                const video_tracks = await input.getVideoTracks()
+                const track = video_tracks[0] ?? null
+                if (!track) {
+                    throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
                 }
-                const alpha = item_alpha(item, t)
-                if (alpha <= 0) {
-                    continue
+                const timestamps: number[] = []
+                for (let i = 0; i < total_frames; i += 1) {
+                    timestamps.push(i / fps)
                 }
-                const size = text_size_at(item, t, height)
-                if (!Number.isFinite(size) || size <= 0) {
-                    continue
-                }
-                const point = resolve_text_anchor(
-                    item.anchor,
-                    width,
-                    height,
-                    item.offset_x * scale,
-                    item.offset_y * scale,
-                )
-                const cached = item.show_end === null ? undefined : animated_cache.get(animated_text_key(index, item))
-                if (cached) {
-                    const factor = size / cached.cached_size
-                    if (Number.isFinite(factor) && factor > 0) {
-                        ctx.save()
-                        ctx.globalAlpha = alpha
-                        ctx.translate(point.x, point.y)
-                        ctx.scale(factor, factor)
-                        ctx.drawImage(cached.canvas, cached.dx, cached.dy)
-                        ctx.restore()
+                const scale = height / 1080
+                const animated_cache = new Map<string, AnimatedTextBitmap>()
+                for (const [index, item] of items.entries()) {
+                    if (!is_animated_text(item) || item.show_end === null) {
                         continue
                     }
+                    const cached_size = Math.max(item.size_start, item.size_end) * scale
+                    if (!Number.isFinite(cached_size) || cached_size <= 0) {
+                        continue
+                    }
+                    const entry = rasterize_animated_text(item, cached_size, scale)
+                    if (entry) {
+                        animated_cache.set(animated_text_key(index, item), entry)
+                    }
                 }
-                ctx.globalAlpha = alpha
-                ctx.font = `${size}px ${item.font}`
-                ctx.textAlign = item.align
-                ctx.textBaseline = "middle"
-                ctx.fillStyle = item.color
-                if (item.max_width !== null) {
-                    ctx.fillText(item.text, point.x, point.y, item.max_width * scale)
-                } else {
-                    ctx.fillText(item.text, point.x, point.y)
+                ctx.imageSmoothingEnabled = true
+                ctx.imageSmoothingQuality = "high"
+                const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
+                const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
+                for (let i = 0; i < total_frames; i += 1) {
+                    if (signal?.aborted) {
+                        await output.cancel()
+                        throw new ClipError("CANCELLED", "Cancelled.")
+                    }
+                    const wrapped = (await frames.next()).value
+                    const t = i / fps
+                    ctx.globalAlpha = 1
+                    ctx.fillStyle = "#000"
+                    ctx.fillRect(0, 0, width, height)
+                    if (wrapped?.canvas) {
+                        draw_contain_fit(ctx, wrapped.canvas, width, height)
+                    }
+                    for (const [index, item] of items.entries()) {
+                        if (t < item.show_start || (item.show_end !== null && t > item.show_end)) {
+                            continue
+                        }
+                        const alpha = item_alpha(item, t)
+                        if (alpha <= 0) {
+                            continue
+                        }
+                        const size = text_size_at(item, t, height)
+                        if (!Number.isFinite(size) || size <= 0) {
+                            continue
+                        }
+                        const point = resolve_text_anchor(
+                            item.anchor,
+                            width,
+                            height,
+                            item.offset_x * scale,
+                            item.offset_y * scale,
+                        )
+                        const cached =
+                            item.show_end === null ? undefined : animated_cache.get(animated_text_key(index, item))
+                        if (cached) {
+                            const factor = size / cached.cached_size
+                            if (Number.isFinite(factor) && factor > 0) {
+                                ctx.save()
+                                ctx.globalAlpha = alpha
+                                ctx.translate(point.x, point.y)
+                                ctx.scale(factor, factor)
+                                ctx.drawImage(cached.canvas, cached.dx, cached.dy)
+                                ctx.restore()
+                                continue
+                            }
+                        }
+                        ctx.globalAlpha = alpha
+                        ctx.font = `${size}px ${item.font}`
+                        ctx.textAlign = item.align
+                        ctx.textBaseline = "middle"
+                        ctx.fillStyle = item.color
+                        if (item.max_width !== null) {
+                            ctx.fillText(item.text, point.x, point.y, item.max_width * scale)
+                        } else {
+                            ctx.fillText(item.text, point.x, point.y)
+                        }
+                    }
+                    ctx.globalAlpha = 1
+                    await add_canvas_frame(mb, video_source, canvas, t, 1 / fps)
+                    on_progress?.(total_frames <= 1 ? 1 : (i + 1) / total_frames)
                 }
-            }
-            ctx.globalAlpha = 1
-            await add_canvas_frame(mb, video_source, canvas, t, 1 / fps)
-            on_progress?.(total_frames <= 1 ? 1 : (i + 1) / total_frames)
-        }
-        try {
-            await output.finalize()
-        } catch (error) {
-            if (
-                output.state === "canceled" ||
-                error instanceof mb.ConversionCanceledError ||
-                (error instanceof Error && error.name === "ConversionCanceledError")
-            ) {
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            throw error
-        }
-        if (!target.buffer) {
+                return encode_setup
+            },
+        })
+        if (!setup.target.buffer) {
             throw new ClipError("FAILED", "Text overlay rendering produced no output.")
         }
-        const done = output
-        const blob = new Blob([target.buffer], { type: output.format.mimeType })
+        const done = setup.output
+        const blob = new Blob([setup.target.buffer], { type: setup.output.format.mimeType })
         return {
             blob,
-            extension: output.format.fileExtension,
-            mime: output.format.mimeType,
+            extension: setup.output.format.fileExtension,
+            mime: setup.output.format.mimeType,
             cancel: () => done.cancel(),
         }
     } finally {
-        signal?.removeEventListener("abort", on_abort)
         input.dispose()
     }
 }

@@ -4,6 +4,7 @@ import { TimecodeError } from "./timecode"
 import { transition_filename } from "./transition-filename"
 import {
     add_canvas_frame,
+    type CanvasEncodeSetup,
     create_video_sample_source,
     decode_full_audio,
     EASING_REGISTRY,
@@ -22,6 +23,7 @@ import {
     total_transition_duration,
     total_transition_frames,
     validate_transition_range,
+    with_canvas_encode,
 } from "./transition-utils"
 
 describe("EASING_REGISTRY", () => {
@@ -280,6 +282,205 @@ describe("decode_full_audio", () => {
             },
         }
         await expect(decode_full_audio(empty_sink as unknown as AudioBufferSink)).resolves.toBeNull()
+    })
+})
+
+describe("with_canvas_encode", () => {
+    it("rejects with CANCELLED without calling body when already aborted", async () => {
+        const controller = new AbortController()
+        controller.abort()
+        let called = false
+        await expect(
+            with_canvas_encode({
+                width: 64,
+                height: 64,
+                fps: 30,
+                quality: "low",
+                crf_raw: null,
+                audio_probe: null,
+                audio_quality: "source-max",
+                needs_audio: false,
+                probe_has_audio: false,
+                head_blob_for_audio: null,
+                signal: controller.signal,
+                body: async () => {
+                    called = true
+                    return 1
+                },
+            }),
+        ).rejects.toMatchObject({ name: "ClipError", code: "CANCELLED" })
+        expect(called).toBe(false)
+    })
+
+    it("builds a canvas setup and finalizes a single frame without audio", async () => {
+        const holder: { setup: CanvasEncodeSetup | null } = { setup: null }
+        const result = await with_canvas_encode({
+            width: 64,
+            height: 64,
+            fps: 30,
+            quality: "low",
+            crf_raw: null,
+            audio_probe: null,
+            audio_quality: "source-max",
+            needs_audio: false,
+            probe_has_audio: false,
+            head_blob_for_audio: null,
+            body: async (setup, mb) => {
+                holder.setup = setup
+                setup.ctx.fillStyle = "#123456"
+                setup.ctx.fillRect(0, 0, 64, 64)
+                await add_canvas_frame(mb, setup.video_source, setup.canvas, 0, 1 / 30)
+                return "done"
+            },
+        })
+        expect(result).toBe("done")
+        expect(holder.setup?.canvas.width).toBe(64)
+        expect(holder.setup?.canvas.height).toBe(64)
+        expect(holder.setup?.audio_source).toBeNull()
+        expect(holder.setup?.decoded).toBeNull()
+        expect(holder.setup?.target.buffer?.byteLength ?? 0).toBeGreaterThan(0)
+    })
+
+    it("skips the audio track when requested but no head blob is available", async () => {
+        const holder: { setup: CanvasEncodeSetup | null } = { setup: null }
+        await with_canvas_encode({
+            width: 64,
+            height: 64,
+            fps: 30,
+            quality: "low",
+            crf_raw: null,
+            audio_probe: { audio_bitrate: 128_000, overall_bitrate: null },
+            audio_quality: "source-max",
+            needs_audio: true,
+            probe_has_audio: true,
+            head_blob_for_audio: null,
+            body: async (setup, mb) => {
+                holder.setup = setup
+                setup.ctx.fillStyle = "#000"
+                setup.ctx.fillRect(0, 0, 64, 64)
+                await add_canvas_frame(mb, setup.video_source, setup.canvas, 0, 1 / 30)
+            },
+        })
+        expect(holder.setup?.audio_source).toBeNull()
+        expect(holder.setup?.decoded).toBeNull()
+    })
+
+    it("skips the audio track when the probe reports no audio despite a head blob", async () => {
+        const holder: { setup: CanvasEncodeSetup | null } = { setup: null }
+        const head_blob = new File(["head-bytes"], "head.mp4", { type: "video/mp4" })
+        await with_canvas_encode({
+            width: 64,
+            height: 64,
+            fps: 30,
+            quality: "low",
+            crf_raw: null,
+            audio_probe: { audio_bitrate: 128_000, overall_bitrate: null },
+            audio_quality: "192k",
+            needs_audio: true,
+            probe_has_audio: false,
+            head_blob_for_audio: head_blob,
+            body: async (setup, mb) => {
+                holder.setup = setup
+                setup.ctx.fillStyle = "#000"
+                setup.ctx.fillRect(0, 0, 64, 64)
+                await add_canvas_frame(mb, setup.video_source, setup.canvas, 0, 1 / 30)
+            },
+        })
+        expect(holder.setup?.audio_source).toBeNull()
+        expect(holder.setup?.decoded).toBeNull()
+    })
+
+    it("uses a provided audio buffer when supplied", async () => {
+        const holder: { setup: CanvasEncodeSetup | null } = { setup: null }
+        let calls = 0
+        const buffer = new AudioBuffer({ numberOfChannels: 1, length: 8000, sampleRate: 8000 })
+        await with_canvas_encode({
+            width: 64,
+            height: 64,
+            fps: 30,
+            quality: "low",
+            crf_raw: null,
+            audio_probe: null,
+            audio_quality: "128k",
+            needs_audio: false,
+            probe_has_audio: false,
+            head_blob_for_audio: null,
+            audio: {
+                kind: "provided",
+                get_audio: async () => {
+                    calls += 1
+                    return { buffer, bitrate: 128_000 }
+                },
+            },
+            body: async (setup, mb) => {
+                holder.setup = setup
+                setup.ctx.fillStyle = "#000"
+                setup.ctx.fillRect(0, 0, 64, 64)
+                await add_canvas_frame(mb, setup.video_source, setup.canvas, 0, 1 / 30)
+            },
+        })
+        expect(calls).toBe(1)
+        expect(holder.setup?.decoded).toBe(buffer)
+        expect(holder.setup?.audio_source).not.toBeNull()
+        expect(holder.setup?.target.buffer?.byteLength ?? 0).toBeGreaterThan(0)
+    })
+
+    it("skips the audio track when the provider returns null", async () => {
+        const holder: { setup: CanvasEncodeSetup | null } = { setup: null }
+        let calls = 0
+        await with_canvas_encode({
+            width: 64,
+            height: 64,
+            fps: 30,
+            quality: "low",
+            crf_raw: null,
+            audio_probe: null,
+            audio_quality: "source-max",
+            needs_audio: false,
+            probe_has_audio: false,
+            head_blob_for_audio: null,
+            audio: {
+                kind: "provided",
+                get_audio: async () => {
+                    calls += 1
+                    return { buffer: null, bitrate: null }
+                },
+            },
+            body: async (setup, mb) => {
+                holder.setup = setup
+                setup.ctx.fillStyle = "#000"
+                setup.ctx.fillRect(0, 0, 64, 64)
+                await add_canvas_frame(mb, setup.video_source, setup.canvas, 0, 1 / 30)
+            },
+        })
+        expect(calls).toBe(1)
+        expect(holder.setup?.audio_source).toBeNull()
+        expect(holder.setup?.decoded).toBeNull()
+    })
+
+    it("maps abort during body to CANCELLED via finalize", async () => {
+        const controller = new AbortController()
+        await expect(
+            with_canvas_encode({
+                width: 64,
+                height: 64,
+                fps: 30,
+                quality: "low",
+                crf_raw: null,
+                audio_probe: null,
+                audio_quality: "source-max",
+                needs_audio: false,
+                probe_has_audio: false,
+                head_blob_for_audio: null,
+                signal: controller.signal,
+                body: async (setup, mb) => {
+                    setup.ctx.fillStyle = "#000"
+                    setup.ctx.fillRect(0, 0, 64, 64)
+                    await add_canvas_frame(mb, setup.video_source, setup.canvas, 0, 1 / 30)
+                    controller.abort()
+                },
+            }),
+        ).rejects.toMatchObject({ name: "ClipError", code: "CANCELLED" })
     })
 })
 

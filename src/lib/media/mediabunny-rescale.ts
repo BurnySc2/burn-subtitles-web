@@ -1,16 +1,11 @@
-import type { Output } from "mediabunny"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
     add_canvas_frame,
     CRF_INVALID_MESSAGE,
-    create_encode_canvas,
-    create_encode_video_source,
-    decode_full_audio,
     draw_contain_fit,
-    ensure_aac_encoder,
     parse_crf_override,
-    resolve_audio_bitrate,
+    with_canvas_encode,
 } from "./transition-utils"
 
 export interface RenderRescaleOptions {
@@ -84,11 +79,6 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
     }
     const mb = await import("mediabunny")
     const source = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(input) })
-    let output: Output | null = null
-    const on_abort = () => {
-        void output?.cancel()
-    }
-    signal?.addEventListener("abort", on_abort, { once: true })
     try {
         if (!(await source.canRead())) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
@@ -113,79 +103,54 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
         if (!(await mb.canEncodeVideo("avc"))) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
         }
-        await ensure_aac_encoder(mb)
-        const target = new mb.BufferTarget()
-        output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
-        output.addVideoTrack(video_source)
-        const audio_tracks = await source.getAudioTracks()
-        const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null
-        const decoded = sink ? await decode_full_audio(sink) : null
-        let audio_source: InstanceType<typeof mb.AudioBufferSource> | null = null
-        if (probe.has_audio && decoded) {
-            audio_source = new mb.AudioBufferSource({
-                codec: "aac",
-                bitrate: resolve_audio_bitrate(probe, null, options.audio_quality ?? "source-max"),
-            })
-            output.addAudioTrack(audio_source)
-        }
-        await output.start()
-        if (signal?.aborted) {
-            await output.cancel()
-            throw new ClipError("CANCELLED", "Cancelled.")
-        }
-        if (audio_source && decoded) {
-            await audio_source.add(decoded)
-        }
-        const ctx = encode_ctx
-        if (!ctx) {
-            throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
-        }
-        const video_tracks = await source.getVideoTracks()
-        const track = video_tracks[0] ?? null
-        if (!track) {
-            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
-        }
-        const timestamps: number[] = []
-        for (let i = 0; i < total_frames; i += 1) {
-            timestamps.push(i / fps)
-        }
-        const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
-        const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
-        for (let i = 0; i < total_frames; i += 1) {
-            if (signal?.aborted) {
-                await output.cancel()
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            const wrapped = (await frames.next()).value
-            ctx.globalAlpha = 1
-            ctx.fillStyle = "#000"
-            ctx.fillRect(0, 0, width, height)
-            if (wrapped?.canvas) {
-                draw_contain_fit(ctx, wrapped.canvas, width, height)
-            }
-            await add_canvas_frame(mb, video_source, canvas, i / fps, 1 / fps)
-            on_progress?.(i + 1, total_frames)
-        }
-        try {
-            await output.finalize()
-        } catch (error) {
-            if (
-                output.state === "canceled" ||
-                error instanceof mb.ConversionCanceledError ||
-                (error instanceof Error && error.name === "ConversionCanceledError")
-            ) {
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            throw error
-        }
-        if (!target.buffer) {
+        const setup = await with_canvas_encode({
+            width,
+            height,
+            fps,
+            quality,
+            crf_raw: options.crf ?? null,
+            audio_probe: probe,
+            audio_quality: options.audio_quality ?? "source-max",
+            needs_audio: true,
+            probe_has_audio: probe.has_audio,
+            head_blob_for_audio: input instanceof File ? input : new File([input], "input", { type: input.type }),
+            signal,
+            body: async (encode_setup, encode_mb) => {
+                const { canvas, ctx, video_source, output } = encode_setup
+                const video_tracks = await source.getVideoTracks()
+                const track = video_tracks[0] ?? null
+                if (!track) {
+                    throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
+                }
+                const timestamps: number[] = []
+                for (let i = 0; i < total_frames; i += 1) {
+                    timestamps.push(i / fps)
+                }
+                const frame_sink = new encode_mb.CanvasSink(track, { poolSize: 1 })
+                const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
+                for (let i = 0; i < total_frames; i += 1) {
+                    if (signal?.aborted) {
+                        await output.cancel()
+                        throw new ClipError("CANCELLED", "Cancelled.")
+                    }
+                    const wrapped = (await frames.next()).value
+                    ctx.globalAlpha = 1
+                    ctx.fillStyle = "#000"
+                    ctx.fillRect(0, 0, width, height)
+                    if (wrapped?.canvas) {
+                        draw_contain_fit(ctx, wrapped.canvas, width, height)
+                    }
+                    await add_canvas_frame(encode_mb, video_source, canvas, i / fps, 1 / fps)
+                    on_progress?.(i + 1, total_frames)
+                }
+                return encode_setup
+            },
+        })
+        if (!setup.target.buffer) {
             throw new ClipError("FAILED", "Rescale rendering produced no output.")
         }
-        return new Blob([target.buffer], { type: output.format.mimeType })
+        return new Blob([setup.target.buffer], { type: setup.output.format.mimeType })
     } finally {
-        signal?.removeEventListener("abort", on_abort)
         source.dispose()
     }
 }

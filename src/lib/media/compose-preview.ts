@@ -1,6 +1,8 @@
+import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
+import { collect_stack_segments } from "./mediabunny-compose-stack"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
@@ -99,10 +101,6 @@ function throw_if_aborted(signal?: AbortSignal): void {
     }
 }
 
-function blob_to_file(blob: Blob, name: string): File {
-    return blob instanceof File ? blob : new File([blob], name, { type: blob.type })
-}
-
 function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
     const incoming = new Map<string, ComposeEdge[]>()
     for (const edge of edges) {
@@ -111,15 +109,6 @@ function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
         incoming.set(edge.target, list)
     }
     return incoming
-}
-
-function single_input(node_id: string, incoming: Map<string, ComposeEdge[]>, memo: Map<string, Blob>): Blob {
-    const edges = incoming.get(node_id) ?? []
-    const blob = edges.length === 1 ? (memo.get(edges[0].source) ?? null) : null
-    if (!blob) {
-        throw new ClipError("FAILED", "Node input is missing.")
-    }
-    return blob
 }
 
 function transition_inputs(
@@ -288,6 +277,7 @@ export async function get_node_preview_blob(
     const output_node = find_output_node(nodes)
     const total = Math.max(1, order.length)
     let done = 0
+    const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
     for (const node_id of order) {
         throw_if_aborted(signal)
         const memo_hit = preview_memo.get(node_id)
@@ -299,6 +289,21 @@ export async function get_node_preview_blob(
         }
         const node = by_id.get(node_id)
         if (!node) {
+            continue
+        }
+        const fused = fused_dispatch.get(node_id) ?? null
+        const fused_active = fused !== null && relevant.has(fused.end_id)
+        if (fused_active && fused.fused_ids.has(node_id) && node_id !== fused.end_id) {
+            continue
+        }
+        if (fused_active && fused !== null && node_id === fused.end_id) {
+            const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
+            const { blob } = await execute_fused_segment(fused, by_id, incoming, blobs, output_node, span_slice, signal)
+            for (const fused_id of fused.fused_ids) {
+                store(fused_id, blob)
+            }
+            done += fused.span
+            on_progress?.(done / total)
             continue
         }
         const slice = (progress: number) => on_progress?.((done + progress) / total)

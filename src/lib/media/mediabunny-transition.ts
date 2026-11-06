@@ -1,4 +1,3 @@
-import type { Output } from "mediabunny"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import { premix_transition_audio } from "./transition-audio"
@@ -11,11 +10,8 @@ import type {
 import {
     add_canvas_frame,
     CRF_INVALID_MESSAGE,
-    create_encode_canvas,
-    create_encode_video_source,
     decode_full_audio,
     draw_contain_fit,
-    ensure_aac_encoder,
     parse_crf_override,
     phase_at,
     resolve_audio_bitrate,
@@ -24,6 +20,7 @@ import {
     TRANSITION_AUDIO_MODES,
     total_transition_duration,
     total_transition_frames,
+    with_canvas_encode,
 } from "./transition-utils"
 
 export type { ProbeResult } from "./mediabunny-clip"
@@ -221,11 +218,6 @@ export async function render_transition(options: RenderTransitionOptions): Promi
     const mb = await import("mediabunny")
     const input_a = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(file_a) })
     const input_b = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(file_b) })
-    let output: Output | null = null
-    const on_abort = () => {
-        void output?.cancel()
-    }
-    signal?.addEventListener("abort", on_abort, { once: true })
     try {
         if (!(await input_a.canRead()) || !(await input_b.canRead())) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
@@ -250,155 +242,193 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             options.total_duration,
             fps,
         )
-        const [video_tracks_a, video_tracks_b] = await Promise.all([input_a.getVideoTracks(), input_b.getVideoTracks()])
-        const video_a = video_tracks_a[0] ?? null
-        const video_b = video_tracks_b[0] ?? null
-        if (!video_a || !video_b) {
-            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
-        }
         if (signal?.aborted) {
             throw new ClipError("CANCELLED", "Cancelled.")
         }
-        await ensure_aac_encoder(mb)
-        const target = new mb.BufferTarget()
-        output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
-        output.addVideoTrack(video_source)
-        const [audio_tracks_a, audio_tracks_b] = await Promise.all([input_a.getAudioTracks(), input_b.getAudioTracks()])
-        const audio_a = resolved_a.has_audio ? (audio_tracks_a[0] ?? null) : null
-        const audio_b = resolved_b.has_audio ? (audio_tracks_b[0] ?? null) : null
-        const audio_source =
-            audio_a || audio_b
-                ? new mb.AudioBufferSource({
-                      codec: "aac",
-                      bitrate: resolve_render_audio_bitrate({ ...options, probe_a: resolved_a, probe_b: resolved_b }),
-                  })
-                : null
-        if (audio_source) {
-            output.addAudioTrack(audio_source)
-        }
-        const sink_audio_a = audio_a ? new mb.AudioBufferSink(audio_a) : null
-        const sink_audio_b = audio_b ? new mb.AudioBufferSink(audio_b) : null
-        const [full_a, full_b] = await Promise.all([
-            sink_audio_a ? decode_full_audio(sink_audio_a) : null,
-            sink_audio_b ? decode_full_audio(sink_audio_b) : null,
-        ])
-        const premixed =
-            options.premixed_audio !== undefined
-                ? options.premixed_audio
-                : await premix_transition_audio({
-                      full_a,
-                      full_b,
-                      start_a,
-                      blend_duration: duration,
-                      total_duration: total,
-                      easing,
-                      audio_mode: options.audio_mode,
-                  })
-        await output.start()
-        if (signal?.aborted) {
-            await output.cancel()
-            throw new ClipError("CANCELLED", "Cancelled.")
-        }
-        if (audio_source && premixed) {
-            await audio_source.add(premixed)
-        }
-        const ctx = encode_ctx
-        if (!ctx) {
-            throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
-        }
-        const sink_a = new mb.CanvasSink(video_a, { poolSize: 1 })
-        const sink_b = new mb.CanvasSink(video_b, { poolSize: 1 })
-        const forward_a = resolved_a.display_width === width && resolved_a.display_height === height
-        const forward_b = resolved_b.display_width === width && resolved_b.display_height === height
-        // S full timeline output=total: solo-a from A only, blend A+B, solo-b from B only
-        const canvas_timestamps_a: number[] = []
-        const canvas_timestamps_b: number[] = []
-        const sample_timestamps_a: number[] = []
-        const sample_timestamps_b: number[] = []
-        for (let i = 0; i < total_frames; i += 1) {
-            const output_t = i / fps
-            const { phase } = phase_at(output_t, start_a, duration, total, easing)
-            if (phase === "solo-a") {
-                if (forward_a) {
-                    sample_timestamps_a.push(output_t)
-                } else {
-                    canvas_timestamps_a.push(output_t)
-                }
-            } else if (phase === "solo-b") {
-                if (forward_b) {
-                    sample_timestamps_b.push(output_t - start_a)
-                } else {
-                    canvas_timestamps_b.push(output_t - start_a)
-                }
-            } else {
-                canvas_timestamps_a.push(output_t)
-                canvas_timestamps_b.push(output_t - start_a)
-            }
-        }
-        const frames_a = sink_a.canvasesAtTimestamps(canvas_timestamps_a)[Symbol.asyncIterator]()
-        const frames_b = sink_b.canvasesAtTimestamps(canvas_timestamps_b)[Symbol.asyncIterator]()
-        const sink_samples_a = forward_a ? new mb.VideoSampleSink(video_a) : null
-        const sink_samples_b = forward_b ? new mb.VideoSampleSink(video_b) : null
-        const samples_a = sink_samples_a?.samplesAtTimestamps(sample_timestamps_a)[Symbol.asyncIterator]() ?? null
-        const samples_b = sink_samples_b?.samplesAtTimestamps(sample_timestamps_b)[Symbol.asyncIterator]() ?? null
-        for (let i = 0; i < total_frames; i += 1) {
-            if (signal?.aborted) {
-                await output.cancel()
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            const output_t = i / fps
-            const { phase, alpha } = phase_at(output_t, start_a, duration, total, easing)
-            if ((phase === "solo-a" && forward_a) || (phase === "solo-b" && forward_b)) {
-                const iterator = phase === "solo-a" ? samples_a : samples_b
-                const sample = iterator ? (await iterator.next()).value : null
-                if (sample) {
-                    try {
-                        sample.setTimestamp(output_t)
-                        sample.setDuration(frame_duration)
-                        await video_source.add(sample)
-                    } finally {
-                        sample.close()
+        const setup = await with_canvas_encode({
+            width,
+            height,
+            fps,
+            quality,
+            crf_raw: options.crf ?? null,
+            audio_probe: null,
+            audio_quality: options.audio_quality ?? "source-max",
+            needs_audio: false,
+            probe_has_audio: false,
+            head_blob_for_audio: null,
+            audio: {
+                kind: "provided",
+                get_audio: async (audio_mb) => {
+                    if (options.premixed_audio !== undefined) {
+                        if (!options.premixed_audio) {
+                            return { buffer: null, bitrate: null }
+                        }
+                        return {
+                            buffer: options.premixed_audio,
+                            bitrate: resolve_render_audio_bitrate({
+                                ...options,
+                                probe_a: resolved_a,
+                                probe_b: resolved_b,
+                            }),
+                        }
                     }
-                } else {
-                    draw_transition_frame(ctx, null, null, width, height, alpha)
-                    await add_canvas_frame(mb, video_source, canvas, output_t, frame_duration)
+                    if (!resolved_a.has_audio && !resolved_b.has_audio) {
+                        return { buffer: null, bitrate: null }
+                    }
+                    const audio_inputs = [file_a, file_b].map(
+                        (file) =>
+                            new audio_mb.Input({
+                                formats: audio_mb.ALL_FORMATS,
+                                source: new audio_mb.BlobSource(file),
+                            }),
+                    )
+                    try {
+                        const audio_tracks = await Promise.all(audio_inputs.map((input) => input.getAudioTracks()))
+                        const sink_audio_a =
+                            resolved_a.has_audio && audio_tracks[0]?.[0]
+                                ? new audio_mb.AudioBufferSink(audio_tracks[0][0])
+                                : null
+                        const sink_audio_b =
+                            resolved_b.has_audio && audio_tracks[1]?.[0]
+                                ? new audio_mb.AudioBufferSink(audio_tracks[1][0])
+                                : null
+                        const [full_a, full_b] = await Promise.all([
+                            sink_audio_a ? decode_full_audio(sink_audio_a) : null,
+                            sink_audio_b ? decode_full_audio(sink_audio_b) : null,
+                        ])
+                        const premixed = await premix_transition_audio({
+                            full_a,
+                            full_b,
+                            start_a,
+                            blend_duration: duration,
+                            total_duration: total,
+                            easing,
+                            audio_mode: options.audio_mode,
+                        })
+                        if (!premixed) {
+                            return { buffer: null, bitrate: null }
+                        }
+                        return {
+                            buffer: premixed,
+                            bitrate: resolve_render_audio_bitrate({
+                                ...options,
+                                probe_a: resolved_a,
+                                probe_b: resolved_b,
+                            }),
+                        }
+                    } finally {
+                        for (const input of audio_inputs) {
+                            input.dispose()
+                        }
+                    }
+                },
+            },
+            signal,
+            body: async (encode_setup, encode_mb) => {
+                const { canvas, ctx, video_source, output } = encode_setup
+                const [video_tracks_a, video_tracks_b] = await Promise.all([
+                    input_a.getVideoTracks(),
+                    input_b.getVideoTracks(),
+                ])
+                const video_a = video_tracks_a[0] ?? null
+                const video_b = video_tracks_b[0] ?? null
+                if (!video_a || !video_b) {
+                    throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
                 }
-                on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
-                continue
-            }
-            const wrapped_a = phase === "solo-b" ? null : (await frames_a.next()).value
-            const wrapped_b = phase === "solo-a" ? null : (await frames_b.next()).value
-            draw_transition_frame(ctx, wrapped_a?.canvas ?? null, wrapped_b?.canvas ?? null, width, height, alpha)
-            await add_canvas_frame(mb, video_source, canvas, output_t, frame_duration)
-            on_progress?.(total_frames <= 1 ? 1 : i / (total_frames - 1))
-        }
-        try {
-            await output.finalize()
-        } catch (error) {
-            if (
-                output.state === "canceled" ||
-                error instanceof mb.ConversionCanceledError ||
-                (error instanceof Error && error.name === "ConversionCanceledError")
-            ) {
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            throw error
-        }
-        if (!target.buffer) {
+                if (signal?.aborted) {
+                    await output.cancel()
+                    throw new ClipError("CANCELLED", "Cancelled.")
+                }
+                const forward_a = resolved_a.display_width === width && resolved_a.display_height === height
+                const forward_b = resolved_b.display_width === width && resolved_b.display_height === height
+                // S full timeline output=total: solo-a from A only, blend A+B, solo-b from B only
+                const canvas_timestamps_a: number[] = []
+                const canvas_timestamps_b: number[] = []
+                const sample_timestamps_a: number[] = []
+                const sample_timestamps_b: number[] = []
+                for (let i = 0; i < total_frames; i += 1) {
+                    const output_t = i / fps
+                    const { phase } = phase_at(output_t, start_a, duration, total, easing)
+                    if (phase === "solo-a") {
+                        if (forward_a) {
+                            sample_timestamps_a.push(output_t)
+                        } else {
+                            canvas_timestamps_a.push(output_t)
+                        }
+                    } else if (phase === "solo-b") {
+                        if (forward_b) {
+                            sample_timestamps_b.push(output_t - start_a)
+                        } else {
+                            canvas_timestamps_b.push(output_t - start_a)
+                        }
+                    } else {
+                        canvas_timestamps_a.push(output_t)
+                        canvas_timestamps_b.push(output_t - start_a)
+                    }
+                }
+                const sink_a = new encode_mb.CanvasSink(video_a, { poolSize: 1 })
+                const sink_b = new encode_mb.CanvasSink(video_b, { poolSize: 1 })
+                const frames_a = sink_a.canvasesAtTimestamps(canvas_timestamps_a)[Symbol.asyncIterator]()
+                const frames_b = sink_b.canvasesAtTimestamps(canvas_timestamps_b)[Symbol.asyncIterator]()
+                const sink_samples_a = forward_a ? new encode_mb.VideoSampleSink(video_a) : null
+                const sink_samples_b = forward_b ? new encode_mb.VideoSampleSink(video_b) : null
+                const samples_a =
+                    sink_samples_a?.samplesAtTimestamps(sample_timestamps_a)[Symbol.asyncIterator]() ?? null
+                const samples_b =
+                    sink_samples_b?.samplesAtTimestamps(sample_timestamps_b)[Symbol.asyncIterator]() ?? null
+                for (let i = 0; i < total_frames; i += 1) {
+                    if (signal?.aborted) {
+                        await output.cancel()
+                        throw new ClipError("CANCELLED", "Cancelled.")
+                    }
+                    const output_t = i / fps
+                    const { phase, alpha } = phase_at(output_t, start_a, duration, total, easing)
+                    if ((phase === "solo-a" && forward_a) || (phase === "solo-b" && forward_b)) {
+                        const iterator = phase === "solo-a" ? samples_a : samples_b
+                        const sample = iterator ? (await iterator.next()).value : null
+                        if (sample) {
+                            try {
+                                sample.setTimestamp(output_t)
+                                sample.setDuration(frame_duration)
+                                await video_source.add(sample)
+                            } finally {
+                                sample.close()
+                            }
+                        } else {
+                            draw_transition_frame(ctx, null, null, width, height, alpha)
+                            await add_canvas_frame(encode_mb, video_source, canvas, output_t, frame_duration)
+                        }
+                        on_progress?.((i + 1) / total_frames)
+                        continue
+                    }
+                    const wrapped_a = phase === "solo-b" ? null : (await frames_a.next()).value
+                    const wrapped_b = phase === "solo-a" ? null : (await frames_b.next()).value
+                    draw_transition_frame(
+                        ctx,
+                        wrapped_a?.canvas ?? null,
+                        wrapped_b?.canvas ?? null,
+                        width,
+                        height,
+                        alpha,
+                    )
+                    await add_canvas_frame(encode_mb, video_source, canvas, output_t, frame_duration)
+                    on_progress?.((i + 1) / total_frames)
+                }
+                return encode_setup
+            },
+        })
+        if (!setup.target.buffer) {
             throw new ClipError("FAILED", "Transition rendering produced no output.")
         }
-        const done = output
-        const blob = new Blob([target.buffer], { type: output.format.mimeType })
+        const done = setup.output
+        const blob = new Blob([setup.target.buffer], { type: setup.output.format.mimeType })
         return {
             blob,
-            extension: output.format.fileExtension,
-            mime: output.format.mimeType,
+            extension: setup.output.format.fileExtension,
+            mime: setup.output.format.mimeType,
             cancel: () => done.cancel(),
         }
     } finally {
-        signal?.removeEventListener("abort", on_abort)
         input_a.dispose()
         input_b.dispose()
     }

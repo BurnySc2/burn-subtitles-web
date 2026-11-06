@@ -18,6 +18,7 @@ import {
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
 } from "$lib/media/transition-utils"
+import { build_datalist_id, get_font_suggestions, is_font_available } from "../../../media/compose-font-library"
 import { create_default_text_item, MAX_TEXT_ITEMS } from "../../../media/compose-types"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
@@ -819,8 +820,21 @@ function probe_summary(node: ComposeNode): string {
                             value={item.font}
                             oninput={(e) => patch_text_item(i, { font: e.currentTarget.value })}
                             placeholder="sans-serif"
+                            list={build_datalist_id(selected.id, i)}
+                            spellcheck={false}
+                            autocomplete="off"
                             class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                         >
+                        <datalist id={build_datalist_id(selected.id, i)}>
+                            {#each get_font_suggestions() as fam (fam)}
+                                <option value={fam}></option>
+                            {/each}
+                        </datalist>
+                        {#if item.font.trim() && !is_font_available(item.font)}
+                            <p class="text-xs font-normal text-amber-700">
+                                ⚠ “{item.font.trim()}” isn’t loaded — canvas will fall back.
+                            </p>
+                        {/if}
                     </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex flex-col gap-1 text-sm font-medium">
