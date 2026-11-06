@@ -109,22 +109,32 @@ function preview_for(cue: SubtitleCue): string[] {
 }
 let gap_safe = $derived(clamp_gap(gap_ms))
 let gap_example = $derived.by(() => {
-    const first = selected_cues[0]
-    const start = first?.start ?? 1.0
-    const end = first?.end ?? 4.0
+    let cue = selected_cues[0]
+    for (const next of selected_cues) {
+        if (!cue || next.end - next.start > cue.end - cue.start) {
+            cue = next
+        }
+    }
+    let start = cue?.start ?? 1.0
+    let end = cue?.end ?? 4.0
+    let label = cue ? `Cue #${cue.index} ` : ""
     let ratio = 0.5
-    if (first) {
-        const parts = preview_for(first)
+    if (cue) {
+        const parts = preview_for(cue)
         const total = parts[0].length + (parts.length > 1 ? parts[1].length : 0)
         ratio = total === 0 ? 0.5 : parts[0].length / total
     }
-    const r_eff = balance_effective_ratio(ratio, balance_preset)
-    const { end_a, start_b } = split_times(start, end, r_eff, gap_safe)
-    if (end_a === start_b) {
-        return "Too big for short cues — those stay unsplit."
+    let r_eff = balance_effective_ratio(ratio, balance_preset)
+    let times = split_times(start, end, r_eff, gap_safe)
+    if (times.end_a === times.start_b) {
+        start = 1.0
+        end = 4.0
+        label = ""
+        r_eff = balance_effective_ratio(0.5, balance_preset)
+        times = split_times(start, end, r_eff, gap_safe)
     }
     const preset_label = BALANCE_PRESETS.find((p) => p.id === balance_preset)?.label ?? balance_preset
-    return `e.g. Part 1 ends ${format_srt_timestamp(end_a)} → ${gap_safe} ms pause → Part 2 starts ${format_srt_timestamp(start_b)} (${preset_label})`
+    return `e.g. ${label}Part 1 ends ${format_srt_timestamp(times.end_a)} → ${gap_safe} ms pause → Part 2 starts ${format_srt_timestamp(times.start_b)} (${preset_label})`
 })
 function derive_custom(cue: SubtitleCue) {
     const first = (custom_text[cue.index] ?? "").trim()
