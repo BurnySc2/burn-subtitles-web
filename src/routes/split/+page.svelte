@@ -452,14 +452,10 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                     {/each}
                 </div>
                 {#if tab === "custom"}
-                    <details
-                        class="mt-2 rounded border p-2"
-                        open
-                    >
-                        <summary class="cursor-pointer text-sm text-gray-600">Custom split</summary>
+                    <div class="mt-2 rounded border p-2">
                         <label
                             for="custom-first-{cue.index}"
-                            class="form-label mt-1"
+                            class="form-label"
                         >
                             First part
                         </label>
@@ -475,7 +471,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                         {#if custom_error[cue.index]}
                             <p class="mt-1 text-xs text-gray-400">{custom_error[cue.index]}</p>
                         {/if}
-                    </details>
+                    </div>
                 {/if}
                 <div
                     class="mt-2 grid items-start gap-2 text-sm md:grid-cols-2"
