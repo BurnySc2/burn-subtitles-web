@@ -59,7 +59,7 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
                             opacity: 1,
                             anchor: "bottom-center",
                             offset_x: 0,
-                            offset_y: 48,
+                            offset_y: 0,
                             align: "center",
                             max_width: null,
                             show_start: 0,

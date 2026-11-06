@@ -147,7 +147,8 @@ export function create_default_text_item(): TextItem {
         opacity: 1,
         anchor: "bottom-center",
         offset_x: 0,
-        offset_y: 48,
+        // offset is inset from edge, 0 = flush (may clip half glyph with textBaseline middle).
+        offset_y: 0,
         align: "center",
         max_width: null,
         show_start: 0,
