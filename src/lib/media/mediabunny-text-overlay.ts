@@ -53,6 +53,60 @@ const TEXT_POSITIONS: readonly OverlayPosition[] = [
     "bottom-right",
 ]
 
+export const MAX_TEXT_ITEMS = 32
+
+export function is_animated_text(item: TextItem): boolean {
+    return item.size_end !== item.size_start
+}
+
+export function animated_text_key(index: number, item: TextItem): string {
+    return `${index}:${item.font}:${item.size_end}:${item.color}`
+}
+
+interface AnimatedTextBitmap {
+    canvas: HTMLCanvasElement
+    dx: number
+    dy: number
+    cached_size: number
+}
+
+function rasterize_animated_text(item: TextItem, cached_size: number, scale: number): AnimatedTextBitmap | null {
+    const measure_canvas = document.createElement("canvas")
+    const measure_ctx = measure_canvas.getContext("2d")
+    if (!measure_ctx) {
+        return null
+    }
+    const font_str = `${cached_size}px ${item.font}`
+    measure_ctx.font = font_str
+    const measured = measure_ctx.measureText(item.text).width
+    if (!Number.isFinite(measured) || measured <= 0) {
+        return null
+    }
+    const max_w = item.max_width !== null ? item.max_width * scale : null
+    const text_w = max_w !== null ? Math.min(measured, max_w) : measured
+    const pad = Math.ceil(cached_size * 0.25) + 2
+    const bitmap_w = Math.max(1, Math.ceil(text_w + pad * 2))
+    const bitmap_h = Math.max(1, Math.ceil(cached_size * 1.6))
+    const bitmap = document.createElement("canvas")
+    bitmap.width = bitmap_w
+    bitmap.height = bitmap_h
+    const off_ctx = bitmap.getContext("2d")
+    if (!off_ctx) {
+        return null
+    }
+    off_ctx.font = font_str
+    off_ctx.textAlign = item.align
+    off_ctx.textBaseline = "middle"
+    off_ctx.fillStyle = item.color
+    const draw_x = item.align === "left" ? pad : item.align === "right" ? bitmap_w - pad : bitmap_w / 2
+    if (max_w !== null) {
+        off_ctx.fillText(item.text, draw_x, bitmap_h / 2, max_w)
+    } else {
+        off_ctx.fillText(item.text, draw_x, bitmap_h / 2)
+    }
+    return { canvas: bitmap, dx: -draw_x, dy: -bitmap_h / 2, cached_size }
+}
+
 export function visible_items(items: TextItem[], t: number): TextItem[] {
     return items.filter((item) => t >= item.show_start && (item.show_end === null || t <= item.show_end))
 }
@@ -170,6 +224,9 @@ export function validate_text_options(options: RenderTextOverlayOptions): void {
     if (!Array.isArray(items) || items.length === 0) {
         throw new ClipError("INVALID_RANGE", "Text overlay needs at least one text item.")
     }
+    if (items.length > MAX_TEXT_ITEMS) {
+        throw new ClipError("INVALID_RANGE", `Text overlay supports at most ${MAX_TEXT_ITEMS} items.`)
+    }
     if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
         throw new ClipError("INVALID_RANGE", "Output width and height must be positive integers.")
     }
@@ -275,6 +332,20 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
             timestamps.push(i / fps)
         }
         const scale = height / 1080
+        const animated_cache = new Map<string, AnimatedTextBitmap>()
+        for (const [index, item] of items.entries()) {
+            if (!is_animated_text(item)) {
+                continue
+            }
+            const cached_size = item.size_end * scale
+            if (!Number.isFinite(cached_size) || cached_size <= 0) {
+                continue
+            }
+            const entry = rasterize_animated_text(item, cached_size, scale)
+            if (entry) {
+                animated_cache.set(animated_text_key(index, item), entry)
+            }
+        }
         const frame_sink = new mb.CanvasSink(track, { poolSize: 1 })
         const frames = frame_sink.canvasesAtTimestamps(timestamps)[Symbol.asyncIterator]()
         for (let i = 0; i < total_frames; i += 1) {
@@ -290,7 +361,12 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
             if (wrapped?.canvas) {
                 draw_contain_fit(ctx, wrapped.canvas, width, height)
             }
-            for (const item of visible_items(items, t)) {
+            ctx.imageSmoothingEnabled = true
+            ctx.imageSmoothingQuality = "high"
+            for (const [index, item] of items.entries()) {
+                if (t < item.show_start || (item.show_end !== null && t > item.show_end)) {
+                    continue
+                }
                 const alpha = item_alpha(item, t)
                 if (alpha <= 0) {
                     continue
@@ -306,8 +382,23 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
                     item.offset_x * scale,
                     item.offset_y * scale,
                 )
+                const cached = animated_cache.get(animated_text_key(index, item))
+                if (cached) {
+                    const factor = size / cached.cached_size
+                    if (Number.isFinite(factor) && factor > 0) {
+                        ctx.save()
+                        ctx.globalAlpha = alpha
+                        ctx.imageSmoothingEnabled = true
+                        ctx.imageSmoothingQuality = "high"
+                        ctx.translate(point.x, point.y)
+                        ctx.scale(factor, factor)
+                        ctx.drawImage(cached.canvas, cached.dx, cached.dy)
+                        ctx.restore()
+                        continue
+                    }
+                }
                 ctx.globalAlpha = alpha
-                ctx.font = `${size.toFixed(2)}px ${item.font}`
+                ctx.font = `${size}px ${item.font}`
                 ctx.textAlign = item.align
                 ctx.textBaseline = "middle"
                 ctx.fillStyle = item.color
