@@ -99,6 +99,35 @@ function handle_add(kind: ComposeNodeKind): void {
                 data: { width: 1920, height: 1080, fps: null, fit: "contain", label: null },
             }
             break
+        case "text":
+            node = {
+                id,
+                type: "text",
+                position,
+                data: {
+                    items: [
+                        {
+                            text: "Hello",
+                            font: "sans-serif",
+                            size_start: 48,
+                            size_end: 48,
+                            color: "#ffffff",
+                            opacity: 1,
+                            anchor: "bottom-center",
+                            offset_x: 0,
+                            offset_y: 48,
+                            align: "center",
+                            max_width: null,
+                            show_start: 0,
+                            show_end: null,
+                            fade_in: 0,
+                            fade_out: 0,
+                        },
+                    ],
+                    label: null,
+                },
+            }
+            break
         case "output":
             node = {
                 id,

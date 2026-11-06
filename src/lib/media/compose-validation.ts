@@ -1,6 +1,6 @@
 import { topo_sort_compose } from "./compose-graph"
 import { validate_srt } from "./compose-subtitles"
-import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
+import type { ComposeEdge, ComposeNode, OverlayPosition, TextItem, ValidationIssue } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
 import {
     parse_crf_override,
@@ -36,7 +36,13 @@ function upstream_duration(
         if (node.type === "color") {
             return node.data.duration
         }
-        if (node.type === "trim" || node.type === "rescale" || node.type === "subtitles" || node.type === "overlay") {
+        if (
+            node.type === "trim" ||
+            node.type === "rescale" ||
+            node.type === "subtitles" ||
+            node.type === "overlay" ||
+            node.type === "text"
+        ) {
             current = next
             continue
         }
@@ -66,6 +72,18 @@ function gate_duration(value: number | null): number | null {
     }
     return value
 }
+
+const TEXT_ANCHORS: readonly OverlayPosition[] = [
+    "top-left",
+    "top-center",
+    "top-right",
+    "center-left",
+    "center",
+    "center-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+]
 
 function node_duration(
     id: string,
@@ -102,7 +120,8 @@ function node_duration(
         node.type === "rescale" ||
         node.type === "subtitles" ||
         node.type === "overlay" ||
-        node.type === "output"
+        node.type === "output" ||
+        node.type === "text"
     ) {
         const pred = sole_pred(node.id, incoming)
         if (pred !== null) {
@@ -245,6 +264,15 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                         node_id: node.id,
                         field: "input",
                         message: "Subtitles node must have exactly 1 input",
+                    })
+                }
+                break
+            case "text":
+                if (count !== 1) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "input",
+                        message: "Text node must have exactly 1 input",
                     })
                 }
                 break
@@ -558,6 +586,163 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
                         field: "show_end",
                         message: `Show end exceeds source duration (${format_timecode(duration)})`,
                     })
+                }
+            }
+        } else if (node.type === "text") {
+            const wired = ins(node.id).length > 0 || outs(node.id).length > 0
+            const items: TextItem[] = Array.isArray(node.data.items) ? node.data.items : []
+            if (wired && items.length < 1) {
+                issues.push({ node_id: node.id, field: "items", message: "Text node must have at least 1 item" })
+            }
+            const duration = upstream_duration(node.id, by_id, incoming)
+            for (const [index, item] of items.entries()) {
+                const prefix = `items[${index}]`
+                if (typeof item.text !== "string" || item.text.trim() === "") {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.text`,
+                        message: "Text item text must not be empty",
+                    })
+                } else if (item.text.length > 2000) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.text`,
+                        message: "Text item text must be at most 2000 characters",
+                    })
+                }
+                if (!Number.isFinite(item.size_start) || item.size_start <= 0 || item.size_start > 1000) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.size_start`,
+                        message: "Text item size_start must be greater than 0 and at most 1000",
+                    })
+                }
+                if (!Number.isFinite(item.size_end) || item.size_end <= 0 || item.size_end > 1000) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.size_end`,
+                        message: "Text item size_end must be greater than 0 and at most 1000",
+                    })
+                }
+                if (typeof item.color !== "string" || !/^#[0-9a-fA-F]{6}$/.test(item.color)) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.color`,
+                        message: "Text item color must be a hex string like #000000",
+                    })
+                }
+                if (!Number.isFinite(item.opacity) || item.opacity < 0 || item.opacity > 1) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.opacity`,
+                        message: "Text item opacity must be between 0 and 1",
+                    })
+                }
+                if (!Number.isFinite(item.offset_x)) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.offset_x`,
+                        message: "Text item offset_x must be a finite number",
+                    })
+                }
+                if (!Number.isFinite(item.offset_y)) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.offset_y`,
+                        message: "Text item offset_y must be a finite number",
+                    })
+                }
+                if (item.align !== "left" && item.align !== "center" && item.align !== "right") {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.align`,
+                        message: 'Text item align must be one of "left", "center" or "right"',
+                    })
+                }
+                if (typeof item.font !== "string" || item.font.trim() === "") {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.font`,
+                        message: "Text item font must not be empty",
+                    })
+                } else if (item.font.length > 200) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.font`,
+                        message: "Text item font must be at most 200 characters",
+                    })
+                }
+                if (!TEXT_ANCHORS.includes(item.anchor)) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.anchor`,
+                        message:
+                            'Text item anchor must be one of "top-left", "top-center", "top-right", "center-left", "center", "center-right", "bottom-left", "bottom-center" or "bottom-right"',
+                    })
+                }
+                if (item.max_width !== null && (!Number.isFinite(item.max_width) || item.max_width <= 0)) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.max_width`,
+                        message: "Text item max_width must be null or greater than 0",
+                    })
+                }
+                if (!Number.isFinite(item.show_start) || item.show_start < 0) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.show_start`,
+                        message: "Text item show_start must not be negative",
+                    })
+                }
+                if (item.show_end !== null && (!Number.isFinite(item.show_end) || !(item.show_end > item.show_start))) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.show_end`,
+                        message: "Text item show_end must be greater than show_start",
+                    })
+                }
+                if (!Number.isFinite(item.fade_in) || item.fade_in < 0) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.fade_in`,
+                        message: "Text item fade_in must not be negative",
+                    })
+                }
+                if (!Number.isFinite(item.fade_out) || item.fade_out < 0) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.fade_out`,
+                        message: "Text item fade_out must not be negative",
+                    })
+                }
+                const visible_window = (item.show_end ?? duration ?? Number.POSITIVE_INFINITY) - item.show_start
+                if (
+                    Number.isFinite(visible_window) &&
+                    Number.isFinite(item.fade_in) &&
+                    Number.isFinite(item.fade_out) &&
+                    item.fade_in + item.fade_out > visible_window
+                ) {
+                    issues.push({
+                        node_id: node.id,
+                        field: `${prefix}.fade_out`,
+                        message: "Text item fade_in plus fade_out must not exceed the visible window",
+                    })
+                }
+                if (duration !== null) {
+                    if (Number.isFinite(item.show_start) && item.show_start > duration) {
+                        issues.push({
+                            node_id: node.id,
+                            field: `${prefix}.show_start`,
+                            message: `Text item show_start exceeds source duration (${format_timecode(duration)})`,
+                        })
+                    }
+                    if (item.show_end !== null && Number.isFinite(item.show_end) && item.show_end > duration + 1e-6) {
+                        issues.push({
+                            node_id: node.id,
+                            field: `${prefix}.show_end`,
+                            message: `Text item show_end exceeds source duration (${format_timecode(duration)})`,
+                        })
+                    }
                 }
             }
         } else if (node.type === "color") {

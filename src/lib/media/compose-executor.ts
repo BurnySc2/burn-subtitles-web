@@ -7,6 +7,7 @@ import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
+import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
 
 export interface ExecuteComposeGraphOptions {
@@ -271,6 +272,23 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     offset_y: node.data.offset_y,
                     show_start: node.data.show_start,
                     show_end: node.data.show_end,
+                    width: output_node?.data.width ?? 1920,
+                    height: output_node?.data.height ?? 1080,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: slice,
+                    signal,
+                })
+                memo.set(node.id, result.blob)
+                break
+            }
+            case "text": {
+                const input = single_input(node.id, incoming, memo)
+                const result = await render_text_overlay({
+                    video: blob_to_file(input, "text-bg.mp4"),
+                    items: node.data.items,
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,

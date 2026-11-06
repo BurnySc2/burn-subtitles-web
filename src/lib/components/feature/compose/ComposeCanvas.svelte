@@ -6,7 +6,7 @@ import { add_compose_edge, compose_state, compose_view, remove_compose_nodes } f
 import type { ComposeEdge, ComposeNode, ComposePosition } from "$lib/media/compose-types"
 
 async function load_flow() {
-    const [lib, source, trim, transition, merge, subtitles, overlay, color, rescale, output] = await Promise.all([
+    const [lib, source, trim, transition, merge, subtitles, overlay, text, color, rescale, output] = await Promise.all([
         import("@xyflow/svelte"),
         import("./nodes/ComposeSourceHost.svelte"),
         import("./nodes/ComposeTrimHost.svelte"),
@@ -14,6 +14,7 @@ async function load_flow() {
         import("./nodes/ComposeMergeHost.svelte"),
         import("./nodes/ComposeSubtitlesHost.svelte"),
         import("./nodes/ComposeOverlayHost.svelte"),
+        import("./nodes/ComposeTextHost.svelte"),
         import("./nodes/ComposeColorHost.svelte"),
         import("./nodes/ComposeRescaleHost.svelte"),
         import("./nodes/ComposeOutputHost.svelte"),
@@ -28,6 +29,7 @@ async function load_flow() {
             merge: merge.default,
             subtitles: subtitles.default,
             overlay: overlay.default,
+            text: text.default,
             color: color.default,
             rescale: rescale.default,
             output: output.default,
@@ -109,6 +111,7 @@ function is_valid_preview(connection: Edge | Connection): boolean {
         case "rescale":
         case "subtitles":
         case "overlay":
+        case "text":
         case "output":
             return incoming.length < 1
         case "transition":

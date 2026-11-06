@@ -15,6 +15,7 @@ export type ComposeNodeKind =
     | "overlay"
     | "color"
     | "rescale"
+    | "text"
     | "output"
 
 export interface SourceNodeData {
@@ -99,6 +100,29 @@ export interface RescaleNodeData {
     label?: string | null
 }
 
+export interface TextItem {
+    text: string
+    font: string
+    size_start: number
+    size_end: number
+    color: string
+    opacity: number
+    anchor: OverlayPosition
+    offset_x: number
+    offset_y: number
+    align: "left" | "center" | "right"
+    max_width: number | null
+    show_start: number
+    show_end: number | null
+    fade_in: number
+    fade_out: number
+}
+
+export interface TextNodeData {
+    items: TextItem[]
+    label?: string | null
+}
+
 export type ComposeNodeData =
     | SourceNodeData
     | TrimNodeData
@@ -108,6 +132,7 @@ export type ComposeNodeData =
     | OverlayNodeData
     | ColorNodeData
     | RescaleNodeData
+    | TextNodeData
     | OutputNodeData
 
 export interface ComposePosition {
@@ -124,6 +149,7 @@ export type ComposeNode =
     | { id: string; type: "overlay"; position: ComposePosition; data: OverlayNodeData }
     | { id: string; type: "color"; position: ComposePosition; data: ColorNodeData }
     | { id: string; type: "rescale"; position: ComposePosition; data: RescaleNodeData }
+    | { id: string; type: "text"; position: ComposePosition; data: TextNodeData }
     | { id: string; type: "output"; position: ComposePosition; data: OutputNodeData }
 
 export interface ComposeEdge {

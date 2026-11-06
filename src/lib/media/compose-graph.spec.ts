@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { find_output_node, ordered_merge_inputs, topo_sort_compose, upstream_of } from "./compose-graph"
+import {
+    find_output_node,
+    is_compose_root,
+    is_single_upstream_passthrough,
+    ordered_merge_inputs,
+    topo_sort_compose,
+    upstream_of,
+} from "./compose-graph"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError } from "./mediabunny-clip"
 
@@ -36,6 +43,33 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
             return { id, type, position, data: { color: "#000000", duration: 20 } }
         case "rescale":
             return { id, type, position, data: { width: 1920, height: 1080, fps: null, fit: "contain" } }
+        case "text":
+            return {
+                id,
+                type,
+                position,
+                data: {
+                    items: [
+                        {
+                            text: "Hello",
+                            font: "sans-serif",
+                            size_start: 48,
+                            size_end: 48,
+                            color: "#ffffff",
+                            opacity: 1,
+                            anchor: "bottom-center",
+                            offset_x: 0,
+                            offset_y: 48,
+                            align: "center",
+                            max_width: null,
+                            show_start: 0,
+                            show_end: null,
+                            fade_in: 0,
+                            fade_out: 0,
+                        },
+                    ],
+                },
+            }
         case "output":
             return {
                 id,
@@ -142,5 +176,26 @@ describe("ordered_merge_inputs", () => {
         expect(ordered_merge_inputs("m", edges)).toEqual(["a", "b", "c"])
         const other_target = [handle_edge("e1", "a", "m", "in0"), handle_edge("e2", "b", "other", "in0")]
         expect(ordered_merge_inputs("m", other_target)).toEqual(["a"])
+    })
+})
+
+describe("is_single_upstream_passthrough", () => {
+    it("returns true for trim, rescale, subtitles, overlay, and text", () => {
+        expect(is_single_upstream_passthrough(node("a", "trim"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("b", "rescale"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("c", "subtitles"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("d", "overlay"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("e", "text"))).toBe(true)
+    })
+
+    it("returns false for source and output", () => {
+        expect(is_single_upstream_passthrough(node("s", "source"))).toBe(false)
+        expect(is_single_upstream_passthrough(node("o", "output"))).toBe(false)
+    })
+})
+
+describe("is_compose_root", () => {
+    it("returns false for text", () => {
+        expect(is_compose_root(node("t", "text"))).toBe(false)
     })
 })

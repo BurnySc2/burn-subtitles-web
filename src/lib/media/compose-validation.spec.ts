@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { ComposeEdge, ComposeNode } from "./compose-types"
+import type { ComposeEdge, ComposeNode, TextItem } from "./compose-types"
 import { compose_node_durations, validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 
@@ -65,6 +65,31 @@ function output(id = "out"): ComposeNode {
         position: { x: 0, y: 0 },
         data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
     }
+}
+
+function text_item(overrides: Partial<TextItem> = {}): TextItem {
+    return {
+        text: "Hello",
+        font: "sans",
+        size_start: 48,
+        size_end: 48,
+        color: "#ffffff",
+        opacity: 1,
+        anchor: "center",
+        offset_x: 0,
+        offset_y: 0,
+        align: "center",
+        max_width: null,
+        show_start: 0,
+        show_end: 10,
+        fade_in: 0.5,
+        fade_out: 0.5,
+        ...overrides,
+    }
+}
+
+function text(id: string, items: TextItem[] = [text_item()]): ComposeNode {
+    return { id, type: "text", position: { x: 0, y: 0 }, data: { items } }
 }
 
 function edge(id: string, from: string, to: string, targetHandle: string | null = null): ComposeEdge {
@@ -255,6 +280,103 @@ describe("validate_compose", () => {
             field: "audio_quality",
             message: "Unknown output audio quality.",
         })
+    })
+
+    it("accepts a valid single-item text node", () => {
+        const nodes = [source("src"), text("txt"), output()]
+        const edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        expect(validate_compose(nodes, edges)).toEqual([])
+    })
+
+    it("flags text arity violations", () => {
+        const lone = [source("src"), text("txt"), output()]
+        expect(validate_compose(lone, [edge("e1", "txt", "out")])).toContainEqual({
+            node_id: "txt",
+            field: "input",
+            message: "Text node must have exactly 1 input",
+        })
+
+        const double = [source("a"), source("b"), text("txt"), output()]
+        const double_edges = [edge("e1", "a", "txt"), edge("e2", "b", "txt"), edge("e3", "txt", "out")]
+        expect(validate_compose(double, double_edges)).toContainEqual({
+            node_id: "txt",
+            field: "input",
+            message: "Text node must have exactly 1 input",
+        })
+    })
+
+    it("flags empty text items only when wired", () => {
+        const wired = [source("src"), text("txt", []), output()]
+        const wired_edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        expect(validate_compose(wired, wired_edges)).toContainEqual({
+            node_id: "txt",
+            field: "items",
+            message: "Text node must have at least 1 item",
+        })
+
+        const idle = [source("src"), text("stray", []), trim("trim"), output()]
+        const idle_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        const idle_issues = validate_compose(idle, idle_edges)
+        expect(idle_issues.some((issue) => issue.field === "items")).toBe(false)
+        expect(idle_issues.length).toBeGreaterThan(0)
+    })
+
+    it("flags invalid text item fields", () => {
+        const bad = text_item({
+            color: "red",
+            align: "justify" as never,
+            opacity: 2,
+            size_start: 0,
+            size_end: 5000,
+            show_start: 5,
+            show_end: 5,
+            fade_in: 6,
+            fade_out: 6,
+        })
+        const nodes = [source("src"), text("txt", [bad]), output()]
+        const edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        const issues = validate_compose(nodes, edges)
+        expect(issues).toContainEqual({
+            node_id: "txt",
+            field: "items[0].color",
+            message: "Text item color must be a hex string like #000000",
+        })
+        expect(issues).toContainEqual({
+            node_id: "txt",
+            field: "items[0].align",
+            message: 'Text item align must be one of "left", "center" or "right"',
+        })
+        expect(issues).toContainEqual({
+            node_id: "txt",
+            field: "items[0].opacity",
+            message: "Text item opacity must be between 0 and 1",
+        })
+        expect(issues.some((issue) => issue.field === "items[0].size_start")).toBe(true)
+        expect(issues.some((issue) => issue.field === "items[0].size_end")).toBe(true)
+        expect(issues).toContainEqual({
+            node_id: "txt",
+            field: "items[0].show_end",
+            message: "Text item show_end must be greater than show_start",
+        })
+        expect(issues).toContainEqual({
+            node_id: "txt",
+            field: "items[0].fade_out",
+            message: "Text item fade_in plus fade_out must not exceed the visible window",
+        })
+    })
+
+    it("flags text windows beyond the probed source duration", () => {
+        const late_end = [source("src", 30), text("txt", [text_item({ show_start: 5, show_end: 40 })]), output()]
+        const late_end_edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        expect(validate_compose(late_end, late_end_edges).some((issue) => issue.field === "items[0].show_end")).toBe(
+            true,
+        )
+
+        const late_start = [source("src", 30), text("txt", [text_item({ show_start: 40, show_end: 50 })]), output()]
+        const late_start_edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
+        expect(
+            validate_compose(late_start, late_start_edges).some((issue) => issue.field === "items[0].show_start"),
+        ).toBe(true)
     })
 })
 
