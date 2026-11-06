@@ -1,36 +1,10 @@
-import { format_srt_timestamp, type SubtitleCue } from "./compose-subtitles"
-import { split_times } from "./split-timing"
-
-/** Proposed split point for one overlong cue. */
-export interface SplitSuggestion {
-    cue_index: number
-    split_word: number
-    preview_a: string
-    preview_b: string
-    reason: string
-}
-
-/** One renderable split choice for a cue. */
-export interface SplitOption {
-    kind: "recommended" | "alternative" | "custom"
-    parts: string[]
-    note: string
-}
+import type { SubtitleCue } from "./compose-subtitles"
 
 export type TabKind = "recommended" | "alternative" | "custom"
 
 export const NO_SPACE_LOCALES = new Set(["ja", "zh", "ko", "th"])
 
-export const CUE_LOCALES: Record<number, string> = { 1: "en", 2: "ar", 3: "ja", 4: "th" }
-
 const CONJUNCTIONS = ["and", "but", "or", "that", "because"]
-
-/** Fixture covering split cases: EN long, AR, JA (no spaces), TH (no spaces). */
-export const SAMPLE_SRT =
-    "1\n00:00:01,000 --> 00:00:04,000\nWhen the storm passed over the mountains, the village began to rebuild\n\n" +
-    "2\n00:00:05,500 --> 00:00:07,000\nعندما توقفت الأمطار خرج الناس إلى الشوارع\n\n" +
-    "3\n00:00:08,000 --> 00:00:10,000\n長い冬が終わり桜の花が咲き始めた\n\n" +
-    "4\n00:00:11,000 --> 00:00:13,500\nเมื่อฤดูฝนสิ้นสุดลงชาวบ้านก็เริ่มเตรียมงาน\n"
 
 /** Locales exercised by the split prototype UI. */
 export const SAMPLE_LOCALES = ["en", "ar", "ja", "zh", "ko", "th"]
@@ -57,7 +31,7 @@ export function tokenize_segmenter(text: string, locale: string): string[] {
         const segmenter = new holder.Segmenter(locale, { granularity: "word" })
         const parts: string[] = []
         for (const item of segmenter.segment(text)) {
-            if (item.isWordLike) {
+            if (item.segment.trim() !== "") {
                 parts.push(item.segment)
             }
         }
@@ -159,48 +133,18 @@ export function apply_split(text: string, split_word: number, locale = "en"): st
         return [text]
     }
     const at = Math.min(words.length - 1, Math.max(1, Math.round(split_word)))
-    return [join_words(words.slice(0, at), locale), join_words(words.slice(at), locale)]
-}
-
-/** Rebuild SRT, expanding split cues into two proportionally timed cues renumbered 1..N. */
-export function build_split_srt(
-    cues: SubtitleCue[],
-    splits: Map<number, number>,
-    locales?: Record<number, string> | Map<number, string>,
-    gap_ms = 10,
-): string {
-    const locale_for = (index: number): string => {
-        if (locales instanceof Map) {
-            return locales.get(index) ?? "en"
+    let cursor = 0
+    for (let i = 0; i < at; i++) {
+        const found = text.indexOf(words[i], cursor)
+        if (found === -1) {
+            return [text]
         }
-        return locales?.[index] ?? "en"
+        cursor = found + words[i].length
     }
-    const stamp = (start: number, end: number) => `${format_srt_timestamp(start)} --> ${format_srt_timestamp(end)}`
-    const out: string[] = []
-    for (const cue of cues) {
-        const at = splits.get(cue.index)
-        const locale = locale_for(cue.index)
-        if (at === undefined) {
-            out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
-            continue
-        }
-        if (at <= 0 || at >= tokenize_for_locale(cue.text, locale).length) {
-            out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
-            continue
-        }
-        const parts = apply_split(cue.text, at, locale)
-        const chars = parts[0].length + parts[1].length
-        if (chars === 0) {
-            out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
-            continue
-        }
-        const { end_a, start_b } = split_times(cue.start, cue.end, parts[0].length / chars, gap_ms)
-        if (end_a === start_b) {
-            out.push(`${out.length + 1}\n${stamp(cue.start, cue.end)}\n${cue.text}`)
-            continue
-        }
-        out.push(`${out.length + 1}\n${stamp(cue.start, end_a)}\n${parts[0]}`)
-        out.push(`${out.length + 1}\n${stamp(start_b, cue.end)}\n${parts[1]}`)
+    const head = text.slice(0, cursor).trim()
+    const tail = text.slice(cursor).trim()
+    if (head.length === 0 || tail.length === 0) {
+        return [text]
     }
-    return out.length === 0 ? "" : `${out.join("\n\n")}\n`
+    return [head, tail]
 }

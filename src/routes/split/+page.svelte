@@ -133,9 +133,16 @@ function derive_custom(cue: SubtitleCue) {
         delete custom_parts[cue.index]
         return
     }
-    const rest = cue.text.replace(first, "").trim()
-    if (!rest || !cue.text.includes(first)) {
+    const normalize = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase()
+    if (!normalize(cue.text).startsWith(normalize(first))) {
         custom_error[cue.index] = "Keep typing — first part must appear in the original text."
+        delete custom_parts[cue.index]
+        return
+    }
+    const rest = cue.text.trim().slice(first.length).trim()
+    if (!rest || normalize(`${first} ${rest}`) !== normalize(cue.text)) {
+        custom_error[cue.index] = "Keep typing — first part must appear in the original text."
+        delete custom_parts[cue.index]
         return
     }
     custom_error[cue.index] = ""
@@ -244,6 +251,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             <select
                 id="balance-preset"
                 bind:value={balance_preset}
+                aria-describedby="balance-hint"
                 class="ml-2 rounded border p-1 text-sm"
             >
                 {#each BALANCE_PRESETS as p (p.id)}
@@ -251,7 +259,10 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 {/each}
             </select>
         </label>
-        <p class="w-full text-xs text-gray-500">
+        <p
+            id="balance-hint"
+            class="w-full text-xs text-gray-500"
+        >
             Equal = both halves same time. Proportional = time matches text length (default). Boost = longer half gets
             extra time.
         </p>
@@ -359,7 +370,12 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                                 {rate.toFixed(1)}
                                 cps
                                 {#if rate > 20}
-                                    ⚠
+                                    <span
+                                        aria-label="reading speed warning: over 20 characters per second"
+                                        title="Over 20 characters per second — hard to read"
+                                    >
+                                        ⚠
+                                    </span>
                                 {/if}
                             </span>
                             <span class="w-16 shrink-0 text-xs text-gray-500">
@@ -444,6 +460,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                         <button
                             role="tab"
                             aria-selected={tab === option.kind}
+                            aria-controls="cue-preview-{cue.index}"
                             class="btn btn-sm {tab === option.kind ? 'btn-primary' : 'btn-secondary'}"
                             onclick={() => { selected_tab[cue.index] = option.kind }}
                         >
@@ -467,13 +484,23 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                             placeholder="First part, rest becomes Part 2"
                             bind:value={custom_text[cue.index]}
                             oninput={() => derive_custom(cue)}
+                            aria-describedby={custom_error[cue.index]
+                                ? `custom-error-${cue.index}`
+                                : undefined}
                         >
                         {#if custom_error[cue.index]}
-                            <p class="mt-1 text-xs text-gray-400">{custom_error[cue.index]}</p>
+                            <p
+                                id="custom-error-{cue.index}"
+                                role="alert"
+                                class="mt-1 text-xs text-red-600"
+                            >
+                                {custom_error[cue.index]}
+                            </p>
                         {/if}
                     </div>
                 {/if}
                 <div
+                    id="cue-preview-{cue.index}"
                     class="mt-2 grid items-start gap-2 text-sm md:grid-cols-2"
                     dir="auto"
                 >
