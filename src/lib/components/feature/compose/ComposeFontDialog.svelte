@@ -69,17 +69,6 @@ $effect(() => {
             </h2>
             <p class="text-sm text-gray-600">Upload once, use in any text node. Custom fonts are listed here.</p>
             <ComposeFontLibrary />
-            <h3 class="mt-4 text-sm font-semibold">Defaults (future)</h3>
-            <div inert={true}>
-                <p class="text-sm text-gray-600">Default font / size / CRF / audio quality defaults will live here.</p>
-                <button
-                    type="button"
-                    disabled
-                    class="btn btn-secondary btn-sm"
-                >
-                    Not yet available
-                </button>
-            </div>
             <button
                 type="button"
                 onclick={close_dialog}
