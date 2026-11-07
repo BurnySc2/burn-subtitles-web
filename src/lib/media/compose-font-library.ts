@@ -1,3 +1,9 @@
+/*
+ * Snapshot rule: font_registry.entries is a mutable plain object. Readers must
+ * subscribe to $font_registry_version and snapshot via list_registry_families()
+ * or get_font_suggestions() (both return fresh arrays); never hold a live ref
+ * to font_registry.entries across derivations, or memoized refs go stale.
+ */
 import { writable } from "svelte/store"
 import { available_fonts } from "../utils/fonts"
 
@@ -59,6 +65,9 @@ export function remove_font_entry(family: string): void {
 }
 
 export function clear_font_registry(): void {
+    if (font_registry.entries.length === 0) {
+        return
+    }
     for (const entry of font_registry.entries) {
         dispose_entry_resources(entry)
     }
@@ -81,7 +90,7 @@ export function list_bundled_families(): string[] {
 }
 
 export function list_registry_families(): string[] {
-    return font_registry.entries.map((entry) => entry.family)
+    return [...font_registry.entries.map((entry) => entry.family)]
 }
 
 export function list_document_families(): string[] {
@@ -137,7 +146,7 @@ export function get_font_suggestions(): string[] {
         }
         return a.localeCompare(b)
     })
-    return known
+    return [...known]
 }
 
 export function is_font_available(family: string): boolean {

@@ -257,6 +257,7 @@ onDestroy(() => {
 <div class="flex w-full flex-col gap-2 p-3">
     <ComposeBrowserWarning />
     <ComposeJsonBar />
+    <!-- WHY dialog-draft: font dialog unmounts on close so its URL draft resets; lifting it would touch dialog internals -->
     <ComposeFontDialog />
     <div class="flex h-[calc(100vh-320px)] w-full items-start gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>

@@ -18,7 +18,12 @@ import {
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
 } from "$lib/media/transition-utils"
-import { build_datalist_id, get_font_suggestions, is_font_available } from "../../../media/compose-font-library"
+import {
+    build_datalist_id,
+    font_registry_version,
+    get_font_suggestions,
+    is_font_available,
+} from "../../../media/compose-font-library"
 import { create_default_text_item, MAX_TEXT_ITEMS } from "../../../media/compose-types"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
@@ -48,6 +53,14 @@ let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges)
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
+let font_options = $derived.by(() => {
+    $font_registry_version
+    return get_font_suggestions()
+})
+
+function is_font_available_reactive(family: string, _version: number): boolean {
+    return is_font_available(family)
+}
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
     on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
@@ -826,11 +839,11 @@ function probe_summary(node: ComposeNode): string {
                             class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                         >
                         <datalist id={build_datalist_id(selected.id, i)}>
-                            {#each get_font_suggestions() as fam (fam)}
+                            {#each font_options as fam (fam)}
                                 <option value={fam}></option>
                             {/each}
                         </datalist>
-                        {#if item.font.trim() && !is_font_available(item.font)}
+                        {#if item.font.trim() && !is_font_available_reactive(item.font, $font_registry_version)}
                             <p class="text-xs font-normal text-amber-700">
                                 ⚠ “{item.font.trim()}” isn’t loaded — canvas will fall back.
                             </p>

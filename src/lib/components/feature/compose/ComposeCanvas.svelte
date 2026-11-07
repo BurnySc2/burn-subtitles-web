@@ -39,9 +39,38 @@ async function load_flow() {
 
 let flow = $state<Awaited<ReturnType<typeof load_flow>> | null>(null)
 
+// WHY capture-guard: Backspace/Delete pressed on font-dialog chrome must not reach SvelteFlow deleteKey or Inspector window delete
+function handle_dialog_keydown_capture(event: KeyboardEvent): void {
+    if (event.key !== "Backspace" && event.key !== "Delete") {
+        return
+    }
+    const target = event.target
+    if (!(target instanceof HTMLElement)) {
+        return
+    }
+    if (target.closest('[role="dialog"]') === null) {
+        return
+    }
+    if (target.closest("input, textarea, select, [contenteditable]") !== null) {
+        return
+    }
+    event.stopPropagation()
+}
+
 // WHY dynamic import: @xyflow/svelte needs browser APIs, static import breaks prerender — see AGENTS.md
-onMount(async () => {
-    flow = await load_flow()
+onMount(() => {
+    if (typeof window === "undefined") {
+        return
+    }
+    window.addEventListener("keydown", handle_dialog_keydown_capture, true)
+    void load_flow().then((loaded) => {
+        flow = loaded
+    })
+    return () => {
+        if (typeof window !== "undefined") {
+            window.removeEventListener("keydown", handle_dialog_keydown_capture, true)
+        }
+    }
 })
 
 function to_flow_node(node: ComposeNode): Node {

@@ -5,11 +5,11 @@ import {
     register_font_entry,
     remove_font_entry,
 } from "$lib/media/compose-font-library"
-import { load_custom_font, load_custom_font_from_url } from "$lib/utils/custom-font"
+import { load_custom_font, load_custom_font_from_url, revoke_custom_font } from "$lib/utils/custom-font"
 
 let registry_entries = $derived.by(() => {
     $font_registry_version
-    return font_registry.entries
+    return [...font_registry.entries]
 })
 
 let file_input: HTMLInputElement | null = $state(null)
@@ -25,6 +25,11 @@ async function on_pick_file(file: File | null): Promise<void> {
     error = null
     try {
         const loaded = await load_custom_font(file)
+        if (!loaded.font_face) {
+            revoke_custom_font(loaded)
+            error = `Font could not be loaded for preview: ${file.name}`
+            return
+        }
         register_font_entry({
             family: loaded.font_family,
             source: "custom-file",
@@ -73,7 +78,7 @@ function on_remove(family: string): void {
 </script>
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
-    <h2 class="text-lg font-semibold">Font library</h2>
+    <h3 class="text-lg font-semibold">Font library</h3>
     <input
         bind:this={file_input}
         type="file"

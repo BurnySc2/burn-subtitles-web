@@ -46,20 +46,20 @@ $effect(() => {
 </button>
 
 {#if open}
-    <button
-        type="button"
-        aria-label="Close font library"
-        onclick={close_dialog}
-        class="fixed inset-0 cursor-default bg-black/50"
-    ></button>
-    <div class="fixed inset-0 flex items-center justify-center p-4">
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <button
+            type="button"
+            aria-label="Close font library"
+            onclick={close_dialog}
+            class="absolute inset-0 cursor-default bg-black/50"
+        ></button>
         <div
             bind:this={panel_ref}
             role="dialog"
             aria-modal="true"
             aria-labelledby="compose-font-dialog-title"
             tabindex="-1"
-            class="max-w-lg w-full rounded-lg bg-white p-4"
+            class="relative z-10 max-w-lg w-full rounded-lg bg-white p-4"
         >
             <h2
                 id="compose-font-dialog-title"
