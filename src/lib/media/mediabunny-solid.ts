@@ -1,13 +1,6 @@
-import type { Output } from "mediabunny"
 import { ClipError } from "./mediabunny-clip"
 import type { TransitionQuality } from "./transition-utils"
-import {
-    add_canvas_frame,
-    CRF_INVALID_MESSAGE,
-    create_encode_canvas,
-    create_encode_video_source,
-    parse_crf_override,
-} from "./transition-utils"
+import { add_canvas_frame, CRF_INVALID_MESSAGE, parse_crf_override, with_canvas_encode } from "./transition-utils"
 
 export interface RenderSolidOptions {
     color: string
@@ -62,62 +55,44 @@ export async function render_solid_color(options: RenderSolidOptions): Promise<B
     if (signal?.aborted) {
         throw new ClipError("CANCELLED", "Cancelled.")
     }
-    const mb = await import("mediabunny")
-    let output: Output | null = null
-    const on_abort = () => {
-        void output?.cancel()
+    const gate = await import("mediabunny")
+    if (!(await gate.canEncodeVideo("avc"))) {
+        throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
     }
-    signal?.addEventListener("abort", on_abort, { once: true })
-    try {
-        if (!(await mb.canEncodeVideo("avc"))) {
-            throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
-        }
-        const total_frames = Math.max(1, Math.round(duration * fps))
-        if (signal?.aborted) {
-            throw new ClipError("CANCELLED", "Cancelled.")
-        }
-        const target = new mb.BufferTarget()
-        output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
-        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf ?? null)
-        output.addVideoTrack(video_source)
-        await output.start()
-        if (signal?.aborted) {
-            await output.cancel()
-            throw new ClipError("CANCELLED", "Cancelled.")
-        }
-        const ctx = encode_ctx
-        if (!ctx) {
-            throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
-        }
-        for (let i = 0; i < total_frames; i += 1) {
-            if (signal?.aborted) {
-                await output.cancel()
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            ctx.globalAlpha = 1
-            ctx.fillStyle = color
-            ctx.fillRect(0, 0, width, height)
-            await add_canvas_frame(mb, video_source, canvas, i / fps, 1 / fps)
-            on_progress?.(i + 1, total_frames)
-        }
-        try {
-            await output.finalize()
-        } catch (error) {
-            if (
-                output.state === "canceled" ||
-                error instanceof mb.ConversionCanceledError ||
-                (error instanceof Error && error.name === "ConversionCanceledError")
-            ) {
-                throw new ClipError("CANCELLED", "Cancelled.")
-            }
-            throw error
-        }
-        if (!target.buffer) {
-            throw new ClipError("FAILED", "Solid rendering produced no output.")
-        }
-        return new Blob([target.buffer], { type: output.format.mimeType })
-    } finally {
-        signal?.removeEventListener("abort", on_abort)
+    const total_frames = Math.max(1, Math.round(duration * fps))
+    if (signal?.aborted) {
+        throw new ClipError("CANCELLED", "Cancelled.")
     }
+    const setup = await with_canvas_encode({
+        width,
+        height,
+        fps,
+        quality,
+        crf_raw: options.crf ?? null,
+        audio_probe: null,
+        audio_quality: "source-max",
+        needs_audio: false,
+        probe_has_audio: false,
+        head_blob_for_audio: null,
+        signal,
+        body: async (encode_setup, mb) => {
+            const { canvas, ctx, video_source, output } = encode_setup
+            for (let i = 0; i < total_frames; i += 1) {
+                if (signal?.aborted) {
+                    await output.cancel()
+                    throw new ClipError("CANCELLED", "Cancelled.")
+                }
+                ctx.globalAlpha = 1
+                ctx.fillStyle = color
+                ctx.fillRect(0, 0, width, height)
+                await add_canvas_frame(mb, video_source, canvas, i / fps, 1 / fps)
+                on_progress?.(i + 1, total_frames)
+            }
+            return encode_setup
+        },
+    })
+    if (!setup.target.buffer) {
+        throw new ClipError("FAILED", "Solid rendering produced no output.")
+    }
+    return new Blob([setup.target.buffer], { type: setup.output.format.mimeType })
 }

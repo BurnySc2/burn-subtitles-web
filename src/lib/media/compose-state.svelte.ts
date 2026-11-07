@@ -1,4 +1,5 @@
-import type { ComposeEdge, ComposeNode, ValidationIssue } from "./compose-types"
+import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
+import { TEXT_ANCHORS } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
 import {
@@ -195,9 +196,11 @@ export function add_compose_edge(connection: ComposeConnection): { ok: boolean; 
         case "rescale":
         case "subtitles":
         case "overlay":
+        case "text":
         case "output": {
-            if (target_node.type === "overlay" && target_handle !== null) {
-                return { ok: false, error: "Overlay inputs accept no handle." }
+            if ((target_node.type === "overlay" || target_node.type === "text") && target_handle !== null) {
+                const handle_label = target_node.type === "overlay" ? "Overlay" : "Text"
+                return { ok: false, error: `${handle_label} inputs accept no handle.` }
             }
             if (incoming.length >= 1) {
                 const label =
@@ -209,7 +212,9 @@ export function add_compose_edge(connection: ComposeConnection): { ok: boolean; 
                             ? "Subtitles"
                             : target_node.type === "overlay"
                               ? "Overlay"
-                              : "Output"
+                              : target_node.type === "text"
+                                ? "Text"
+                                : "Output"
                 return { ok: false, error: `${label} nodes accept 1 input — remove the existing connection first.` }
             }
             break
@@ -328,6 +333,16 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                         label: node.data.label ?? null,
                     },
                 }
+            case "text":
+                return {
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    data: {
+                        items: node.data.items.map((item) => ({ ...item })),
+                        label: node.data.label ?? null,
+                    },
+                }
             default:
                 return {
                     id: node.id,
@@ -373,17 +388,7 @@ const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-
 const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra"])
 const EASINGS = new Set(["linear", "exponential"])
 const SUBTITLE_MODES = new Set(["mux", "burn", "sidecar"])
-const OVERLAY_POSITIONS = new Set([
-    "top-left",
-    "top-center",
-    "top-right",
-    "center-left",
-    "center",
-    "center-right",
-    "bottom-left",
-    "bottom-center",
-    "bottom-right",
-])
+const OVERLAY_POSITIONS = new Set<string>(TEXT_ANCHORS)
 
 function parse_node(raw: unknown): ComposeNode {
     if (!is_record(raw) || typeof raw.id !== "string" || typeof raw.type !== "string") {
@@ -603,6 +608,78 @@ function parse_node(raw: unknown): ComposeNode {
                     crf,
                     label: parse_label(raw.data.label, raw.id),
                 },
+            }
+        }
+        case "text": {
+            if (!Array.isArray(raw.data.items)) {
+                throw new Error(`Node "${raw.id}": text needs an items array`)
+            }
+            const items = raw.data.items.map((raw_item: unknown, index: number) => {
+                if (!is_record(raw_item)) {
+                    throw new Error(`Node "${raw.id}": invalid text item ${index}`)
+                }
+                if (typeof raw_item.text !== "string" || raw_item.text.trim() === "") {
+                    throw new Error(`Node "${raw.id}": invalid text item ${index} text`)
+                }
+                if (typeof raw_item.anchor !== "string" || !OVERLAY_POSITIONS.has(raw_item.anchor)) {
+                    throw new Error(`Node "${raw.id}": unknown text item ${index} anchor`)
+                }
+                const numerics: Array<[string, unknown]> = [
+                    ["size_start", raw_item.size_start],
+                    ["size_end", raw_item.size_end],
+                    ["opacity", raw_item.opacity],
+                    ["offset_x", raw_item.offset_x],
+                    ["offset_y", raw_item.offset_y],
+                    ["show_start", raw_item.show_start],
+                    ["fade_in", raw_item.fade_in],
+                    ["fade_out", raw_item.fade_out],
+                ]
+                for (const [field, value] of numerics) {
+                    if (typeof value !== "number" || !Number.isFinite(value)) {
+                        throw new Error(`Node "${raw.id}": invalid text item ${index} ${field}`)
+                    }
+                }
+                if (
+                    raw_item.show_end !== null &&
+                    (typeof raw_item.show_end !== "number" || !Number.isFinite(raw_item.show_end))
+                ) {
+                    throw new Error(`Node "${raw.id}": invalid text item ${index} show_end`)
+                }
+                if (
+                    raw_item.max_width !== null &&
+                    (typeof raw_item.max_width !== "number" || !Number.isFinite(raw_item.max_width))
+                ) {
+                    throw new Error(`Node "${raw.id}": invalid text item ${index} max_width`)
+                }
+                if (typeof raw_item.font !== "string" || typeof raw_item.color !== "string") {
+                    throw new Error(`Node "${raw.id}": invalid text item ${index} font or color`)
+                }
+                if (raw_item.align !== "left" && raw_item.align !== "center" && raw_item.align !== "right") {
+                    throw new Error(`Node "${raw.id}": unknown text item ${index} align`)
+                }
+                return {
+                    text: raw_item.text,
+                    font: raw_item.font,
+                    size_start: raw_item.size_start as number,
+                    size_end: raw_item.size_end as number,
+                    color: raw_item.color,
+                    opacity: raw_item.opacity as number,
+                    anchor: raw_item.anchor as TextItem["anchor"],
+                    offset_x: raw_item.offset_x as number,
+                    offset_y: raw_item.offset_y as number,
+                    align: raw_item.align as TextItem["align"],
+                    max_width: raw_item.max_width as number | null,
+                    show_start: raw_item.show_start as number,
+                    show_end: raw_item.show_end as number | null,
+                    fade_in: raw_item.fade_in as number,
+                    fade_out: raw_item.fade_out as number,
+                }
+            })
+            return {
+                id: raw.id,
+                type: "text",
+                position,
+                data: { items, label: parse_label(raw.data.label, raw.id) },
             }
         }
         default:

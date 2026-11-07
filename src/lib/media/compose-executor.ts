@@ -1,12 +1,21 @@
-import { find_output_node, topo_sort_compose } from "./compose-graph"
+import {
+    blob_to_file,
+    build_fused_dispatch,
+    execute_fused_segment as execute_shared_fused_segment,
+    type FusedDispatch,
+    single_input,
+} from "./compose-fused"
+import { type ComposeOutputNode, find_output_node, topo_sort_compose } from "./compose-graph"
 import { srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
+import { collect_stack_segments } from "./mediabunny-compose-stack"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
+import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
 
 export interface ExecuteComposeGraphOptions {
@@ -22,8 +31,18 @@ function throw_if_aborted(signal?: AbortSignal): void {
     }
 }
 
-function blob_to_file(blob: Blob, name: string): File {
-    return blob instanceof File ? blob : new File([blob], name, { type: blob.type })
+async function execute_fused_segment(
+    dispatch: FusedDispatch,
+    by_id: Map<string, ComposeNode>,
+    incoming: Map<string, ComposeEdge[]>,
+    memo: Map<string, Blob>,
+    output_node: ComposeOutputNode | null,
+    on_slice: (progress: number) => void,
+    signal?: AbortSignal,
+): Promise<{ blob: Blob; sidecar_vtt: string | null }> {
+    return execute_shared_fused_segment(dispatch, by_id, incoming, memo, output_node, on_slice, signal, {
+        include_sidecar: true,
+    })
 }
 
 function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
@@ -34,15 +53,6 @@ function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
         incoming.set(edge.target, list)
     }
     return incoming
-}
-
-function single_input(node_id: string, incoming: Map<string, ComposeEdge[]>, memo: Map<string, Blob>): Blob {
-    const edges = incoming.get(node_id) ?? []
-    const blob = edges.length === 1 ? (memo.get(edges[0].source) ?? null) : null
-    if (!blob) {
-        throw new ClipError("FAILED", "Node input is missing.")
-    }
-    return blob
 }
 
 function transition_inputs(
@@ -191,10 +201,36 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     let sidecar_vtt: string | null = null
     const total = Math.max(1, order.length)
     let done = 0
+    const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
     for (const node_id of order) {
         throw_if_aborted(signal)
         const node = by_id.get(node_id)
         if (!node) {
+            continue
+        }
+        const fused = fused_dispatch.get(node_id) ?? null
+        if (fused?.fused_ids.has(node_id) && node_id !== fused.end_id) {
+            continue
+        }
+        if (fused && node_id === fused.end_id) {
+            const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
+            const { blob, sidecar_vtt: fused_sidecar } = await execute_fused_segment(
+                fused,
+                by_id,
+                incoming,
+                memo,
+                output_node,
+                span_slice,
+                signal,
+            )
+            for (const fused_id of fused.fused_ids) {
+                memo.set(fused_id, blob)
+            }
+            if (fused_sidecar !== null) {
+                sidecar_vtt ??= fused_sidecar
+            }
+            done += fused.span
+            on_progress?.(done / total)
             continue
         }
         const slice = (progress: number) => on_progress?.((done + progress) / total)
@@ -271,6 +307,23 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     offset_y: node.data.offset_y,
                     show_start: node.data.show_start,
                     show_end: node.data.show_end,
+                    width: output_node?.data.width ?? 1920,
+                    height: output_node?.data.height ?? 1080,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: slice,
+                    signal,
+                })
+                memo.set(node.id, result.blob)
+                break
+            }
+            case "text": {
+                const input = single_input(node.id, incoming, memo)
+                const result = await render_text_overlay({
+                    video: blob_to_file(input, "text-bg.mp4"),
+                    items: node.data.items,
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,

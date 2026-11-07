@@ -1,10 +1,14 @@
+import { font_cache_key } from "./compose-font-library"
+import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
+import { collect_stack_segments } from "./mediabunny-compose-stack"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
+import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
 
 export interface NodePreviewOptions {
@@ -50,6 +54,9 @@ function serialize_node(node: ComposeNode): string {
     if (node.type === "color") {
         return [node.id, node.type, node.data.color, String(node.data.duration)].join(":")
     }
+    if (node.type === "text") {
+        return [node.id, node.type, JSON.stringify(node.data.items)].join(":")
+    }
     if (node.type === "rescale") {
         return [
             node.id,
@@ -61,6 +68,23 @@ function serialize_node(node: ComposeNode): string {
         ].join(":")
     }
     return [node.id, node.type, JSON.stringify(node.data)].join(":")
+}
+
+export function collect_referenced_fonts(relevant: Set<string>, by_id: Map<string, ComposeNode>): string[] {
+    const collected = new Set<string>()
+    for (const id of relevant) {
+        const node = by_id.get(id)
+        if (node?.type !== "text") {
+            continue
+        }
+        for (const item of node.data.items ?? []) {
+            const family = item.font.trim().toLowerCase()
+            if (family) {
+                collected.add(family)
+            }
+        }
+    }
+    return [...collected].sort()
 }
 
 function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: ComposeEdge[]): string {
@@ -82,7 +106,12 @@ function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: Co
               output.data.audio_quality,
           ].join(":")
         : "no-output"
-    return JSON.stringify([serial_nodes, serial_edges, output_settings])
+    return JSON.stringify([
+        serial_nodes,
+        serial_edges,
+        output_settings,
+        font_cache_key(collect_referenced_fonts(relevant, by_id)),
+    ])
 }
 
 export function clear_node_preview_cache(): void {
@@ -95,10 +124,6 @@ function throw_if_aborted(signal?: AbortSignal): void {
     }
 }
 
-function blob_to_file(blob: Blob, name: string): File {
-    return blob instanceof File ? blob : new File([blob], name, { type: blob.type })
-}
-
 function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
     const incoming = new Map<string, ComposeEdge[]>()
     for (const edge of edges) {
@@ -107,15 +132,6 @@ function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
         incoming.set(edge.target, list)
     }
     return incoming
-}
-
-function single_input(node_id: string, incoming: Map<string, ComposeEdge[]>, memo: Map<string, Blob>): Blob {
-    const edges = incoming.get(node_id) ?? []
-    const blob = edges.length === 1 ? (memo.get(edges[0].source) ?? null) : null
-    if (!blob) {
-        throw new ClipError("FAILED", "Node input is missing.")
-    }
-    return blob
 }
 
 function transition_inputs(
@@ -284,6 +300,7 @@ export async function get_node_preview_blob(
     const output_node = find_output_node(nodes)
     const total = Math.max(1, order.length)
     let done = 0
+    const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
     for (const node_id of order) {
         throw_if_aborted(signal)
         const memo_hit = preview_memo.get(node_id)
@@ -295,6 +312,21 @@ export async function get_node_preview_blob(
         }
         const node = by_id.get(node_id)
         if (!node) {
+            continue
+        }
+        const fused = fused_dispatch.get(node_id) ?? null
+        const fused_active = fused !== null && relevant.has(fused.end_id)
+        if (fused_active && fused.fused_ids.has(node_id) && node_id !== fused.end_id) {
+            continue
+        }
+        if (fused_active && fused !== null && node_id === fused.end_id) {
+            const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
+            const { blob } = await execute_fused_segment(fused, by_id, incoming, blobs, output_node, span_slice, signal)
+            for (const fused_id of fused.fused_ids) {
+                store(fused_id, blob)
+            }
+            done += fused.span
+            on_progress?.(done / total)
             continue
         }
         const slice = (progress: number) => on_progress?.((done + progress) / total)
@@ -384,6 +416,23 @@ export async function get_node_preview_blob(
                     offset_y: node.data.offset_y,
                     show_start: node.data.show_start,
                     show_end: node.data.show_end,
+                    width: output_node?.data.width ?? 1920,
+                    height: output_node?.data.height ?? 1080,
+                    fps: output_node?.data.fps ?? 30,
+                    quality: output_node?.data.quality ?? "medium",
+                    crf: output_node?.data.crf ?? null,
+                    audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    on_progress: slice,
+                    signal,
+                })
+                store(node.id, result.blob)
+                break
+            }
+            case "text": {
+                const input = single_input(node.id, incoming, blobs)
+                const result = await render_text_overlay({
+                    video: blob_to_file(input, "text-bg.mp4"),
+                    items: node.data.items,
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
