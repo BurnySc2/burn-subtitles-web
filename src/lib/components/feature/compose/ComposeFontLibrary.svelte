@@ -9,12 +9,12 @@ import {
 } from "$lib/media/compose-font-library"
 import {
     clear_font_url_index,
+    type FontUrlEntry,
     get_font_url_auto_restore,
     load_font_url_index,
     remove_font_url_entry,
     save_font_url_entry,
     set_font_url_auto_restore,
-    type FontUrlEntry,
 } from "$lib/media/compose-font-url-index"
 import { load_custom_font, load_custom_font_from_url, revoke_custom_font } from "$lib/utils/custom-font"
 import { restore_saved_url_fonts, restore_single_url_font } from "../../../media/compose-font-restore"
@@ -33,7 +33,9 @@ let restore_summary = $state<string | null>(null)
 let auto_restore_enabled = $state(true)
 let saved_url_count = $state(0)
 let saved_url_entries = $state<FontUrlEntry[]>([])
-let url_status = $state<Record<string, { status: "loaded" | "failed" | "retrying"; code: string | null; message: string | null }>>({})
+let url_status = $state<
+    Record<string, { status: "loaded" | "failed" | "retrying"; code: string | null; message: string | null }>
+>({})
 
 let status_text = $derived.by(() => {
     if (restoring && registry_entries.length === 0) {
