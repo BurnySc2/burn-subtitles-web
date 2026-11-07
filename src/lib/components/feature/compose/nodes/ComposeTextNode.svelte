@@ -19,11 +19,7 @@ let title = $derived(compose_node_title("text", data.label))
 let item_count = $derived(data.items.length)
 let visible_items = $derived(data.items.slice(0, 2))
 let overflow_count = $derived(Math.max(0, item_count - 2))
-let summary = $derived(
-    item_count === 0
-        ? `0 / ${MAX_TEXT_ITEMS}`
-        : `${item_count} / ${MAX_TEXT_ITEMS} · ${truncate_preview(data.items[0]?.text ?? "")}`,
-)
+let summary = $derived(`${item_count} / ${MAX_TEXT_ITEMS}`)
 let is_invalid = $derived(
     item_count === 0 ||
         item_count > MAX_TEXT_ITEMS ||
