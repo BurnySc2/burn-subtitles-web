@@ -775,7 +775,7 @@ function probe_summary(node: ComposeNode): string {
             </label>
             <p class="text-xs text-gray-500">v1 supports contain only.</p>
         {:else if selected.type === "text"}
-            <p class="text-sm text-gray-600">{selected.data.items.length} / {MAX_TEXT_ITEMS} items (top first)</p>
+            <p class="text-sm text-gray-600">{selected.data.items.length}/ {MAX_TEXT_ITEMS} items (last item on top)</p>
             <button
                 type="button"
                 onclick={add_text_item}
@@ -827,7 +827,7 @@ function probe_summary(node: ComposeNode): string {
                         ></textarea>
                     </label>
                     <label class="flex flex-col gap-1 text-sm font-medium">
-                        Font
+                        Font family
                         <input
                             type="text"
                             value={item.font}
@@ -851,7 +851,7 @@ function probe_summary(node: ComposeNode): string {
                     </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Size start
+                            Size start (px)
                             <input
                                 type="number"
                                 min="1"
@@ -864,7 +864,7 @@ function probe_summary(node: ComposeNode): string {
                             >
                         </label>
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Size end
+                            Size end (px)
                             <input
                                 type="number"
                                 min="1"
@@ -897,7 +897,7 @@ function probe_summary(node: ComposeNode): string {
                         </span>
                     </label>
                     <label class="flex flex-col gap-1 text-sm font-medium">
-                        Opacity
+                        Opacity (0-1)
                         <input
                             type="number"
                             min="0"
@@ -911,7 +911,7 @@ function probe_summary(node: ComposeNode): string {
                         >
                     </label>
                     <label class="flex flex-col gap-1 text-sm font-medium">
-                        Anchor
+                        Position anchor
                         <select
                             value={item.anchor}
                             onchange={(e) =>
@@ -931,7 +931,7 @@ function probe_summary(node: ComposeNode): string {
                     </label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Offset X
+                            Offset X (px, right +)
                             <input
                                 type="number"
                                 step="1"
@@ -943,7 +943,7 @@ function probe_summary(node: ComposeNode): string {
                             >
                         </label>
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Offset Y
+                            Offset Y (px, down +)
                             <input
                                 type="number"
                                 step="1"
@@ -957,7 +957,7 @@ function probe_summary(node: ComposeNode): string {
                     </div>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Align
+                            Line alignment
                             <select
                                 value={item.align}
                                 onchange={(e) =>
@@ -970,7 +970,7 @@ function probe_summary(node: ComposeNode): string {
                             </select>
                         </label>
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Max width
+                            Max width (px, empty = auto)
                             <input
                                 type="number"
                                 min="1"
@@ -995,7 +995,7 @@ function probe_summary(node: ComposeNode): string {
                             >
                         </label>
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Show end (s)
+                            Show end (s, empty = video end)
                             <input
                                 type="number"
                                 min="0"
@@ -1007,7 +1007,7 @@ function probe_summary(node: ComposeNode): string {
                             >
                         </label>
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Fade in (s)
+                            Fade in (s, from show start)
                             <input
                                 type="number"
                                 min="0"
@@ -1020,7 +1020,7 @@ function probe_summary(node: ComposeNode): string {
                             >
                         </label>
                         <label class="flex flex-col gap-1 text-sm font-medium">
-                            Fade out (s)
+                            Fade out (s, before show end)
                             <input
                                 type="number"
                                 min="0"
