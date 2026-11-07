@@ -144,10 +144,9 @@ function start_rename(): void {
                     {/if}
                     <span
                         class="shrink-0 truncate text-gray-500"
-                        title={`${item.anchor} · ${item.size_start}`}
+                        title={item.anchor}
                     >
                         {item.anchor}
-                        · {item.size_start}
                     </span>
                 </li>
             {/each}
