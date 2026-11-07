@@ -1,3 +1,5 @@
+import { SUBTITLE_BURN_DEFAULTS, type SubtitlesNodeData, type SubtitleVerticalAnchor } from "./compose-types"
+
 export class SubtitleError extends Error {
     constructor(message: string) {
         super(message)
@@ -243,4 +245,85 @@ export function vtt_to_srt(vtt_content: string): string {
         )
         .join("\n\n")
     return `${body}\n`
+}
+
+export const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
+// WHY strict subtitle gate: 3-digit input falls back to defaults so validation flags it
+export const STRICT_HEX_6 = /^#[0-9a-fA-F]{6}$/
+
+export interface NormalizedSubtitleStyle {
+    font_file: File | null
+    font_size: number
+    text_color: string
+    stroke_color: string
+    outline_size: number
+    shadow_size: number
+    horizontal_margin: number
+    vertical_anchor: SubtitleVerticalAnchor
+    vertical_offset: number
+    right_to_left: boolean
+}
+
+export function clamp_number(value: number, min: number, max: number): number {
+    if (!Number.isFinite(value)) {
+        return min
+    }
+    return Math.min(max, Math.max(min, value))
+}
+
+export function normalize_subtitle_style(partial: Partial<SubtitlesNodeData>): NormalizedSubtitleStyle {
+    const font_size = partial.font_size
+    const outline_size = partial.outline_size
+    const shadow_size = partial.shadow_size
+    const horizontal_margin = partial.horizontal_margin
+    const vertical_offset = partial.vertical_offset
+    return {
+        font_file: partial.font_file ?? SUBTITLE_BURN_DEFAULTS.font_file,
+        font_size: Number.isFinite(font_size)
+            ? clamp_number(font_size as number, 1, 1000)
+            : SUBTITLE_BURN_DEFAULTS.font_size,
+        text_color:
+            typeof partial.text_color === "string" && STRICT_HEX_6.test(partial.text_color)
+                ? partial.text_color
+                : SUBTITLE_BURN_DEFAULTS.text_color,
+        stroke_color:
+            typeof partial.stroke_color === "string" && STRICT_HEX_6.test(partial.stroke_color)
+                ? partial.stroke_color
+                : SUBTITLE_BURN_DEFAULTS.stroke_color,
+        outline_size: Number.isFinite(outline_size)
+            ? clamp_number(outline_size as number, 0, 10)
+            : SUBTITLE_BURN_DEFAULTS.outline_size,
+        shadow_size: Number.isFinite(shadow_size)
+            ? clamp_number(shadow_size as number, 0, 10)
+            : SUBTITLE_BURN_DEFAULTS.shadow_size,
+        horizontal_margin: Number.isFinite(horizontal_margin)
+            ? clamp_number(horizontal_margin as number, 0, 2000)
+            : SUBTITLE_BURN_DEFAULTS.horizontal_margin,
+        vertical_anchor:
+            partial.vertical_anchor === "top" ||
+            partial.vertical_anchor === "center" ||
+            partial.vertical_anchor === "bottom"
+                ? partial.vertical_anchor
+                : SUBTITLE_BURN_DEFAULTS.vertical_anchor,
+        vertical_offset: Number.isFinite(vertical_offset)
+            ? clamp_number(vertical_offset as number, 0, 2000)
+            : SUBTITLE_BURN_DEFAULTS.vertical_offset,
+        right_to_left:
+            typeof partial.right_to_left === "boolean" ? partial.right_to_left : SUBTITLE_BURN_DEFAULTS.right_to_left,
+    }
+}
+
+export function active_cues_at(cues: SubtitleCue[], t: number): SubtitleCue[] {
+    if (!Number.isFinite(t)) {
+        return []
+    }
+    return cues.filter((cue) => cue.start <= t && t < cue.end)
+}
+
+export function resolve_burn_font_px(font_size: number, height: number): number {
+    const size = Number.isFinite(font_size) && font_size > 0 ? font_size : SUBTITLE_BURN_DEFAULTS.font_size
+    if (!Number.isFinite(height) || height <= 0) {
+        return Math.round(size)
+    }
+    return Math.max(1, Math.round((size * height) / 1080))
 }
