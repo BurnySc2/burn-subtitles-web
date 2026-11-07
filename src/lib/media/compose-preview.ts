@@ -1,3 +1,4 @@
+import { font_cache_key } from "./compose-font-library"
 import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
@@ -69,6 +70,23 @@ function serialize_node(node: ComposeNode): string {
     return [node.id, node.type, JSON.stringify(node.data)].join(":")
 }
 
+export function collect_referenced_fonts(relevant: Set<string>, by_id: Map<string, ComposeNode>): string[] {
+    const collected = new Set<string>()
+    for (const id of relevant) {
+        const node = by_id.get(id)
+        if (node?.type !== "text") {
+            continue
+        }
+        for (const item of node.data.items ?? []) {
+            const family = item.font.trim().toLowerCase()
+            if (family) {
+                collected.add(family)
+            }
+        }
+    }
+    return [...collected].sort()
+}
+
 function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: ComposeEdge[]): string {
     const by_id = new Map(nodes.map((node) => [node.id, node]))
     const relevant = new Set([...upstream_of(target_id, nodes, edges), target_id])
@@ -88,7 +106,12 @@ function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: Co
               output.data.audio_quality,
           ].join(":")
         : "no-output"
-    return JSON.stringify([serial_nodes, serial_edges, output_settings])
+    return JSON.stringify([
+        serial_nodes,
+        serial_edges,
+        output_settings,
+        font_cache_key(collect_referenced_fonts(relevant, by_id)),
+    ])
 }
 
 export function clear_node_preview_cache(): void {

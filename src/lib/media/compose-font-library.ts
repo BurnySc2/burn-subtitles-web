@@ -4,7 +4,7 @@
  * or get_font_suggestions() (both return fresh arrays); never hold a live ref
  * to font_registry.entries across derivations, or memoized refs go stale.
  */
-import { writable } from "svelte/store"
+import { get, writable } from "svelte/store"
 import { available_fonts } from "../utils/fonts"
 
 export type FontLibrarySource = "bundled" | "custom-file" | "custom-url" | "system"
@@ -171,4 +171,16 @@ export function is_font_available(family: string): boolean {
 
 export function build_datalist_id(node_id: string, index: number): string {
     return `font-list-${node_id}-${index}`
+}
+
+/**
+ * Pure prerender-safe snapshot key for font-dependent caches: combines the
+ * current registry version with sorted normalized referenced families.
+ * Reads the version via `get()` without subscribing, so module import and
+ * SSR/prerender evaluation stay side-effect free.
+ */
+export function font_cache_key(referenced: string[] = []): string {
+    const version = get(font_registry_version)
+    const normalized = [...new Set(referenced.map((family) => family.trim().toLowerCase()).filter(Boolean))].sort()
+    return `${version}:${normalized.join(",")}`
 }

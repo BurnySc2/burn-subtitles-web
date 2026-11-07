@@ -14,9 +14,10 @@ import {
     remove_font_url_entry,
     save_font_url_entry,
     set_font_url_auto_restore,
+    type FontUrlEntry,
 } from "$lib/media/compose-font-url-index"
 import { load_custom_font, load_custom_font_from_url, revoke_custom_font } from "$lib/utils/custom-font"
-import { restore_saved_url_fonts } from "../../../media/compose-font-restore"
+import { restore_saved_url_fonts, restore_single_url_font } from "../../../media/compose-font-restore"
 
 let registry_entries = $derived.by(() => {
     $font_registry_version
@@ -31,6 +32,8 @@ let restoring = $state(false)
 let restore_summary = $state<string | null>(null)
 let auto_restore_enabled = $state(true)
 let saved_url_count = $state(0)
+let saved_url_entries = $state<FontUrlEntry[]>([])
+let url_status = $state<Record<string, { status: "loaded" | "failed" | "retrying"; code: string | null; message: string | null }>>({})
 
 let status_text = $derived.by(() => {
     if (restoring && registry_entries.length === 0) {
@@ -59,13 +62,22 @@ onMount(() => {
     }
     auto_restore_enabled = get_font_url_auto_restore()
     const index = load_font_url_index()
+    saved_url_entries = index.entries
     saved_url_count = index.entries.length
     if (index.entries.length === 0 || !index.auto_restore_enabled) {
         return
     }
     restoring = true
     void restore_saved_url_fonts(index.entries)
-        .then(({ restored, skipped, failed }) => {
+        .then(({ restored, skipped, failed, per_entry }) => {
+            for (const item of per_entry) {
+                const key = item.family.toLowerCase()
+                if (item.status === "failed") {
+                    url_status[key] = { status: "failed", code: item.code, message: item.message }
+                } else {
+                    url_status[key] = { status: "loaded", code: null, message: null }
+                }
+            }
             if (restored === 0 && failed === 0) {
                 return
             }
@@ -132,7 +144,9 @@ async function on_fetch_url(): Promise<void> {
             origin_url: url,
         })
         save_font_url_entry({ family: loaded.font_family, origin_url: url })
-        saved_url_count = load_font_url_index().entries.length
+        saved_url_entries = load_font_url_index().entries
+        saved_url_count = saved_url_entries.length
+        url_status[loaded.font_family.toLowerCase()] = { status: "loaded", code: null, message: null }
         url_text = ""
         restore_summary = null
     } catch (caught) {
@@ -145,8 +159,49 @@ async function on_fetch_url(): Promise<void> {
 function on_remove(family: string): void {
     remove_font_entry(family)
     remove_font_url_entry(family)
-    saved_url_count = load_font_url_index().entries.length
+    saved_url_entries = load_font_url_index().entries
+    saved_url_count = saved_url_entries.length
     restore_summary = null
+}
+
+async function retry_saved_url(entry: FontUrlEntry): Promise<void> {
+    const key = entry.family.toLowerCase()
+    if (url_status[key]?.status === "retrying") {
+        return
+    }
+    url_status[key] = { status: "retrying", code: null, message: null }
+    error = null
+    try {
+        const result = await restore_single_url_font(entry)
+        if (!result) {
+            const next = { ...url_status }
+            delete next[key]
+            url_status = next
+            return
+        }
+        if (result.status === "failed") {
+            url_status[key] = { status: "failed", code: result.code, message: result.message }
+        } else {
+            url_status[key] = { status: "loaded", code: null, message: null }
+        }
+        restore_summary = null
+    } catch (caught) {
+        error = caught instanceof Error ? caught.message : "Failed to fetch font URL."
+        const next = { ...url_status }
+        delete next[key]
+        url_status = next
+    }
+}
+
+async function copy_url_text(url: string): Promise<void> {
+    if (!browser) {
+        return
+    }
+    try {
+        await navigator.clipboard.writeText(url)
+    } catch {
+        return
+    }
 }
 
 function on_toggle_auto_restore(enabled: boolean): void {
@@ -156,6 +211,7 @@ function on_toggle_auto_restore(enabled: boolean): void {
 
 function on_clear_saved_urls(): void {
     clear_font_url_index()
+    saved_url_entries = []
     saved_url_count = 0
     restore_summary = null
 }
@@ -224,6 +280,68 @@ function on_clear_saved_urls(): void {
             Delete saved URLs{saved_url_count > 0 ? ` (${saved_url_count})` : ""}
         </button>
     </div>
+    {#if saved_url_entries.length > 0}
+        <div class="flex flex-col gap-1">
+            <h4 class="text-sm font-semibold">Saved font URLs ({saved_url_entries.length})</h4>
+            <ul class="flex flex-col gap-1">
+                {#each saved_url_entries as saved (saved.family)}
+                    {@const key = saved.family.toLowerCase()}
+                    {@const current = url_status[key]}
+                    {@const is_loaded = registry_entries.some((item) => item.family.toLowerCase() === key)}
+                    <li class="flex flex-col gap-1 rounded border border-gray-200 bg-white px-2 py-1">
+                        <span
+                            class="truncate text-sm"
+                            title={saved.family}
+                            style="font-family: '{saved.family}', sans-serif"
+                        >
+                            {saved.family}
+                        </span>
+                        <code class="block max-w-full overflow-x-auto rounded bg-gray-50 p-1 text-xs select-all"
+                            >{saved.origin_url}</code
+                        >
+                        <p class="text-xs text-gray-500">
+                            {#if current?.status === "retrying"}
+                                Retrying…
+                            {:else if current?.status === "failed"}
+                                Failed {current.code ?? "UNKNOWN"} — {current.message ?? "fetch failed"}
+                            {:else if current?.status === "loaded" || is_loaded}
+                                Loaded
+                            {:else}
+                                Saved
+                            {/if}
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onclick={() => void retry_saved_url(saved)}
+                                disabled={current?.status === "retrying"}
+                                aria-label={`Retry font ${saved.family}`}
+                                class="btn btn-secondary btn-sm shrink-0"
+                            >
+                                Retry
+                            </button>
+                            <button
+                                type="button"
+                                onclick={() => void copy_url_text(saved.origin_url)}
+                                aria-label={`Copy URL for ${saved.family}`}
+                                class="btn btn-secondary btn-sm shrink-0"
+                            >
+                                Copy URL
+                            </button>
+                            <button
+                                type="button"
+                                onclick={() => on_remove(saved.family)}
+                                aria-label={`Remove saved URL ${saved.family}`}
+                                class="shrink-0 text-sm text-red-700 underline"
+                            >
+                                Remove saved URL
+                            </button>
+                        </div>
+                    </li>
+                {/each}
+            </ul>
+        </div>
+    {/if}
     {#if registry_entries.length > 0}
         <ul class="flex flex-col gap-1">
             {#each registry_entries as entry (entry.family)}
