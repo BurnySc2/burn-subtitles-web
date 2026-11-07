@@ -199,28 +199,34 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
 </script>
 
 <div class="mx-auto max-w-5xl p-6">
-    <h1 class="mt-2 text-2xl font-bold">Split Subtitles</h1>
-    <p class="mt-1 text-sm text-gray-600">Pick a split per cue, then accept and download.</p>
-    <ol class="mt-3 flex items-center gap-2 text-sm">
-        <li
-            aria-current={step === 1 ? "step" : undefined}
-            class={step === 1 ? "font-semibold" : "text-gray-600"}
-        >
-            1 Select
-        </li>
-        <li
-            aria-hidden="true"
-            class="text-gray-400"
-        >
-            →
-        </li>
-        <li
-            aria-current={step === 2 ? "step" : undefined}
-            class={step === 2 ? "font-semibold" : "text-gray-600"}
-        >
-            2 Review
-        </li>
-    </ol>
+    <div class="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h1 class="text-2xl font-bold">
+            Split Subtitles
+            <span class="ml-2 align-middle text-sm font-normal text-gray-600"
+                >Pick a split per cue, then download.</span
+            >
+        </h1>
+        <ol class="ml-auto flex items-center gap-2 text-xs">
+            <li
+                aria-current={step === 1 ? "step" : undefined}
+                class={step === 1 ? "font-semibold" : "text-gray-600"}
+            >
+                1 Select
+            </li>
+            <li
+                aria-hidden="true"
+                class="text-gray-400"
+            >
+                →
+            </li>
+            <li
+                aria-current={step === 2 ? "step" : undefined}
+                class={step === 2 ? "font-semibold" : "text-gray-600"}
+            >
+                2 Review
+            </li>
+        </ol>
+    </div>
     <div class="mt-3 flex flex-wrap items-center gap-2">
         <div class="flex items-center gap-2">
             <label
@@ -239,6 +245,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 bind:value={gap_ms}
                 inputmode="numeric"
                 aria-describedby="gap-example"
+                title="Blank between halves so they don't overlap"
                 class="w-20 max-w-[5rem] rounded border p-1 text-right"
             >
         </div>
