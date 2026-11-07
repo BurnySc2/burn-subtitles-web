@@ -8,7 +8,7 @@ import {
     SubtitleError,
     validate_srt,
 } from "$lib/media/compose-subtitles"
-import { preview_parts, SAMPLE_LOCALES, type TabKind } from "$lib/media/split-prototype"
+import { preview_parts, SAMPLE_LOCALES, type TabKind, tokenize_for_locale } from "$lib/media/split-prototype"
 import {
     BALANCE_PRESETS,
     type BalancePreset,
@@ -105,7 +105,8 @@ function preview_for(cue: SubtitleCue): string[] {
     if (!included.has(cue.index)) {
         return [cue.text]
     }
-    return preview_parts(cue, tab_of(cue.index), custom_parts[cue.index], page_locale)
+    const current = tab_of(cue.index)
+    return preview_parts(cue, current, current === "custom" ? custom_parts[cue.index] : undefined, page_locale)
 }
 let gap_safe = $derived(clamp_gap(gap_ms))
 let gap_example = $derived.by(() => {
@@ -149,14 +150,32 @@ function derive_custom(cue: SubtitleCue) {
         delete custom_parts[cue.index]
         return
     }
-    const rest = cue.text.trim().slice(first.length).trim()
-    if (!rest || normalize(`${first} ${rest}`) !== normalize(cue.text)) {
+    const words = tokenize_for_locale(first, page_locale)
+    const lower_text = cue.text.toLowerCase()
+    let cursor = 0
+    for (const word of words) {
+        const found = lower_text.indexOf(word.toLowerCase(), cursor)
+        if (found === -1) {
+            custom_error[cue.index] = "Keep typing — first part must appear in the original text."
+            delete custom_parts[cue.index]
+            return
+        }
+        cursor = found + word.length
+    }
+    const head = cue.text.slice(0, cursor).trim()
+    const tail = cue.text.slice(cursor).trim()
+    if (
+        !head ||
+        !tail ||
+        normalize(`${head} ${tail}`) !== normalize(cue.text) ||
+        normalize(head) !== normalize(first)
+    ) {
         custom_error[cue.index] = "Keep typing — first part must appear in the original text."
         delete custom_parts[cue.index]
         return
     }
     custom_error[cue.index] = ""
-    custom_parts[cue.index] = [first, rest]
+    custom_parts[cue.index] = [head, tail]
 }
 function reset_cue(cue: SubtitleCue) {
     selected_tab[cue.index] = "recommended"
