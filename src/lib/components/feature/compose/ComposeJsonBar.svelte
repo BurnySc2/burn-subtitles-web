@@ -55,12 +55,11 @@ async function handle_import(file: File | null): Promise<void> {
 }
 </script>
 
-<div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
-    <!-- svelte-ignore a11y_no_static_element_interactions: buttons and input are the keyboard path; drop is enhancement only, so no role=button -->
-    <div
-        class="drop-zone nodrag flex flex-wrap items-center gap-2"
-        class:drag-over={is_dragging}
-        ondragover={(e) => {
+<!-- svelte-ignore a11y_no_static_element_interactions: buttons and input are the keyboard path; drop is enhancement only, so no role=button -->
+<div
+    class="drop-zone nodrag flex flex-wrap items-center gap-2"
+    class:drag-over={is_dragging}
+    ondragover={(e) => {
             if (running) {
                 return
             }
@@ -68,13 +67,13 @@ async function handle_import(file: File | null): Promise<void> {
             e.stopPropagation()
             is_dragging = true
         }}
-        ondragleave={(e) => {
+    ondragleave={(e) => {
             if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
                 return
             }
             is_dragging = false
         }}
-        ondrop={(e) => {
+    ondrop={(e) => {
             e.preventDefault()
             e.stopPropagation()
             is_dragging = false
@@ -83,37 +82,37 @@ async function handle_import(file: File | null): Promise<void> {
             }
             void handle_import(first_dropped_file(e))
         }}
+>
+    <button
+        type="button"
+        onclick={handle_download}
+        disabled={running || compose_state.nodes.length === 0}
+        class="btn btn-secondary btn-sm"
     >
-        <button
-            type="button"
-            onclick={handle_download}
-            disabled={running || compose_state.nodes.length === 0}
-            class="btn btn-secondary btn-sm"
-        >
-            Download JSON
-        </button>
-        <button
-            type="button"
-            onclick={() => file_input?.click()}
-            disabled={running}
-            class="btn btn-secondary btn-sm"
-        >
-            Upload JSON
-        </button>
-        <input
-            bind:this={file_input}
-            type="file"
-            accept="application/json,.json"
-            onchange={(e) => void handle_import(e.currentTarget.files?.[0] ?? null)}
-            class="hidden"
-        >
-    </div>
-    {#if import_error}
-        <p
-            aria-live="polite"
-            class="rounded bg-red-100 p-2 text-sm text-red-800"
-        >
-            {import_error}
-        </p>
-    {/if}
+        Download JSON
+    </button>
+    <button
+        type="button"
+        onclick={() => file_input?.click()}
+        disabled={running}
+        class="btn btn-secondary btn-sm"
+    >
+        Upload JSON
+    </button>
+    <input
+        bind:this={file_input}
+        type="file"
+        accept="application/json,.json"
+        onchange={(e) => void handle_import(e.currentTarget.files?.[0] ?? null)}
+        class="hidden"
+    >
+    <span class="text-xs text-gray-600">or drop .json here</span>
 </div>
+{#if import_error}
+    <p
+        aria-live="polite"
+        class="rounded bg-red-100 p-2 text-sm text-red-800"
+    >
+        {import_error}
+    </p>
+{/if}
