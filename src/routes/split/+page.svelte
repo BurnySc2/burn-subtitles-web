@@ -204,7 +204,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
     <ol class="mt-3 flex items-center gap-2 text-sm">
         <li
             aria-current={step === 1 ? "step" : undefined}
-            class={step === 1 ? "font-semibold" : "text-gray-500"}
+            class={step === 1 ? "font-semibold" : "text-gray-600"}
         >
             1 Select
         </li>
@@ -216,7 +216,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </li>
         <li
             aria-current={step === 2 ? "step" : undefined}
-            class={step === 2 ? "font-semibold" : "text-gray-500"}
+            class={step === 2 ? "font-semibold" : "text-gray-600"}
         >
             2 Review
         </li>
@@ -243,13 +243,13 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </div>
         <p
             id="gap-hint"
-            class="w-full text-xs text-gray-500"
+            class="w-full text-xs text-gray-600"
         >
             Brief blank between the two halves so they don't overlap.
         </p>
         <p
             id="gap-example"
-            class="w-full text-xs text-gray-500"
+            class="w-full text-xs text-gray-600"
         >
             {gap_example}
         </p>
@@ -271,7 +271,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </label>
         <p
             id="balance-hint"
-            class="w-full text-xs text-gray-500"
+            class="w-full text-xs text-gray-600"
         >
             Equal = both halves same time. Proportional = time matches text length (default). Boost = longer half gets
             extra time.
@@ -294,7 +294,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         </select>
         <p
             id="locale-hint"
-            class="w-full text-xs text-gray-500"
+            class="w-full text-xs text-gray-600"
         >
             Tokenizer language for all cues.
         </p>
@@ -311,9 +311,9 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             >
         </label>
         {#if cues.length === 0}
-            <span class="text-xs text-gray-500">No file loaded</span>
+            <span class="text-xs text-gray-600">No file loaded</span>
         {:else}
-            <span class="text-xs text-gray-500">{file_name} · {cues.length} cues</span>
+            <span class="text-xs text-gray-700">{file_name} · {cues.length} cues</span>
         {/if}
     </div>
     {#if upload_error}
@@ -354,7 +354,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 >
                     Clear
                 </button>
-                <span class="ml-auto text-xs text-gray-500">{progress}</span>
+                <span class="ml-auto text-xs">{progress}</span>
             </div>
             <ul class="mt-3 divide-y rounded border">
                 {#each cues as cue (cue.index)}
@@ -368,7 +368,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                                 onchange={() => toggle_cue(cue.index)}
                             >
                             <span class="w-10 shrink-0 text-sm font-semibold">#{cue.index}</span>
-                            <span class="w-44 shrink-0 text-xs text-gray-500">
+                            <span class="w-44 shrink-0 text-xs">
                                 {format_srt_timestamp(cue.start)}
                                 --> {format_srt_timestamp(cue.end)}
                             </span>
@@ -388,7 +388,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                                     </span>
                                 {/if}
                             </span>
-                            <span class="w-16 shrink-0 text-xs text-gray-500">
+                            <span class="w-16 shrink-0 text-xs">
                                 {Array.from(cue.text).length}
                                 chars
                             </span>
@@ -450,7 +450,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             >
                 <div class="flex flex-wrap items-center gap-2">
                     <h2 class="text-base font-semibold">Cue #{cue.index}</h2>
-                    <span class="text-xs text-gray-500">
+                    <span class="text-xs">
                         {format_srt_timestamp(cue.start)}
                         --> {format_srt_timestamp(cue.end)}
                     </span>
