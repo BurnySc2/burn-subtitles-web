@@ -1,4 +1,5 @@
-import type { AudioBufferSink } from "mediabunny"
+import type { AudioBufferSink, AudioBufferSource, BufferTarget, Output, VideoSampleSource } from "mediabunny"
+import { ClipError } from "./mediabunny-clip"
 import { TimecodeError } from "./timecode"
 
 export type TransitionResSource = "a" | "b"
@@ -450,4 +451,138 @@ export async function decode_full_audio(sink: AudioBufferSink): Promise<AudioBuf
         offset += chunk.length
     }
     return full
+}
+
+export interface CanvasEncodeSetup {
+    mb: typeof import("mediabunny")
+    output: Output
+    target: BufferTarget
+    canvas: HTMLCanvasElement
+    ctx: CanvasRenderingContext2D
+    video_source: VideoSampleSource
+    audio_source: AudioBufferSource | null
+    decoded: AudioBuffer | null
+}
+
+export interface CanvasEncodeProvidedAudio {
+    buffer: AudioBuffer | null
+    bitrate: number | null
+}
+
+export type CanvasEncodeAudio =
+    | { kind: "head-blob" }
+    | {
+          kind: "provided"
+          get_audio: (mb: typeof import("mediabunny")) => Promise<CanvasEncodeProvidedAudio>
+      }
+
+export interface CanvasEncodeOptions<T> {
+    width: number
+    height: number
+    fps: number
+    quality: TransitionQuality
+    crf_raw: number | string | null | undefined
+    audio_probe: TransitionAudioBitrateProbe | null
+    audio_quality: TransitionAudioQuality
+    needs_audio: boolean
+    probe_has_audio: boolean
+    head_blob_for_audio: File | null
+    audio?: CanvasEncodeAudio
+    signal?: AbortSignal
+    body: (setup: CanvasEncodeSetup, mb: typeof import("mediabunny")) => Promise<T>
+}
+
+export async function with_canvas_encode<T>(options: CanvasEncodeOptions<T>): Promise<T> {
+    const { width, height, fps, quality, signal } = options
+    if (signal?.aborted) {
+        throw new ClipError("CANCELLED", "Cancelled.")
+    }
+    const mb = await import("mediabunny")
+    let output: Output | null = null
+    const on_abort = () => {
+        void output?.cancel()
+    }
+    signal?.addEventListener("abort", on_abort, { once: true })
+    try {
+        const is_provided_audio = options.audio?.kind === "provided"
+        if (!is_provided_audio && options.needs_audio) {
+            await ensure_aac_encoder(mb)
+        }
+        const target = new mb.BufferTarget()
+        output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
+        const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf_raw)
+        output.addVideoTrack(video_source)
+        let audio_source: AudioBufferSource | null = null
+        let decoded: AudioBuffer | null = null
+        if (is_provided_audio && options.audio?.kind === "provided") {
+            const provided = await options.audio.get_audio(mb)
+            decoded = provided.buffer
+            if (decoded) {
+                await ensure_aac_encoder(mb)
+                audio_source = new mb.AudioBufferSource({
+                    codec: "aac",
+                    bitrate:
+                        provided.bitrate ?? resolve_audio_bitrate(options.audio_probe, null, options.audio_quality),
+                })
+                output.addAudioTrack(audio_source)
+            }
+        } else if (options.needs_audio && options.probe_has_audio && options.head_blob_for_audio) {
+            const audio_input = new mb.Input({
+                formats: mb.ALL_FORMATS,
+                source: new mb.BlobSource(options.head_blob_for_audio),
+            })
+            try {
+                const audio_tracks = await audio_input.getAudioTracks()
+                const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null
+                decoded = sink ? await decode_full_audio(sink) : null
+            } finally {
+                audio_input.dispose()
+            }
+            if (decoded) {
+                audio_source = new mb.AudioBufferSource({
+                    codec: "aac",
+                    bitrate: resolve_audio_bitrate(options.audio_probe, null, options.audio_quality),
+                })
+                output.addAudioTrack(audio_source)
+            }
+        }
+        await output.start()
+        if (signal?.aborted) {
+            await output.cancel()
+            throw new ClipError("CANCELLED", "Cancelled.")
+        }
+        if (audio_source && decoded) {
+            await audio_source.add(decoded)
+        }
+        const ctx = encode_ctx
+        if (!ctx) {
+            throw new ClipError("FAILED", "Could not acquire a 2D canvas context.")
+        }
+        const setup: CanvasEncodeSetup = { mb, output, target, canvas, ctx, video_source, audio_source, decoded }
+        let result: T
+        try {
+            result = await options.body(setup, mb)
+        } catch (error) {
+            if (output) {
+                await output.cancel().catch(() => {})
+            }
+            throw error
+        }
+        try {
+            await output.finalize()
+        } catch (error) {
+            if (
+                output.state === "canceled" ||
+                error instanceof mb.ConversionCanceledError ||
+                (error instanceof Error && error.name === "ConversionCanceledError")
+            ) {
+                throw new ClipError("CANCELLED", "Cancelled.")
+            }
+            throw error
+        }
+        return result
+    } finally {
+        signal?.removeEventListener("abort", on_abort)
+    }
 }

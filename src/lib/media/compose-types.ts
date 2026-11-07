@@ -15,6 +15,7 @@ export type ComposeNodeKind =
     | "overlay"
     | "color"
     | "rescale"
+    | "text"
     | "output"
 
 export interface SourceNodeData {
@@ -124,6 +125,64 @@ export interface RescaleNodeData {
     label?: string | null
 }
 
+export interface TextItem {
+    text: string
+    font: string
+    size_start: number
+    size_end: number
+    color: string
+    opacity: number
+    anchor: OverlayPosition
+    offset_x: number
+    offset_y: number
+    align: "left" | "center" | "right"
+    max_width: number | null
+    show_start: number
+    show_end: number | null
+    fade_in: number
+    fade_out: number
+}
+
+export interface TextNodeData {
+    items: TextItem[]
+    label?: string | null
+}
+
+export const MAX_TEXT_ITEMS = 32 as const
+
+export const TEXT_ANCHORS: readonly OverlayPosition[] = [
+    "top-left",
+    "top-center",
+    "top-right",
+    "center-left",
+    "center",
+    "center-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
+]
+
+export function create_default_text_item(): TextItem {
+    return {
+        text: "Hello",
+        font: "sans-serif",
+        size_start: 48,
+        size_end: 48,
+        color: "#ffffff",
+        opacity: 1,
+        anchor: "bottom-center",
+        offset_x: 0,
+        // offset is inset from edge, 0 = flush (may clip half glyph with textBaseline middle).
+        offset_y: 0,
+        align: "center",
+        max_width: null,
+        show_start: 0,
+        show_end: null,
+        fade_in: 0,
+        fade_out: 0,
+    }
+}
+
 export type ComposeNodeData =
     | SourceNodeData
     | TrimNodeData
@@ -133,6 +192,7 @@ export type ComposeNodeData =
     | OverlayNodeData
     | ColorNodeData
     | RescaleNodeData
+    | TextNodeData
     | OutputNodeData
 
 export interface ComposePosition {
@@ -149,6 +209,7 @@ export type ComposeNode =
     | { id: string; type: "overlay"; position: ComposePosition; data: OverlayNodeData }
     | { id: string; type: "color"; position: ComposePosition; data: ColorNodeData }
     | { id: string; type: "rescale"; position: ComposePosition; data: RescaleNodeData }
+    | { id: string; type: "text"; position: ComposePosition; data: TextNodeData }
     | { id: string; type: "output"; position: ComposePosition; data: OutputNodeData }
 
 export interface ComposeEdge {

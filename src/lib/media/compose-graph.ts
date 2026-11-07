@@ -43,7 +43,13 @@ export function is_compose_root(node: ComposeNode): boolean {
 }
 
 export function is_single_upstream_passthrough(node: ComposeNode): boolean {
-    return node.type === "trim" || node.type === "rescale" || node.type === "subtitles" || node.type === "overlay"
+    return (
+        node.type === "trim" ||
+        node.type === "rescale" ||
+        node.type === "subtitles" ||
+        node.type === "overlay" ||
+        node.type === "text"
+    )
 }
 
 function merge_handle_index(handle: string | null): number {

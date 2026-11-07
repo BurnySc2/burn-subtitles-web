@@ -8,6 +8,7 @@ import type {
     OverlayNodeData,
     RescaleNodeData,
     SubtitlesNodeData,
+    TextItem,
     TransitionNodeData,
     TrimNodeData,
 } from "$lib/media/compose-types"
@@ -18,6 +19,13 @@ import {
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
 } from "$lib/media/transition-utils"
+import {
+    build_datalist_id,
+    font_registry_version,
+    get_font_suggestions,
+    is_font_available,
+} from "../../../media/compose-font-library"
+import { create_default_text_item, MAX_TEXT_ITEMS } from "../../../media/compose-types"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
@@ -46,6 +54,14 @@ let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges)
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
+let font_options = $derived.by(() => {
+    $font_registry_version
+    return get_font_suggestions()
+})
+
+function is_font_available_reactive(family: string, _version: number): boolean {
+    return is_font_available(family)
+}
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
     on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
@@ -182,6 +198,61 @@ function patch_rescale(patch: Partial<RescaleNodeData>): void {
     if (node && node.type === "rescale") {
         Object.assign(node.data, patch)
     }
+}
+
+function patch_text_item(index: number, patch: Partial<TextItem>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "text") {
+        const item = node.data.items[index]
+        if (item) {
+            Object.assign(item, patch)
+        }
+    }
+}
+
+function add_text_item(): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (!node || node.type !== "text" || node.data.items.length >= MAX_TEXT_ITEMS) {
+        return
+    }
+    node.data.items.push(create_default_text_item())
+}
+
+function remove_text_item(index: number): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "text") {
+        node.data.items.splice(index, 1)
+    }
+}
+
+function move_text_item(index: number, direction: -1 | 1): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (!node || node.type !== "text") {
+        return
+    }
+    const other = index + direction
+    if (index < 0 || other < 0 || index >= node.data.items.length || other >= node.data.items.length) {
+        return
+    }
+    const current = node.data.items[index]
+    node.data.items[index] = node.data.items[other]
+    node.data.items[other] = current
+}
+
+function on_text_show_end_input(index: number, raw: string): void {
+    if (raw.trim() === "") {
+        patch_text_item(index, { show_end: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_text_item(index, { show_end: value }))
+}
+
+function on_text_max_width_input(index: number, raw: string): void {
+    if (raw.trim() === "") {
+        patch_text_item(index, { max_width: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_text_item(index, { max_width: value }))
 }
 
 function patch_label(label: string): void {
@@ -906,6 +977,267 @@ function probe_summary(node: ComposeNode): string {
                 </select>
             </label>
             <p class="text-xs text-gray-500">v1 supports contain only.</p>
+        {:else if selected.type === "text"}
+            <p class="text-sm text-gray-600">{selected.data.items.length}/ {MAX_TEXT_ITEMS} items (last item on top)</p>
+            <button
+                type="button"
+                onclick={add_text_item}
+                disabled={selected.data.items.length >= MAX_TEXT_ITEMS}
+                class="btn btn-secondary btn-sm self-start"
+            >
+                Add text item
+            </button>
+            {#each selected.data.items as item, i (item)}
+                <div class="flex flex-col gap-2 rounded border border-gray-200 bg-white p-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium">Item {i + 1}</span>
+                        <span class="flex-1"></span>
+                        <button
+                            type="button"
+                            onclick={() => move_text_item(i, -1)}
+                            disabled={i === 0}
+                            class="btn btn-secondary btn-sm"
+                            aria-label={`Move text item ${i + 1} up`}
+                        >
+                            Up
+                        </button>
+                        <button
+                            type="button"
+                            onclick={() => move_text_item(i, 1)}
+                            disabled={i === selected.data.items.length - 1}
+                            class="btn btn-secondary btn-sm"
+                            aria-label={`Move text item ${i + 1} down`}
+                        >
+                            Down
+                        </button>
+                        <button
+                            type="button"
+                            onclick={() => remove_text_item(i)}
+                            disabled={selected.data.items.length <= 1}
+                            class="btn btn-sm bg-red-600 text-white transition-colors hover:bg-red-700"
+                            aria-label={`Remove text item ${i + 1}`}
+                        >
+                            Remove
+                        </button>
+                    </div>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Text
+                        <textarea
+                            value={item.text}
+                            oninput={(e) => patch_text_item(i, { text: e.currentTarget.value })}
+                            rows="2"
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        ></textarea>
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Font family
+                        <input
+                            type="text"
+                            value={item.font}
+                            oninput={(e) => patch_text_item(i, { font: e.currentTarget.value })}
+                            placeholder="sans-serif"
+                            list={build_datalist_id(selected.id, i)}
+                            spellcheck={false}
+                            autocomplete="off"
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        >
+                        <datalist id={build_datalist_id(selected.id, i)}>
+                            {#each font_options as fam (fam)}
+                                <option value={fam}></option>
+                            {/each}
+                        </datalist>
+                        {#if item.font.trim() && !is_font_available_reactive(item.font, $font_registry_version)}
+                            <p class="text-xs font-normal text-amber-700">
+                                ⚠ “{item.font.trim()}” isn’t loaded — canvas will fall back.
+                            </p>
+                        {/if}
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Size start (px)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.size_start}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { size_start: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Size end (px)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.size_end}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { size_end: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                    </div>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Color
+                        <span class="flex items-center gap-2">
+                            <input
+                                type="color"
+                                value={item.color}
+                                oninput={(e) => patch_text_item(i, { color: e.currentTarget.value })}
+                                class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                            >
+                            <input
+                                type="text"
+                                value={item.color}
+                                oninput={(e) => patch_text_item(i, { color: e.currentTarget.value })}
+                                placeholder="#ffffff"
+                                spellcheck={false}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                            >
+                        </span>
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Opacity (0-1)
+                        <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={item.opacity}
+                            oninput={(e) =>
+                                on_number_input(e.currentTarget.value, (value) =>
+                                    patch_text_item(i, { opacity: value }))}
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        >
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Position anchor
+                        <select
+                            value={item.anchor}
+                            onchange={(e) =>
+                                patch_text_item(i, { anchor: e.currentTarget.value as TextItem["anchor"] })}
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        >
+                            <option value="top-left">top-left</option>
+                            <option value="top-center">top-center</option>
+                            <option value="top-right">top-right</option>
+                            <option value="center-left">center-left</option>
+                            <option value="center">center</option>
+                            <option value="center-right">center-right</option>
+                            <option value="bottom-left">bottom-left</option>
+                            <option value="bottom-center">bottom-center</option>
+                            <option value="bottom-right">bottom-right</option>
+                        </select>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Offset X (px, right +)
+                            <input
+                                type="number"
+                                step="1"
+                                value={item.offset_x}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { offset_x: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Offset Y (px, down +)
+                            <input
+                                type="number"
+                                step="1"
+                                value={item.offset_y}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { offset_y: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Line alignment
+                            <select
+                                value={item.align}
+                                onchange={(e) =>
+                                    patch_text_item(i, { align: e.currentTarget.value as TextItem["align"] })}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                                <option value="left">left</option>
+                                <option value="center">center</option>
+                                <option value="right">right</option>
+                            </select>
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Max width (px, empty = auto)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.max_width ?? ""}
+                                oninput={(e) => on_text_max_width_input(i, e.currentTarget.value)}
+                                placeholder="auto"
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Show start (s)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                value={item.show_start}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { show_start: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Show end (s, empty = video end)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                value={item.show_end ?? ""}
+                                oninput={(e) => on_text_show_end_input(i, e.currentTarget.value)}
+                                placeholder="end of video"
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Fade in (s, from show start)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={item.fade_in}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { fade_in: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Fade out (s, before show end)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={item.fade_out}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { fade_out: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                    </div>
+                </div>
+            {/each}
         {:else if selected.type === "output"}
             <label class="flex flex-col gap-1 text-sm font-medium">
                 File name
@@ -1016,7 +1348,7 @@ function probe_summary(node: ComposeNode): string {
         {/key}
         {#if selected_issues.length > 0}
             <ul class="flex flex-col gap-1">
-                {#each selected_issues as issue (issue.field ?? issue.message)}
+                {#each selected_issues as issue, j (j)}
                     <li class="rounded bg-red-100 p-2 text-sm text-red-800">
                         {#if issue.field}
                             {issue.field}:
