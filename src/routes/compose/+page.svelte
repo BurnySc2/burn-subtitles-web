@@ -1,5 +1,6 @@
 <script lang="ts">
-import { onDestroy } from "svelte"
+import { onDestroy, onMount } from "svelte"
+import { browser } from "$app/environment"
 import ComposeBrowserWarning from "$lib/components/feature/compose/ComposeBrowserWarning.svelte"
 import ComposeCanvas from "$lib/components/feature/compose/ComposeCanvas.svelte"
 import ComposeFontDialog from "$lib/components/feature/compose/ComposeFontDialog.svelte"
@@ -12,6 +13,8 @@ import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.s
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
 import { clear_font_registry } from "$lib/media/compose-font-library"
+import { restore_saved_url_fonts } from "$lib/media/compose-font-restore"
+import { get_font_url_auto_restore, load_font_url_index } from "$lib/media/compose-font-url-index"
 import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
 import { type ComposeNode, type ComposeNodeKind, create_default_text_item } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
@@ -240,6 +243,20 @@ let sidecar_name = $derived.by(() => {
         }
     }
     return compose_filename(stem, "vtt")
+})
+
+onMount(() => {
+    if (!browser) {
+        return
+    }
+    if (!get_font_url_auto_restore()) {
+        return
+    }
+    const entries = load_font_url_index().entries
+    if (entries.length === 0) {
+        return
+    }
+    void restore_saved_url_fonts(entries)
 })
 
 onDestroy(() => {

@@ -4,13 +4,11 @@ import { browser } from "$app/environment"
 import {
     font_registry,
     font_registry_version,
-    is_font_available,
     register_font_entry,
     remove_font_entry,
 } from "$lib/media/compose-font-library"
 import {
     clear_font_url_index,
-    type FontUrlEntry,
     get_font_url_auto_restore,
     load_font_url_index,
     remove_font_url_entry,
@@ -18,6 +16,7 @@ import {
     set_font_url_auto_restore,
 } from "$lib/media/compose-font-url-index"
 import { load_custom_font, load_custom_font_from_url, revoke_custom_font } from "$lib/utils/custom-font"
+import { restore_saved_url_fonts } from "../../../media/compose-font-restore"
 
 let registry_entries = $derived.by(() => {
     $font_registry_version
@@ -54,42 +53,6 @@ let status_text = $derived.by(() => {
     return extras.length > 0 ? `${base}. ${extras.join(". ")}` : base
 })
 
-async function restore_saved_fonts(entries: FontUrlEntry[]): Promise<void> {
-    restoring = true
-    let restored = 0
-    let skipped = 0
-    let failed = 0
-    for (const entry of entries) {
-        if (is_font_available(entry.family)) {
-            skipped += 1
-            continue
-        }
-        try {
-            const loaded = await load_custom_font_from_url(entry.origin_url)
-            register_font_entry({
-                family: loaded.font_family,
-                source: "custom-url",
-                object_url: loaded.object_url,
-                font_face: loaded.font_face ?? null,
-                loaded_at: Date.now(),
-                origin_url: entry.origin_url,
-            })
-            restored += 1
-        } catch {
-            failed += 1
-        }
-    }
-    restoring = false
-    const parts = [`Restored ${restored} of ${entries.length} saved fonts`]
-    if (skipped > 0) {
-        parts.push(`skipped ${skipped}`)
-    }
-    if (failed > 0) {
-        parts.push(`failed ${failed}`)
-    }
-    restore_summary = parts.join(", ")
-}
-
 onMount(() => {
     if (!browser) {
         return
@@ -100,7 +63,21 @@ onMount(() => {
     if (index.entries.length === 0 || !index.auto_restore_enabled) {
         return
     }
-    void restore_saved_fonts(index.entries)
+    restoring = true
+    void restore_saved_url_fonts(index.entries)
+        .then(({ restored, skipped, failed }) => {
+            const parts = [`Restored ${restored} of ${index.entries.length} saved fonts`]
+            if (skipped > 0) {
+                parts.push(`skipped ${skipped}`)
+            }
+            if (failed > 0) {
+                parts.push(`failed ${failed}`)
+            }
+            restore_summary = parts.join(", ")
+        })
+        .finally(() => {
+            restoring = false
+        })
 })
 
 async function on_pick_file(file: File | null): Promise<void> {
