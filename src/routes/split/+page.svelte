@@ -226,6 +226,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             <label
                 for="gap-ms"
                 class="text-sm"
+                title="Blank between halves so they don't overlap"
             >
                 Pause between parts (ms)
             </label>
@@ -237,16 +238,10 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 step="1"
                 bind:value={gap_ms}
                 inputmode="numeric"
-                aria-describedby="gap-hint gap-example"
+                aria-describedby="gap-example"
                 class="w-20 max-w-[5rem] rounded border p-1 text-right"
             >
         </div>
-        <p
-            id="gap-hint"
-            class="w-full text-xs text-gray-600"
-        >
-            Brief blank between the two halves so they don't overlap.
-        </p>
         <p
             id="gap-example"
             class="w-full text-xs text-gray-600"
@@ -273,8 +268,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
             id="balance-hint"
             class="w-full text-xs text-gray-600"
         >
-            Equal = both halves same time. Proportional = time matches text length (default). Boost = longer half gets
-            extra time.
+            Equal · Proportional (default) · Boost extra time.
         </p>
         <label
             for="page-locale"
@@ -285,19 +279,13 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         <select
             id="page-locale"
             bind:value={page_locale}
-            aria-describedby="locale-hint"
+            title="Tokenizer for all cues"
             class="rounded border p-1 text-sm"
         >
             {#each SAMPLE_LOCALES as locale (locale)}
                 <option value={locale}>{locale}</option>
             {/each}
         </select>
-        <p
-            id="locale-hint"
-            class="w-full text-xs text-gray-600"
-        >
-            Tokenizer language for all cues.
-        </p>
     </div>
     <hr class="my-4 border-t border-gray-200">
     <div class="mt-3 flex flex-wrap items-center gap-2">
