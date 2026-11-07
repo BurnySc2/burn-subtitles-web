@@ -16,6 +16,12 @@ const is_active = (path: string) => {
             >Subtitles Burner</a
         >
         <a
+            href={resolve("/split")}
+            class="transition-colors hover:text-gray-800"
+            class:font-bold={is_active("/split")}
+            >Split Subtitles</a
+        >
+        <a
             href={resolve("/download-srt")}
             class="transition-colors hover:text-gray-800"
             class:font-bold={is_active("/download-srt")}
