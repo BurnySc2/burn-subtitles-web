@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { SubtitleCue } from "./compose-subtitles"
-import { alternative_split, apply_split, preview_parts, recommend_split } from "./split-prototype"
+import { alternative_split, apply_split, preview_parts, recommend_split } from "./split-text"
 
 function make_cue(text: string): SubtitleCue {
     return { index: 1, start: 0, end: 1, text }

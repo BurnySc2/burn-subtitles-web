@@ -8,7 +8,7 @@ import {
     SubtitleError,
     validate_srt,
 } from "$lib/media/compose-subtitles"
-import { preview_parts, SAMPLE_LOCALES, type TabKind, tokenize_for_locale } from "$lib/media/split-prototype"
+import { preview_parts, SAMPLE_LOCALES, type TabKind, tokenize_for_locale } from "$lib/media/split-text"
 import {
     BALANCE_PRESETS,
     type BalancePreset,
