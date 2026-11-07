@@ -1,3 +1,4 @@
+import { writable } from "svelte/store"
 import { available_fonts } from "../utils/fonts"
 
 export type FontLibrarySource = "bundled" | "custom-file" | "custom-url" | "system"
@@ -12,6 +13,8 @@ export interface FontLibraryEntry {
 }
 
 export const font_registry: { entries: FontLibraryEntry[] } = { entries: [] }
+
+export const font_registry_version = writable(0)
 
 function dispose_entry_resources(entry: FontLibraryEntry): void {
     if (entry.object_url) {
@@ -35,9 +38,11 @@ export function register_font_entry(entry: FontLibraryEntry): void {
             dispose_entry_resources(previous)
         }
         font_registry.entries[index] = entry
+        font_registry_version.update((count) => count + 1)
         return
     }
     font_registry.entries.push(entry)
+    font_registry_version.update((count) => count + 1)
 }
 
 export function remove_font_entry(family: string): void {
@@ -50,6 +55,7 @@ export function remove_font_entry(family: string): void {
     if (removed) {
         dispose_entry_resources(removed)
     }
+    font_registry_version.update((count) => count + 1)
 }
 
 export function clear_font_registry(): void {
@@ -57,6 +63,7 @@ export function clear_font_registry(): void {
         dispose_entry_resources(entry)
     }
     font_registry.entries = []
+    font_registry_version.update((count) => count + 1)
 }
 
 export function list_bundled_families(): string[] {

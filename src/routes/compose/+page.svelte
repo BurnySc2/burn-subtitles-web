@@ -2,7 +2,7 @@
 import { onDestroy } from "svelte"
 import ComposeBrowserWarning from "$lib/components/feature/compose/ComposeBrowserWarning.svelte"
 import ComposeCanvas from "$lib/components/feature/compose/ComposeCanvas.svelte"
-import ComposeFontLibrary from "$lib/components/feature/compose/ComposeFontLibrary.svelte"
+import ComposeFontDialog from "$lib/components/feature/compose/ComposeFontDialog.svelte"
 import ComposeInspector from "$lib/components/feature/compose/ComposeInspector.svelte"
 import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPanel.svelte"
 import ComposeJsonBar from "$lib/components/feature/compose/ComposeJsonBar.svelte"
@@ -257,11 +257,11 @@ onDestroy(() => {
 <div class="flex w-full flex-col gap-2 p-3">
     <ComposeBrowserWarning />
     <ComposeJsonBar />
+    <ComposeFontDialog />
     <div class="flex h-[calc(100vh-320px)] w-full items-start gap-4">
         <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
         <div class="flex h-full min-w-0 flex-1 flex-col rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
         <div class="flex h-full w-80 shrink-0 flex-col gap-2 overflow-y-auto">
-            <ComposeFontLibrary />
             <ComposeInspector on_preview={handle_node_preview} />
         </div>
     </div>

@@ -1,6 +1,16 @@
 <script lang="ts">
-import { font_registry, register_font_entry, remove_font_entry } from "$lib/media/compose-font-library"
+import {
+    font_registry,
+    font_registry_version,
+    register_font_entry,
+    remove_font_entry,
+} from "$lib/media/compose-font-library"
 import { load_custom_font, load_custom_font_from_url } from "$lib/utils/custom-font"
+
+let registry_entries = $derived.by(() => {
+    $font_registry_version
+    return font_registry.entries
+})
 
 let file_input: HTMLInputElement | null = $state(null)
 let url_text = $state("")
@@ -101,17 +111,17 @@ function on_remove(family: string): void {
     >
         {#if error}
             {error}
-        {:else if font_registry.entries.length > 0}
-            {font_registry.entries.length}
-            custom font{font_registry.entries.length === 1 ? "" : "s"}
+        {:else if registry_entries.length > 0}
+            {registry_entries.length}
+            custom font{registry_entries.length === 1 ? "" : "s"}
             loaded
         {:else}
             No custom fonts — pick a file or fetch a URL
         {/if}
     </p>
-    {#if font_registry.entries.length > 0}
+    {#if registry_entries.length > 0}
         <ul class="flex flex-col gap-1">
-            {#each font_registry.entries as entry (entry.family)}
+            {#each registry_entries as entry (entry.family)}
                 <li class="flex items-center justify-between gap-2 rounded border border-gray-200 bg-white px-2 py-1">
                     <span
                         class="min-w-0 flex-1 truncate text-sm"
