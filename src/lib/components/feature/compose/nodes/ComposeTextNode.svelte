@@ -5,15 +5,10 @@ import { compose_node_title, MAX_TEXT_ITEMS, TEXT_ANCHORS, type TextNodeData } f
 let {
     id = "",
     data,
-    update_data,
 }: {
     id?: string
     data: TextNodeData
-    update_data: (patch: Partial<TextNodeData>) => void
 } = $props()
-
-let editing_label = $state(false)
-let label_draft = $state("")
 
 let title = $derived(compose_node_title("text", data.label))
 let item_count = $derived(data.items.length)
@@ -42,11 +37,6 @@ function truncate_preview(raw: string): string {
     const trimmed = raw.trim()
     return trimmed.length > 20 ? `${trimmed.slice(0, 20)}…` : trimmed
 }
-
-function start_rename(): void {
-    label_draft = data.label ?? ""
-    editing_label = true
-}
 </script>
 
 <div
@@ -66,47 +56,12 @@ function start_rename(): void {
         type="source"
         position={Position.Right}
     />
-    <div class="flex min-w-0 items-center justify-between gap-2">
-        <p
-            class="min-w-0 flex-1 truncate text-sm font-medium"
-            ondblclick={start_rename}
-            title="Double-click to rename"
-        >
-            {title}
-        </p>
-        <button
-            type="button"
-            onclick={start_rename}
-            aria-label="Rename node"
-            class="btn btn-secondary btn-sm nodrag shrink-0 px-2 py-0.5 text-xs"
-        >
-            Rename
-        </button>
-    </div>
-    {#if editing_label}
-        <input
-            type="text"
-            value={label_draft}
-            placeholder="Name (optional)"
-            aria-label="Node name (optional)"
-            oninput={(e) => {
-                label_draft = e.currentTarget.value
-            }}
-            onblur={() => {
-                update_data({ label: label_draft.trim() === "" ? null : label_draft.trim() })
-                editing_label = false
-            }}
-            onkeydown={(e) => {
-                if (e.key === "Enter") {
-                    update_data({ label: label_draft.trim() === "" ? null : label_draft.trim() })
-                    editing_label = false
-                } else if (e.key === "Escape") {
-                    editing_label = false
-                }
-            }}
-            class="nodrag mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
-        >
-    {/if}
+    <p
+        class="min-w-0 truncate text-sm font-medium"
+        {title}
+    >
+        {title}
+    </p>
     <p
         id={id ? `${id}-summary` : undefined}
         class="mt-1 text-xs text-gray-500"

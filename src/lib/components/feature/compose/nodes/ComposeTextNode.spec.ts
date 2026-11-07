@@ -3,7 +3,8 @@ import { create_default_text_item, MAX_TEXT_ITEMS, TEXT_ANCHORS, type TextItem }
 
 // Mirrors the row helpers in ComposeTextNode.svelte (truncate_preview,
 // is_dimmed, visible_items slice(0, 2), overflow_count max(0, n - 2), summary,
-// is_invalid, anchor-only row meta) and the rename trim contract (blank -> null).
+// is_invalid, anchor-only row meta). Rename removed from the card;
+// the inspector is the sole path.
 // NOTE: the brief suggested ../../../media/compose-types, but from nodes/ that
 // resolves to components/media (missing); $lib alias follows the
 // ComposeOutputNode.spec.ts precedent (correct relative would be
@@ -30,10 +31,7 @@ function overflow_count(items: TextItem[]): number {
 }
 
 function summary(items: TextItem[]): string {
-    if (items.length === 0) {
-        return `0 / ${MAX_TEXT_ITEMS}`
-    }
-    return `${items.length} / ${MAX_TEXT_ITEMS} · ${truncate_preview(items[0]?.text ?? "")}`
+    return `${items.length} / ${MAX_TEXT_ITEMS}`
 }
 
 function is_invalid(items: TextItem[]): boolean {
@@ -63,10 +61,6 @@ function row_meta(item: TextItem): string {
     return item.anchor
 }
 
-function normalize_label(value: string): string | null {
-    return value.trim() === "" ? null : value.trim()
-}
-
 function items_of(count: number): TextItem[] {
     return Array.from({ length: count }, () => text_item())
 }
@@ -85,7 +79,8 @@ describe("ComposeTextNode rows", () => {
             expect(overflow_count(items)).toBe(want_overflow)
         }
         expect(summary([])).toBe(`0 / ${MAX_TEXT_ITEMS}`)
-        expect(summary(items_of(1))).toBe(`1 / ${MAX_TEXT_ITEMS} · Hello`)
+        expect(summary(items_of(1))).toBe(`1 / ${MAX_TEXT_ITEMS}`)
+        expect(summary(items_of(1))).not.toContain("·")
     })
 
     it("flags empty text and bad hex colors as invalid", () => {
@@ -99,13 +94,11 @@ describe("ComposeTextNode rows", () => {
         expect(is_invalid([text_item({ color: "#12ab34" })])).toBe(false)
     })
 
-    it("keeps row meta anchor-only, dims below full opacity, and trims rename", () => {
+    it("keeps row meta anchor-only and dims below full opacity", () => {
         const item = text_item()
         expect(row_meta(item)).toBe(item.anchor)
         expect(row_meta(item)).not.toContain("·")
         expect(is_dimmed(1)).toBe(false)
         expect(is_dimmed(0.5)).toBe(true)
-        expect(normalize_label("")).toBeNull()
-        expect(normalize_label("  x  ")).toBe("x")
     })
 })

@@ -66,9 +66,12 @@ onMount(() => {
     restoring = true
     void restore_saved_url_fonts(index.entries)
         .then(({ restored, skipped, failed }) => {
+            if (restored === 0 && failed === 0) {
+                return
+            }
             const parts = [`Restored ${restored} of ${index.entries.length} saved fonts`]
             if (skipped > 0) {
-                parts.push(`skipped ${skipped}`)
+                parts.push(`already loaded ${skipped}`)
             }
             if (failed > 0) {
                 parts.push(`failed ${failed}`)
@@ -103,6 +106,7 @@ async function on_pick_file(file: File | null): Promise<void> {
         if (file_input) {
             file_input.value = ""
         }
+        restore_summary = null
     } catch (caught) {
         error = caught instanceof Error ? caught.message : "Failed to load font file."
     } finally {
@@ -130,6 +134,7 @@ async function on_fetch_url(): Promise<void> {
         save_font_url_entry({ family: loaded.font_family, origin_url: url })
         saved_url_count = load_font_url_index().entries.length
         url_text = ""
+        restore_summary = null
     } catch (caught) {
         error = caught instanceof Error ? caught.message : "Failed to fetch font URL."
     } finally {
@@ -141,6 +146,7 @@ function on_remove(family: string): void {
     remove_font_entry(family)
     remove_font_url_entry(family)
     saved_url_count = load_font_url_index().entries.length
+    restore_summary = null
 }
 
 function on_toggle_auto_restore(enabled: boolean): void {
@@ -151,6 +157,7 @@ function on_toggle_auto_restore(enabled: boolean): void {
 function on_clear_saved_urls(): void {
     clear_font_url_index()
     saved_url_count = 0
+    restore_summary = null
 }
 </script>
 
