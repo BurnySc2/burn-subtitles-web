@@ -75,7 +75,7 @@ function subtitles(id: string): ComposeNode {
         id,
         type: "subtitles",
         position: { x: 0, y: 0 },
-        data: { file: new File([VALID_SRT], "test.srt"), content: null, mode: "burn" },
+        data: { file: new File([VALID_SRT], "test.srt"), mode: "burn" },
     }
 }
 

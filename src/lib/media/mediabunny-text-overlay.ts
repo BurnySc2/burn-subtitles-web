@@ -73,20 +73,60 @@ export function measure_text_width(text: string, font: string): number | null {
     return measured
 }
 
+export function wrap_text_lines(text: string, max_w_px: number | null, font: string): string[] {
+    if (max_w_px === null || !Number.isFinite(max_w_px) || max_w_px <= 0) {
+        return [text]
+    }
+    const lines: string[] = []
+    for (const paragraph of text.split("\n")) {
+        const words = paragraph.split(/\s+/).filter((word) => word !== "")
+        if (words.length === 0) {
+            lines.push("")
+            continue
+        }
+        let current = words[0]
+        for (let i = 1; i < words.length; i += 1) {
+            const candidate = `${current} ${words[i]}`
+            const measured = measure_text_width(candidate, font)
+            if (measured === null) {
+                return [text]
+            }
+            if (measured <= max_w_px) {
+                current = candidate
+            } else {
+                lines.push(current)
+                current = words[i]
+            }
+        }
+        lines.push(current)
+    }
+    return lines.length > 0 ? lines : [text]
+}
+
 export function rasterize_animated_text(item: TextItem, cached_size: number, scale: number): AnimatedTextBitmap | null {
     if (typeof document === "undefined") {
         return null
     }
     const font_str = `${cached_size}px ${item.font}`
-    const measured = measure_text_width(item.text, font_str)
-    if (measured === null) {
-        return null
-    }
     const max_w = item.max_width !== null ? item.max_width * scale : null
-    const text_w = max_w !== null ? Math.min(measured, max_w) : measured
+    const lines = wrap_text_lines(item.text, max_w, font_str)
+    let text_w = 0
+    for (const line of lines) {
+        if (line === "") {
+            continue
+        }
+        const measured = measure_text_width(line, font_str)
+        if (measured === null) {
+            return null
+        }
+        if (measured > text_w) {
+            text_w = measured
+        }
+    }
     const pad = Math.ceil(cached_size * 0.25) + 2
     const bitmap_w = Math.max(1, Math.ceil(text_w + pad * 2))
-    const bitmap_h = Math.max(1, Math.ceil(cached_size * 1.6))
+    const line_h = cached_size * 1.2
+    const bitmap_h = Math.max(1, Math.ceil(lines.length * line_h))
     const bitmap = document.createElement("canvas")
     bitmap.width = bitmap_w
     bitmap.height = bitmap_h
@@ -99,10 +139,9 @@ export function rasterize_animated_text(item: TextItem, cached_size: number, sca
     off_ctx.textBaseline = "middle"
     off_ctx.fillStyle = item.color
     const draw_x = item.align === "left" ? pad : item.align === "right" ? bitmap_w - pad : bitmap_w / 2
-    if (max_w !== null) {
-        off_ctx.fillText(item.text, draw_x, bitmap_h / 2, max_w)
-    } else {
-        off_ctx.fillText(item.text, draw_x, bitmap_h / 2)
+    const start_y = bitmap_h / 2 - ((lines.length - 1) * line_h) / 2
+    for (let line_index = 0; line_index < lines.length; line_index += 1) {
+        off_ctx.fillText(lines[line_index], draw_x, start_y + line_index * line_h)
     }
     return { canvas: bitmap, dx: -draw_x, dy: -bitmap_h / 2, cached_size }
 }
@@ -374,14 +413,17 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
                             }
                         }
                         ctx.globalAlpha = alpha
-                        ctx.font = `${size}px ${item.font}`
+                        const font_str = `${size}px ${item.font}`
+                        ctx.font = font_str
                         ctx.textAlign = item.align
                         ctx.textBaseline = "middle"
                         ctx.fillStyle = item.color
-                        if (item.max_width !== null) {
-                            ctx.fillText(item.text, point.x, point.y, item.max_width * scale)
-                        } else {
-                            ctx.fillText(item.text, point.x, point.y)
+                        const max_w = item.max_width !== null ? item.max_width * scale : null
+                        const lines = wrap_text_lines(item.text, max_w, font_str)
+                        const line_h = size * 1.2
+                        const start_y = point.y - ((lines.length - 1) * line_h) / 2
+                        for (let line_index = 0; line_index < lines.length; line_index += 1) {
+                            ctx.fillText(lines[line_index], point.x, start_y + line_index * line_h)
                         }
                     }
                     ctx.globalAlpha = 1

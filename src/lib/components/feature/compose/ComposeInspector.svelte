@@ -1,5 +1,6 @@
 <script lang="ts">
 import { compose_state, remove_compose_nodes, set_subtitles_font_file } from "$lib/media/compose-state.svelte"
+import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import type {
     ColorNodeData,
     ComposeNode,
@@ -62,6 +63,18 @@ let font_options = $derived.by(() => {
 function is_font_available_reactive(family: string, _version: number): boolean {
     return is_font_available(family)
 }
+
+function strict_hex_or(raw: string | undefined, fallback: string): string {
+    return typeof raw === "string" && STRICT_HEX_6.test(raw) ? raw : fallback
+}
+
+let subtitle_font = $derived.by(() => {
+    if (selected?.type !== "subtitles") {
+        return ""
+    }
+    const font = (selected.data as { font?: unknown }).font
+    return typeof font === "string" ? font : ""
+})
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
     on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
@@ -640,6 +653,33 @@ function probe_summary(node: ComposeNode): string {
                 {/if}
             </div>
             <label class="flex flex-col gap-1 text-sm font-medium">
+                Font family (optional)
+                <input
+                    type="text"
+                    value={subtitle_font}
+                    oninput={(e) =>
+                        patch_subtitles({ font: e.currentTarget.value } as Partial<SubtitlesNodeData>)}
+                    placeholder="sans-serif"
+                    list={build_datalist_id(selected.id, 0)}
+                    spellcheck={false}
+                    autocomplete="off"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                <datalist id={build_datalist_id(selected.id, 0)}>
+                    {#each font_options as fam (fam)}
+                        <option value={fam}></option>
+                    {/each}
+                </datalist>
+                {#if subtitle_font.trim() && !is_font_available_reactive(subtitle_font, $font_registry_version)}
+                    <p class="text-xs font-normal text-amber-700">
+                        ⚠ “{subtitle_font.trim()}” isn’t loaded — canvas will fall back.
+                    </p>
+                {/if}
+                {#if subtitle_field_message("font")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
                 Font size (8-160)
                 <input
                     type="number"
@@ -660,14 +700,14 @@ function probe_summary(node: ComposeNode): string {
                 <span class="flex items-center gap-2">
                     <input
                         type="color"
-                        value={normalize_hex_input(selected.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color)}
+                        value={strict_hex_or(selected.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color)}
                         oninput={(e) => patch_subtitles({ text_color: e.currentTarget.value })}
                         class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
                     >
                     <input
                         type="text"
                         value={selected.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color}
-                        oninput={(e) => patch_subtitles({ text_color: normalize_hex_input(e.currentTarget.value) })}
+                        oninput={(e) => patch_subtitles({ text_color: e.currentTarget.value })}
                         placeholder="#ffff7f"
                         spellcheck={false}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
@@ -682,14 +722,14 @@ function probe_summary(node: ComposeNode): string {
                 <span class="flex items-center gap-2">
                     <input
                         type="color"
-                        value={normalize_hex_input(selected.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color)}
+                        value={strict_hex_or(selected.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color)}
                         oninput={(e) => patch_subtitles({ stroke_color: e.currentTarget.value })}
                         class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
                     >
                     <input
                         type="text"
                         value={selected.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color}
-                        oninput={(e) => patch_subtitles({ stroke_color: normalize_hex_input(e.currentTarget.value) })}
+                        oninput={(e) => patch_subtitles({ stroke_color: e.currentTarget.value })}
                         placeholder="#000000"
                         spellcheck={false}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"

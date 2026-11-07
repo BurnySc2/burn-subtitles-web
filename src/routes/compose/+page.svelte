@@ -84,8 +84,7 @@ function handle_add(kind: ComposeNodeKind): void {
                 id,
                 type: "subtitles",
                 position,
-                // WHY content stays null: inline SRT deprecated, attach an .srt file instead
-                data: { file: null, content: null, ...SUBTITLE_BURN_DEFAULTS },
+                data: { file: null, mode: "burn", ...SUBTITLE_BURN_DEFAULTS },
             }
             break
         case "overlay":

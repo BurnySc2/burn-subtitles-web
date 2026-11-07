@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { execute_compose_graph } from "./compose-executor"
+import { parse_compose_json, serialize_compose } from "./compose-state.svelte"
 import { normalize_subtitle_style } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip, probe_media } from "./mediabunny-clip"
@@ -44,7 +45,7 @@ function subtitles(id: string, file: File | null = new File([VALID_SRT], "test.s
         id,
         type: "subtitles",
         position: { x: 0, y: 0 },
-        data: { file, content: null },
+        data: { file, mode: "burn" },
     }
 }
 
@@ -173,17 +174,42 @@ describe("execute_compose_graph subtitles flow", () => {
         }
     })
 
-    it("rejects legacy content without a file at the validation gate", async () => {
-        const legacy: ComposeNode = {
-            id: "sub",
-            type: "subtitles",
-            position: { x: 0, y: 0 },
-            data: { file: null, content: VALID_SRT },
-        }
-        const result = await execute_compose_graph({
-            nodes: [source("src"), legacy, output()],
-            edges: [edge("e1", "src", "sub"), edge("e2", "sub", "out")],
+    it("drops legacy content field on parse and still requires a file at the validation gate", async () => {
+        const legacy_json = JSON.stringify({
+            version: 1,
+            nodes: [
+                { id: "src", type: "source", position: { x: 0, y: 0 }, data: { file: null } },
+                {
+                    id: "sub",
+                    type: "subtitles",
+                    position: { x: 0, y: 0 },
+                    data: { file: null, mode: "burn", content: VALID_SRT },
+                },
+                {
+                    id: "out",
+                    type: "output",
+                    position: { x: 0, y: 0 },
+                    data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                },
+            ],
+            edges: [
+                { id: "e1", source: "src", sourceHandle: null, target: "sub", targetHandle: null },
+                { id: "e2", source: "sub", sourceHandle: null, target: "out", targetHandle: null },
+            ],
         })
+        const parsed = parse_compose_json(legacy_json)
+        const sub = parsed.nodes.find((node) => node.id === "sub")
+        expect(sub?.type).toBe("subtitles")
+        if (sub?.type === "subtitles") {
+            expect("content" in sub.data).toBe(false)
+        }
+        expect(serialize_compose(parsed.nodes, parsed.edges)).not.toContain("content")
+        for (const node of parsed.nodes) {
+            if (node.type === "source") {
+                node.data.file = mp4_file("src.mp4")
+            }
+        }
+        const result = await execute_compose_graph({ nodes: parsed.nodes, edges: parsed.edges })
         expect(result.ok).toBe(false)
         expect(result.output).toBeNull()
         expect(result.issues).toContainEqual({
@@ -199,7 +225,7 @@ describe("execute_compose_graph subtitles flow", () => {
             id: "sub",
             type: "subtitles",
             position: { x: 0, y: 0 },
-            data: { file: new File([], "empty.srt"), content: null },
+            data: { file: new File([], "empty.srt"), mode: "burn" },
         }
         await expect(
             execute_compose_graph({
@@ -215,7 +241,7 @@ describe("execute_compose_graph subtitles flow", () => {
             id: "sub",
             type: "subtitles",
             position: { x: 0, y: 0 },
-            data: { file: new File(["not a subtitle"], "bad.srt"), content: null },
+            data: { file: new File(["not a subtitle"], "bad.srt"), mode: "burn" },
         }
         await expect(
             execute_compose_graph({

@@ -1,8 +1,8 @@
 # AGENTS.md — AI Agent Quick Overview
 
 Static, client-only SvelteKit frontend. No backend, no server routes, no database.
-Subtitle burn-in (`/`) runs in-browser via FFmpeg WASM; clip trimming (`/clip`)
-and compose (`/compose`) run via MediaBunny + WebCodecs — no FFmpeg outside `/` (plus dev scratch).
+Subtitle burn-in (`/`) runs in-browser via FFmpeg WASM; clip trimming (`/clip`),
+crossfade (`/transition`) and compose (`/compose`) run via MediaBunny + WebCodecs — no FFmpeg outside `/` (plus dev scratch).
 
 ## Stack
 
@@ -21,6 +21,7 @@ and compose (`/compose`) run via MediaBunny + WebCodecs — no FFmpeg outside `/
 | `/ass`          | `src/routes/ass/+page.svelte`          | ASS subtitle tooling                                                                            |
 | `/download-srt` | `src/routes/download-srt/+page.svelte` | SRT download helper                                                                             |
 | `/compose`      | `src/routes/compose/+page.svelte`      | DAG builder: palette → canvas → inspector → render (MediaBunny-only incl. subtitles burn + text overlay)       |
+| `/transition`   | `src/routes/transition/+page.svelte`  | Crossfade Transition via MediaBunny, no FFmpeg (dual video upload; not in nav)                                |
 | `/dev`          | `src/routes/dev/+page.svelte`          | Dev-only scratch page                                                                           |
 
 Deleted v1: `feature/clip/ClipExtractor.svelte`, `lib/utils/clip-processing.ts`,
@@ -62,7 +63,7 @@ Deleted v1: `feature/clip/ClipExtractor.svelte`, `lib/utils/clip-processing.ts`,
 - Svelte 5 runes only: `$state` / `$derived`, `onclick=` (not `on:click`); shared state = module-level `$state` singletons, not stores.
 - Styling via `app.css` helpers (`.btn .btn-primary/.btn-secondary .btn-sm/.btn-md/.btn-lg`, `.section`, `.form-label`, `.drop-zone`); Tailwind utilities for layout.
 - Code, identifiers, comments in English.
-- `await import("mediabunny")` dynamically (never top-level) — SSR/prerender safety; `/clip` and `/compose` paths must never import `@ffmpeg` (even dynamically); FFmpeg allowed only in root Subtitle Burn-in (`/` via ASSSubtitleProcessor + video-processing.ts + subtitle-processing.ts) and dev scratch. Same rule for `@xyflow/svelte`: `ComposeCanvas.svelte` loads it in `onMount` via `load_flow()` (static import breaks prerender; type-only imports are fine).
+- `await import("mediabunny")` dynamically (never top-level) — SSR/prerender safety; `/clip`, `/transition` and `/compose` paths must never import `@ffmpeg` (even dynamically); FFmpeg allowed only in root Subtitle Burn-in (`/` via ASSSubtitleProcessor + video-processing.ts + subtitle-processing.ts) and dev scratch. Same rule for `@xyflow/svelte`: `ComposeCanvas.svelte` loads it in `onMount` via `load_flow()` (static import breaks prerender; type-only imports are fine).
 - Compose handles: `<Handle>` ports live in `*Node.svelte` views; all handle CSS under `.compose-canvas :global(...)` in `ComposeCanvas.svelte` (never per-node `<style>`).
 - Object URLs: `URL.revokeObjectURL()` old URL before replacing; `onDestroy` revokes previews/sources (`ClipV2Extractor`, root page).
 - FFmpeg MEMFS: `writeFile` → `exec` → `readFile` → `deleteFile` input+output.
@@ -81,7 +82,7 @@ npm run test:integration   # playwright test
 ## Verification
 
 - `npm run check` → 0 errors; `npm run lint` clean (note: preview `<video>` elements may trip Biome a11y `useMediaCaption` — verify before suppressing).
-- `npm run test:unit`: 34 files, 241 passed (vitest browser/chromium).
+- `npm run test:unit`: 45 files, 413 passed (vitest browser/chromium).
 - Keep `package.json` + lockfile in sync when touching deps (`generate-types` targets a local backend that is not part of this repo).
 
 ## Gotchas

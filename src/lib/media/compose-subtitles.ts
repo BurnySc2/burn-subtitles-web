@@ -248,6 +248,8 @@ export function vtt_to_srt(vtt_content: string): string {
 }
 
 export const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
+// WHY strict subtitle gate: 3-digit input falls back to defaults so validation flags it
+export const STRICT_HEX_6 = /^#[0-9a-fA-F]{6}$/
 
 export interface NormalizedSubtitleStyle {
     font_file: File | null
@@ -281,11 +283,11 @@ export function normalize_subtitle_style(partial: Partial<SubtitlesNodeData>): N
             ? clamp_number(font_size as number, 1, 1000)
             : SUBTITLE_BURN_DEFAULTS.font_size,
         text_color:
-            typeof partial.text_color === "string" && HEX_RE.test(partial.text_color)
+            typeof partial.text_color === "string" && STRICT_HEX_6.test(partial.text_color)
                 ? partial.text_color
                 : SUBTITLE_BURN_DEFAULTS.text_color,
         stroke_color:
-            typeof partial.stroke_color === "string" && HEX_RE.test(partial.stroke_color)
+            typeof partial.stroke_color === "string" && STRICT_HEX_6.test(partial.stroke_color)
                 ? partial.stroke_color
                 : SUBTITLE_BURN_DEFAULTS.stroke_color,
         outline_size: Number.isFinite(outline_size)

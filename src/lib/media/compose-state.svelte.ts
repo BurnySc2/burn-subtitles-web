@@ -334,9 +334,8 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                     position: node.position,
                     data: {
                         file: file_stub(node.data.file),
+                        mode: "burn",
                         font_file: file_stub(node.data.font_file ?? null),
-                        // WHY keep legacy content: old JSON round-trips verbatim
-                        content: node.data.content,
                         font_size: node.data.font_size ?? SUBTITLE_BURN_DEFAULTS.font_size,
                         text_color: node.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color,
                         stroke_color: node.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color,
@@ -512,10 +511,10 @@ function parse_node(raw: unknown): ComposeNode {
         }
         case "subtitles": {
             parse_stub(raw.data.file, raw.id)
-            // WHY accept legacy content: old JSON parses, file hydrates null, validation flags re-attach
-            if (raw.data.content !== null && typeof raw.data.content !== "string") {
-                throw new Error(`Node "${raw.id}": invalid subtitle content`)
+            if (raw.data.mode !== "burn") {
+                throw new Error(`Node "${raw.id}": subtitles mode must be "burn"`)
             }
+            // Old JSON may carry data.content — ignored, never hydrated.
             if (raw.data.font_file !== undefined) {
                 parse_stub(raw.data.font_file, raw.id)
             }
@@ -525,8 +524,8 @@ function parse_node(raw: unknown): ComposeNode {
                 position,
                 data: {
                     file: null,
+                    mode: "burn",
                     font_file: null,
-                    content: raw.data.content,
                     font_size: parse_finite_number(raw.data.font_size, SUBTITLE_BURN_DEFAULTS.font_size),
                     text_color: parse_string_or(raw.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color),
                     stroke_color: parse_string_or(raw.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color),

@@ -1,6 +1,7 @@
 import { is_chromium } from "../utils/browser-detect"
+import { is_font_available } from "./compose-font-library"
 import { topo_sort_compose } from "./compose-graph"
-import { HEX_RE, normalize_subtitle_style } from "./compose-subtitles"
+import { normalize_subtitle_style } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
@@ -519,7 +520,7 @@ export function validate_compose(
                 }
                 for (const field of ["text_color", "stroke_color"] as const) {
                     const value = node.data[field]
-                    if (value !== undefined && value !== null && !HEX_RE.test(value)) {
+                    if (value !== undefined && value !== null && !/^#[0-9a-fA-F]{6}$/.test(value)) {
                         issues.push({
                             node_id: node.id,
                             field,
@@ -565,6 +566,18 @@ export function validate_compose(
                             message: "Subtitle font must not exceed 10 MiB",
                         })
                     }
+                }
+                const subtitle_font = (node.data as { font?: unknown }).font
+                if (
+                    typeof subtitle_font === "string" &&
+                    subtitle_font.trim() !== "" &&
+                    !is_font_available(subtitle_font)
+                ) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "font",
+                        message: "Subtitle font is not available — load it in the font library",
+                    })
                 }
                 if (!is_chromium_browser) {
                     issues.push({

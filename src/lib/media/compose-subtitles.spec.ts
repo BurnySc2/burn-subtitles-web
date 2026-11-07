@@ -6,6 +6,7 @@ import {
     normalize_subtitle_style,
     parse_srt,
     resolve_burn_font_px,
+    STRICT_HEX_6,
     SubtitleError,
     srt_to_vtt,
     validate_srt,
@@ -129,6 +130,16 @@ describe("HEX_RE", () => {
     })
 })
 
+describe("STRICT_HEX_6", () => {
+    it.each(["#000000", "#ffff7f", "#ABCDEF"])("accepts %s", (hex) => {
+        expect(STRICT_HEX_6.test(hex)).toBe(true)
+    })
+
+    it.each(["#fff", "#FFF", "#abc", "fff", "#ff", "#ffff", "red", "#12345g"])("rejects %s", (hex) => {
+        expect(STRICT_HEX_6.test(hex)).toBe(false)
+    })
+})
+
 describe("normalize_subtitle_style", () => {
     it("returns burn defaults for an empty partial", () => {
         expect(normalize_subtitle_style({})).toEqual({ ...SUBTITLE_BURN_DEFAULTS })
@@ -147,6 +158,12 @@ describe("normalize_subtitle_style", () => {
         expect(style.stroke_color).toBe(SUBTITLE_BURN_DEFAULTS.stroke_color)
         expect(style.outline_size).toBe(SUBTITLE_BURN_DEFAULTS.outline_size)
         expect(style.vertical_anchor).toBe(SUBTITLE_BURN_DEFAULTS.vertical_anchor)
+    })
+
+    it("falls back for shorthand hex like #fff", () => {
+        const style = normalize_subtitle_style({ text_color: "#fff", stroke_color: "#ABC" })
+        expect(style.text_color).toBe(SUBTITLE_BURN_DEFAULTS.text_color)
+        expect(style.stroke_color).toBe(SUBTITLE_BURN_DEFAULTS.stroke_color)
     })
 
     it("keeps valid custom values", () => {

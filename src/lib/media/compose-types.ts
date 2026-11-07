@@ -60,10 +60,7 @@ export const SUBTITLE_BURN_DEFAULTS = {
 
 export interface SubtitlesNodeData {
     file: File | null
-    /** @deprecated Paste removed; legacy JSON only, never read. */
-    content: string | null
-    /** @deprecated Burn-only; legacy JSON only, never read. */
-    mode?: "burn"
+    mode: "burn"
     font_file?: File | null
     font_size?: number
     text_color?: string
