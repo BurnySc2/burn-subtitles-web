@@ -1,10 +1,22 @@
 <script lang="ts">
+import { onMount } from "svelte"
+import { browser } from "$app/environment"
 import {
     font_registry,
     font_registry_version,
+    is_font_available,
     register_font_entry,
     remove_font_entry,
 } from "$lib/media/compose-font-library"
+import {
+    clear_font_url_index,
+    type FontUrlEntry,
+    get_font_url_auto_restore,
+    load_font_url_index,
+    remove_font_url_entry,
+    save_font_url_entry,
+    set_font_url_auto_restore,
+} from "$lib/media/compose-font-url-index"
 import { load_custom_font, load_custom_font_from_url, revoke_custom_font } from "$lib/utils/custom-font"
 
 let registry_entries = $derived.by(() => {
@@ -16,6 +28,80 @@ let file_input: HTMLInputElement | null = $state(null)
 let url_text = $state("")
 let busy = $state(false)
 let error = $state<string | null>(null)
+let restoring = $state(false)
+let restore_summary = $state<string | null>(null)
+let auto_restore_enabled = $state(true)
+let saved_url_count = $state(0)
+
+let status_text = $derived.by(() => {
+    if (restoring && registry_entries.length === 0) {
+        return "Restoring saved fonts…"
+    }
+    const base =
+        registry_entries.length > 0
+            ? `${registry_entries.length} custom font${registry_entries.length === 1 ? "" : "s"} loaded`
+            : "No custom fonts — pick a file or fetch a URL"
+    const extras: string[] = []
+    if (restore_summary) {
+        extras.push(restore_summary)
+    }
+    if (restoring) {
+        extras.push("Restoring saved fonts…")
+    }
+    if (!auto_restore_enabled) {
+        extras.push("Auto-restore off")
+    }
+    return extras.length > 0 ? `${base}. ${extras.join(". ")}` : base
+})
+
+async function restore_saved_fonts(entries: FontUrlEntry[]): Promise<void> {
+    restoring = true
+    let restored = 0
+    let skipped = 0
+    let failed = 0
+    for (const entry of entries) {
+        if (is_font_available(entry.family)) {
+            skipped += 1
+            continue
+        }
+        try {
+            const loaded = await load_custom_font_from_url(entry.origin_url)
+            register_font_entry({
+                family: loaded.font_family,
+                source: "custom-url",
+                object_url: loaded.object_url,
+                font_face: loaded.font_face ?? null,
+                loaded_at: Date.now(),
+                origin_url: entry.origin_url,
+            })
+            restored += 1
+        } catch {
+            failed += 1
+        }
+    }
+    restoring = false
+    const parts = [`Restored ${restored} of ${entries.length} saved fonts`]
+    if (skipped > 0) {
+        parts.push(`skipped ${skipped}`)
+    }
+    if (failed > 0) {
+        parts.push(`failed ${failed}`)
+    }
+    restore_summary = parts.join(", ")
+}
+
+onMount(() => {
+    if (!browser) {
+        return
+    }
+    auto_restore_enabled = get_font_url_auto_restore()
+    const index = load_font_url_index()
+    saved_url_count = index.entries.length
+    if (index.entries.length === 0 || !index.auto_restore_enabled) {
+        return
+    }
+    void restore_saved_fonts(index.entries)
+})
 
 async function on_pick_file(file: File | null): Promise<void> {
     if (!file || busy) {
@@ -64,6 +150,8 @@ async function on_fetch_url(): Promise<void> {
             loaded_at: Date.now(),
             origin_url: url,
         })
+        save_font_url_entry({ family: loaded.font_family, origin_url: url })
+        saved_url_count = load_font_url_index().entries.length
         url_text = ""
     } catch (caught) {
         error = caught instanceof Error ? caught.message : "Failed to fetch font URL."
@@ -74,6 +162,18 @@ async function on_fetch_url(): Promise<void> {
 
 function on_remove(family: string): void {
     remove_font_entry(family)
+    remove_font_url_entry(family)
+    saved_url_count = load_font_url_index().entries.length
+}
+
+function on_toggle_auto_restore(enabled: boolean): void {
+    auto_restore_enabled = enabled
+    set_font_url_auto_restore(enabled)
+}
+
+function on_clear_saved_urls(): void {
+    clear_font_url_index()
+    saved_url_count = 0
 }
 </script>
 
@@ -116,14 +216,30 @@ function on_remove(family: string): void {
     >
         {#if error}
             {error}
-        {:else if registry_entries.length > 0}
-            {registry_entries.length}
-            custom font{registry_entries.length === 1 ? "" : "s"}
-            loaded
         {:else}
-            No custom fonts — pick a file or fetch a URL
+            {status_text}
         {/if}
     </p>
+    <p class="text-sm text-gray-500">Saved URLs refetch on next visit. Files are never stored.</p>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input
+                type="checkbox"
+                bind:checked={auto_restore_enabled}
+                onchange={(e) => on_toggle_auto_restore(e.currentTarget.checked)}
+                class="h-4 w-4"
+            >
+            Auto-restore saved fonts
+        </label>
+        <button
+            type="button"
+            onclick={on_clear_saved_urls}
+            disabled={saved_url_count === 0}
+            class="shrink-0 text-sm text-red-700 underline disabled:text-gray-400 disabled:no-underline"
+        >
+            Delete saved URLs{saved_url_count > 0 ? ` (${saved_url_count})` : ""}
+        </button>
+    </div>
     {#if registry_entries.length > 0}
         <ul class="flex flex-col gap-1">
             {#each registry_entries as entry (entry.family)}
