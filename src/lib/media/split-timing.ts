@@ -1,8 +1,6 @@
 /** Split timing helpers for gapless/overlapping part boundaries. */
 export const DEFAULT_GAP_MS = 10
 
-export const GAP_PRESETS = [0, 10, 80]
-
 export const MIN_PART = 0.2
 
 export const MAX_GAP_MS = 500

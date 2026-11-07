@@ -2,8 +2,6 @@ import type { SubtitleCue } from "./compose-subtitles"
 
 export type TabKind = "recommended" | "alternative" | "custom"
 
-export const NO_SPACE_LOCALES = new Set(["ja", "zh", "ko", "th"])
-
 const CONJUNCTIONS = ["and", "but", "or", "that", "because"]
 
 /** Locales exercised by the split prototype UI. */
@@ -90,11 +88,6 @@ export function alternative_split(words: string[], recommended: number, max_char
     const offset = Math.max(1, Math.floor(words.length / 4)) * (recommended * 2 > words.length ? -1 : 1)
     const shifted = Math.min(words.length - 1, Math.max(1, recommended + offset))
     return shifted === recommended ? Math.max(1, Math.min(words.length - 1, recommended + 1)) : shifted
-}
-
-export function join_words(words: string[], locale: string): string {
-    const base = locale.split(/[-_]/)[0]?.toLowerCase() ?? locale
-    return NO_SPACE_LOCALES.has(base) ? words.join("") : words.join(" ")
 }
 
 export function tokenize_for_locale(text: string, locale: string): string[] {
