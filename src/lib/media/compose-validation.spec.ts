@@ -73,10 +73,6 @@ function wired_subtitle_issues(overrides: Partial<SubtitlesNodeData>, is_chromiu
     return validate_compose(nodes, edges, is_chromium_browser)
 }
 
-function font_file(name: string, size: number): File {
-    return { name, size } as unknown as File
-}
-
 function transition(id: string, start = 0, duration = 1): ComposeNode {
     return { id, type: "transition", position: { x: 0, y: 0 }, data: { start, duration, easing: "linear" } }
 }
@@ -393,45 +389,64 @@ describe("validate_compose", () => {
         ).toEqual([])
     })
 
-    it("accepts subtitle font extensions and enforces the 10 MiB cap", () => {
-        const mib = 1024 * 1024
-        for (const name of ["font.ttf", "font.otf", "font.woff", "font.woff2", "font.TTF"]) {
-            const issues = wired_subtitle_issues({ font_file: font_file(name, 1024) })
-            expect(issues.filter((issue) => issue.field === "font_file")).toEqual([])
-        }
-        for (const name of ["font.txt", "font.eot", "font", "font.ttf.exe"]) {
-            expect(wired_subtitle_issues({ font_file: font_file(name, 1024) })).toContainEqual({
-                node_id: "sub",
-                field: "font_file",
-                message: "Subtitle font must be a ttf, otf, woff, or woff2 file",
-            })
-        }
-        expect(
-            wired_subtitle_issues({ font_file: font_file("font.ttf", 10 * mib) }).filter(
-                (issue) => issue.field === "font_file",
-            ),
-        ).toEqual([])
-        expect(wired_subtitle_issues({ font_file: font_file("font.ttf", 10 * mib + 1) })).toContainEqual({
+    it("flags unavailable subtitle font families and accepts empty or bundled families", () => {
+        expect(wired_subtitle_issues({ font_family: "NoSuchFontXYZ" })).toContainEqual({
             node_id: "sub",
-            field: "font_file",
-            message: "Subtitle font must not exceed 10 MiB",
-        })
-    })
-
-    it("flags unavailable subtitle fonts and accepts empty or bundled families", () => {
-        expect(
-            wired_subtitle_issues({ font: "NoSuchFontXYZ" } as unknown as Partial<SubtitlesNodeData>),
-        ).toContainEqual({
-            node_id: "sub",
-            field: "font",
+            field: "font_family",
             message: "Subtitle font is not available — load it in the font library",
         })
         expect(
-            wired_subtitle_issues({ font: "Roboto" } as unknown as Partial<SubtitlesNodeData>).filter(
-                (issue) => issue.field === "font",
-            ),
+            wired_subtitle_issues({ font_family: "Roboto" }).filter((issue) => issue.field === "font_family"),
         ).toEqual([])
-        expect(wired_subtitle_issues({}).filter((issue) => issue.field === "font")).toEqual([])
+        expect(wired_subtitle_issues({}).filter((issue) => issue.field === "font_family")).toEqual([])
+        expect(wired_subtitle_issues({ font_family: "   " }).filter((issue) => issue.field === "font_family")).toEqual(
+            [],
+        )
+        expect(wired_subtitle_issues({ font_family: "a".repeat(201) })).toContainEqual({
+            node_id: "sub",
+            field: "font_family",
+            message: "Subtitle font_family must be at most 200 characters",
+        })
+    })
+
+    it("tolerates a legacy font_file stub on parse without emitting font issues", () => {
+        const legacy_json = JSON.stringify({
+            version: 1,
+            nodes: [
+                { id: "src", type: "source", position: { x: 0, y: 0 }, data: { file: null } },
+                {
+                    id: "sub",
+                    type: "subtitles",
+                    position: { x: 0, y: 0 },
+                    data: {
+                        file: null,
+                        mode: "burn",
+                        font_family: "Roboto",
+                        font_file: { name: "font.ttf", size: 1024, type: "font/ttf" },
+                    },
+                },
+                {
+                    id: "out",
+                    type: "output",
+                    position: { x: 0, y: 0 },
+                    data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                },
+            ],
+            edges: [
+                { id: "e1", source: "src", sourceHandle: null, target: "sub", targetHandle: null },
+                { id: "e2", source: "sub", sourceHandle: null, target: "out", targetHandle: null },
+            ],
+        })
+        const parsed = parse_compose_json(legacy_json)
+        const sub = parsed.nodes.find((node) => node.id === "sub")
+        expect(sub?.type).toBe("subtitles")
+        if (sub?.type === "subtitles") {
+            expect("font_file" in sub.data).toBe(false)
+            expect(sub.data.font_family).toBe("Roboto")
+        }
+        expect(serialize_compose(parsed.nodes, parsed.edges)).not.toContain("font_file")
+        expect(parsed.issues.some((issue) => issue.field === "font_file")).toBe(false)
+        expect(parsed.issues.some((issue) => issue.field === "font_family")).toBe(false)
     })
 
     it("warns about burn-in outside Chromium browsers", () => {

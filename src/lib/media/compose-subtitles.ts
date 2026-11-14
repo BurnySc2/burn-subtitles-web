@@ -252,7 +252,7 @@ export const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 export const STRICT_HEX_6 = /^#[0-9a-fA-F]{6}$/
 
 export interface NormalizedSubtitleStyle {
-    font_file: File | null
+    font_family: string
     font_size: number
     text_color: string
     stroke_color: string
@@ -272,13 +272,14 @@ export function clamp_number(value: number, min: number, max: number): number {
 }
 
 export function normalize_subtitle_style(partial: Partial<SubtitlesNodeData>): NormalizedSubtitleStyle {
+    const raw_family = typeof partial.font_family === "string" ? partial.font_family.trim() : ""
     const font_size = partial.font_size
     const outline_size = partial.outline_size
     const shadow_size = partial.shadow_size
     const horizontal_margin = partial.horizontal_margin
     const vertical_offset = partial.vertical_offset
     return {
-        font_file: partial.font_file ?? SUBTITLE_BURN_DEFAULTS.font_file,
+        font_family: raw_family === "" ? SUBTITLE_BURN_DEFAULTS.font_family : raw_family.slice(0, 200),
         font_size: Number.isFinite(font_size)
             ? clamp_number(font_size as number, 1, 1000)
             : SUBTITLE_BURN_DEFAULTS.font_size,

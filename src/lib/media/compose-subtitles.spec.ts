@@ -166,6 +166,13 @@ describe("normalize_subtitle_style", () => {
         expect(style.stroke_color).toBe(SUBTITLE_BURN_DEFAULTS.stroke_color)
     })
 
+    it("trims font_family and falls back for empty or overlong values", () => {
+        expect(normalize_subtitle_style({ font_family: "  Roboto  " }).font_family).toBe("Roboto")
+        expect(normalize_subtitle_style({ font_family: "   " }).font_family).toBe(SUBTITLE_BURN_DEFAULTS.font_family)
+        expect(normalize_subtitle_style({}).font_family).toBe(SUBTITLE_BURN_DEFAULTS.font_family)
+        expect(normalize_subtitle_style({ font_family: "a".repeat(250) }).font_family).toHaveLength(200)
+    })
+
     it("keeps valid custom values", () => {
         const style = normalize_subtitle_style({ text_color: "#123abc", vertical_anchor: "top", font_size: 48 })
         expect(style.text_color).toBe("#123abc")

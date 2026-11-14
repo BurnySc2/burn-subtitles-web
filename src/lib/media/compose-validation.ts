@@ -1,7 +1,6 @@
 import { is_chromium } from "../utils/browser-detect"
 import { is_font_available } from "./compose-font-library"
 import { topo_sort_compose } from "./compose-graph"
-import { normalize_subtitle_style } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
@@ -528,7 +527,6 @@ export function validate_compose(
                         })
                     }
                 }
-                const style = normalize_subtitle_style(node.data)
                 const range_checks = [
                     { field: "font_size", raw: node.data.font_size, min: 8, max: 160 },
                     { field: "outline_size", raw: node.data.outline_size, min: 0, max: 10 },
@@ -550,32 +548,21 @@ export function validate_compose(
                         })
                     }
                 }
-                const font_file = style.font_file
-                if (font_file !== null && font_file !== undefined) {
-                    if (!/\.(ttf|otf|woff|woff2)$/i.test(font_file.name)) {
-                        issues.push({
-                            node_id: node.id,
-                            field: "font_file",
-                            message: "Subtitle font must be a ttf, otf, woff, or woff2 file",
-                        })
-                    }
-                    if (font_file.size > 10 * 1024 * 1024) {
-                        issues.push({
-                            node_id: node.id,
-                            field: "font_file",
-                            message: "Subtitle font must not exceed 10 MiB",
-                        })
-                    }
-                }
-                const subtitle_font = (node.data as { font?: unknown }).font
-                if (
-                    typeof subtitle_font === "string" &&
-                    subtitle_font.trim() !== "" &&
-                    !is_font_available(subtitle_font)
+                const font_family = node.data.font_family
+                if (typeof font_family === "string" && font_family.length > 200) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "font_family",
+                        message: "Subtitle font_family must be at most 200 characters",
+                    })
+                } else if (
+                    typeof font_family === "string" &&
+                    font_family.trim() !== "" &&
+                    !is_font_available(font_family.trim())
                 ) {
                     issues.push({
                         node_id: node.id,
-                        field: "font",
+                        field: "font_family",
                         message: "Subtitle font is not available — load it in the font library",
                     })
                 }

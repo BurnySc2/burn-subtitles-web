@@ -61,30 +61,9 @@ export function flow_center_position(): { x: number; y: number } {
 }
 
 const preview_urls = new Map<string, string>()
-const font_file_urls = new Map<string, string>()
 
 export function preview_url(node_id: string): string | null {
     return preview_urls.get(node_id) ?? null
-}
-
-export function font_file_url(node_id: string): string | null {
-    return font_file_urls.get(node_id) ?? null
-}
-
-export function set_subtitles_font_file(node_id: string, file: File | null, url: string | null): void {
-    const previous = font_file_urls.get(node_id)
-    if (previous && previous !== url) {
-        URL.revokeObjectURL(previous)
-    }
-    if (url === null) {
-        font_file_urls.delete(node_id)
-    } else {
-        font_file_urls.set(node_id, url)
-    }
-    const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
-    if (node && node.type === "subtitles") {
-        node.data.font_file = file
-    }
 }
 
 export function set_source_file(node_id: string, file: File, url: string): void {
@@ -155,11 +134,6 @@ export function remove_compose_nodes(node_ids: string[]): void {
         if (url !== undefined) {
             URL.revokeObjectURL(url)
             preview_urls.delete(id)
-        }
-        const font_url = font_file_urls.get(id)
-        if (font_url !== undefined) {
-            URL.revokeObjectURL(font_url)
-            font_file_urls.delete(id)
         }
     }
     compose_state.nodes = compose_state.nodes.filter((node) => !ids.has(node.id))
@@ -285,10 +259,6 @@ export function revoke_all(): void {
         URL.revokeObjectURL(url)
     }
     preview_urls.clear()
-    for (const url of font_file_urls.values()) {
-        URL.revokeObjectURL(url)
-    }
-    font_file_urls.clear()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
     }
@@ -335,7 +305,7 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                     data: {
                         file: file_stub(node.data.file),
                         mode: "burn",
-                        font_file: file_stub(node.data.font_file ?? null),
+                        font_family: node.data.font_family ?? SUBTITLE_BURN_DEFAULTS.font_family,
                         font_size: node.data.font_size ?? SUBTITLE_BURN_DEFAULTS.font_size,
                         text_color: node.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color,
                         stroke_color: node.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color,
@@ -525,7 +495,7 @@ function parse_node(raw: unknown): ComposeNode {
                 data: {
                     file: null,
                     mode: "burn",
-                    font_file: null,
+                    font_family: parse_string_or(raw.data.font_family, SUBTITLE_BURN_DEFAULTS.font_family),
                     font_size: parse_finite_number(raw.data.font_size, SUBTITLE_BURN_DEFAULTS.font_size),
                     text_color: parse_string_or(raw.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color),
                     stroke_color: parse_string_or(raw.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color),

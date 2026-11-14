@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
-import { compose_node_title, type SubtitlesNodeData } from "$lib/media/compose-types"
+import { compose_node_title, SUBTITLE_BURN_DEFAULTS, type SubtitlesNodeData } from "$lib/media/compose-types"
 
 let {
     id = "",
@@ -17,12 +17,16 @@ let label_draft = $state("")
 
 let title = $derived(compose_node_title("subtitles", data.label))
 
-let has_custom_font = $derived(data.font_file !== null && data.font_file !== undefined)
+let family = $derived(
+    typeof data.font_family === "string" && data.font_family.trim() !== ""
+        ? data.font_family.trim()
+        : SUBTITLE_BURN_DEFAULTS.font_family,
+)
+let is_default_family = $derived(family === SUBTITLE_BURN_DEFAULTS.font_family)
 let badge = $derived.by(() => {
     const source = data.file ? data.file.name : "no file"
-    return has_custom_font ? `${source} · font` : source
+    return is_default_family ? source : `${source} · ${family}`
 })
-let font_name = $derived(data.font_file ? data.font_file.name : null)
 </script>
 
 <div
@@ -75,11 +79,8 @@ let font_name = $derived(data.font_file ? data.font_file.name : null)
     <p
         id={id ? `${id}-badge` : undefined}
         class="mt-1 text-xs text-gray-500"
-        title={font_name ? `Custom font: ${font_name}` : undefined}
+        title={is_default_family ? undefined : `Font: ${family}`}
     >
         {badge}
-        {#if has_custom_font}
-            <span aria-hidden="true"> ●</span>
-        {/if}
     </p>
 </div>

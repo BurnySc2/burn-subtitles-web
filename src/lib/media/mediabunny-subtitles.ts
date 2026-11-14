@@ -1,5 +1,4 @@
 import type { Output } from "mediabunny"
-import { CUSTOM_FONT_FAMILY, parse_font_family } from "../utils/custom-font"
 import { active_cues_at, parse_srt, resolve_burn_font_px } from "./compose-subtitles"
 import type { SubtitleVerticalAnchor } from "./compose-types"
 import { ClipError, probe_media } from "./mediabunny-clip"
@@ -18,7 +17,7 @@ import {
 
 export interface BurnSubtitlesOptions {
     srt_content: string
-    font_file: File | null
+    font_family: string
     font_size: number
     text_color: string
     stroke_color: string
@@ -164,7 +163,6 @@ export async function render_subtitles_burn(
     const mb = await import("mediabunny")
     const input = new mb.Input({ formats: mb.ALL_FORMATS, source: new mb.BlobSource(video) })
     let output: Output | null = null
-    let font_face: FontFace | null = null
     const on_abort = () => {
         void output?.cancel()
     }
@@ -187,18 +185,10 @@ export async function render_subtitles_burn(
         } catch (error) {
             throw new ClipError("INVALID_RANGE", (error as Error).message)
         }
-        let font_family = "sans-serif"
-        if (opts.font_file) {
-            const buffer = await opts.font_file.arrayBuffer()
-            font_family = parse_font_family(buffer, CUSTOM_FONT_FAMILY)
-            try {
-                font_face = new FontFace(font_family, buffer)
-                document.fonts.add(font_face)
-                await font_face.load()
-            } catch {
-                throw new ClipError("FAILED", "Could not load the custom font.")
-            }
-        }
+        const font_family = opts.font_family.trim() === "" ? "sans-serif" : opts.font_family.trim()
+        try {
+            await document.fonts.load(`16px "${font_family}"`)
+        } catch {}
         if (cues.length === 0) {
             return video
         }
@@ -292,11 +282,6 @@ export async function render_subtitles_burn(
         return new Blob([target.buffer], { type: output.format.mimeType })
     } finally {
         signal?.removeEventListener("abort", on_abort)
-        if (font_face) {
-            try {
-                document.fonts.delete(font_face)
-            } catch {}
-        }
         input.dispose()
     }
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { compose_state, remove_compose_nodes, set_subtitles_font_file } from "$lib/media/compose-state.svelte"
+import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import type {
     ColorNodeData,
@@ -68,12 +68,12 @@ function strict_hex_or(raw: string | undefined, fallback: string): string {
     return typeof raw === "string" && STRICT_HEX_6.test(raw) ? raw : fallback
 }
 
-let subtitle_font = $derived.by(() => {
+let subtitle_font_family = $derived.by(() => {
     if (selected?.type !== "subtitles") {
         return ""
     }
-    const font = (selected.data as { font?: unknown }).font
-    return typeof font === "string" ? font : ""
+    const family = selected.data.font_family
+    return typeof family === "string" ? family : ""
 })
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
@@ -162,18 +162,6 @@ function on_subtitles_srt_file(event: Event): void {
     if (file) {
         patch_subtitles({ file })
     }
-}
-
-function on_subtitles_font_file(event: Event, node_id: string): void {
-    const input = event.currentTarget as HTMLInputElement | null
-    const file = input?.files?.[0] ?? null
-    if (input) {
-        input.value = ""
-    }
-    if (!file) {
-        return
-    }
-    set_subtitles_font_file(node_id, file, URL.createObjectURL(file))
 }
 
 function patch_output(patch: Partial<OutputNodeData>): void {
@@ -630,35 +618,12 @@ function probe_summary(node: ComposeNode): string {
                     <small class="text-xs font-normal text-red-700">{subtitle_field_message("file")}</small>
                 {/if}
             </div>
-            <div class="flex flex-col gap-1 text-sm font-medium">
-                Font file (optional)
-                <input
-                    type="file"
-                    accept=".ttf,.otf,.woff,.woff2"
-                    onchange={(e) => on_subtitles_font_file(e, selected.id)}
-                    class="w-full rounded border border-gray-300 bg-white p-2 font-normal"
-                >
-                {#if selected.data.font_file}
-                    <p class="text-xs font-normal text-gray-500">Font: {selected.data.font_file.name}</p>
-                    <button
-                        type="button"
-                        onclick={() => set_subtitles_font_file(selected.id, null, null)}
-                        class="self-start text-sm font-normal text-red-700 underline"
-                    >
-                        Remove
-                    </button>
-                {/if}
-                {#if subtitle_field_message("font_file")}
-                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font_file")}</small>
-                {/if}
-            </div>
             <label class="flex flex-col gap-1 text-sm font-medium">
                 Font family (optional)
                 <input
                     type="text"
-                    value={subtitle_font}
-                    oninput={(e) =>
-                        patch_subtitles({ font: e.currentTarget.value } as Partial<SubtitlesNodeData>)}
+                    value={subtitle_font_family}
+                    oninput={(e) => patch_subtitles({ font_family: e.currentTarget.value })}
                     placeholder="sans-serif"
                     list={build_datalist_id(selected.id, 0)}
                     spellcheck={false}
@@ -670,13 +635,13 @@ function probe_summary(node: ComposeNode): string {
                         <option value={fam}></option>
                     {/each}
                 </datalist>
-                {#if subtitle_font.trim() && !is_font_available_reactive(subtitle_font, $font_registry_version)}
+                {#if subtitle_font_family.trim() && !is_font_available_reactive(subtitle_font_family, $font_registry_version)}
                     <p class="text-xs font-normal text-amber-700">
-                        ⚠ “{subtitle_font.trim()}” isn’t loaded — canvas will fall back.
+                        ⚠ “{subtitle_font_family.trim()}” isn’t loaded — canvas will fall back.
                     </p>
                 {/if}
-                {#if subtitle_field_message("font")}
-                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font")}</small>
+                {#if subtitle_field_message("font_family")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font_family")}</small>
                 {/if}
             </label>
             <label class="flex flex-col gap-1 text-sm font-medium">

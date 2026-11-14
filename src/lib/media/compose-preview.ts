@@ -37,14 +37,8 @@ function serialize_node(node: ComposeNode): string {
         return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(node.data.probe ?? null)].join(":")
     }
     if (node.type === "subtitles") {
-        const { font_file, ...style_rest } = normalize_subtitle_style(node.data)
-        return [
-            node.id,
-            node.type,
-            file_stub_key(node.data.file),
-            file_stub_key(font_file),
-            JSON.stringify(style_rest),
-        ].join(":")
+        const style = normalize_subtitle_style(node.data)
+        return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(style)].join(":")
     }
     if (node.type === "overlay") {
         return [
@@ -83,11 +77,17 @@ export function collect_referenced_fonts(relevant: Set<string>, by_id: Map<strin
     const collected = new Set<string>()
     for (const id of relevant) {
         const node = by_id.get(id)
-        if (node?.type !== "text") {
+        if (node?.type === "text") {
+            for (const item of node.data.items ?? []) {
+                const family = item.font.trim().toLowerCase()
+                if (family) {
+                    collected.add(family)
+                }
+            }
             continue
         }
-        for (const item of node.data.items ?? []) {
-            const family = item.font.trim().toLowerCase()
+        if (node?.type === "subtitles") {
+            const family = normalize_subtitle_style(node.data).font_family.trim().toLowerCase()
             if (family) {
                 collected.add(family)
             }

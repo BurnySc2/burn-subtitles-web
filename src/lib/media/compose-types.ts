@@ -46,7 +46,7 @@ export interface MergeNodeData {
 export type SubtitleVerticalAnchor = "top" | "center" | "bottom"
 
 export const SUBTITLE_BURN_DEFAULTS = {
-    font_file: null,
+    font_family: "sans-serif",
     font_size: 24,
     text_color: "#ffff7f",
     stroke_color: "#000000",
@@ -61,7 +61,7 @@ export const SUBTITLE_BURN_DEFAULTS = {
 export interface SubtitlesNodeData {
     file: File | null
     mode: "burn"
-    font_file?: File | null
+    font_family?: string
     font_size?: number
     text_color?: string
     stroke_color?: string

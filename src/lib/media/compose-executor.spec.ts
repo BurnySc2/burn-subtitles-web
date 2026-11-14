@@ -167,6 +167,7 @@ describe("execute_compose_graph subtitles flow", () => {
         const call = vi.mocked(render_subtitles_burn).mock.calls[0]
         expect(call?.[0]).toBeInstanceOf(File)
         expect(call?.[1]).toMatchObject({ srt_content: VALID_SRT, ...normalize_subtitle_style({}) })
+        expect(call?.[1].font_family).toBe("sans-serif")
         expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
         expect(vi.mocked(render_transition)).not.toHaveBeenCalled()
         if (result.output) {
