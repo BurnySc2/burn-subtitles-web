@@ -1,5 +1,6 @@
 <script lang="ts">
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
+import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import type {
     ColorNodeData,
     ComposeNode,
@@ -12,6 +13,7 @@ import type {
     TransitionNodeData,
     TrimNodeData,
 } from "$lib/media/compose-types"
+import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
 import {
     QUALITY_QUANTIZER,
@@ -61,6 +63,18 @@ let font_options = $derived.by(() => {
 function is_font_available_reactive(family: string, _version: number): boolean {
     return is_font_available(family)
 }
+
+function strict_hex_or(raw: string | undefined, fallback: string): string {
+    return typeof raw === "string" && STRICT_HEX_6.test(raw) ? raw : fallback
+}
+
+let subtitle_font_family = $derived.by(() => {
+    if (selected?.type !== "subtitles") {
+        return ""
+    }
+    const family = selected.data.font_family
+    return typeof family === "string" ? family : ""
+})
 
 function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
     on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
@@ -135,6 +149,21 @@ function patch_subtitles(patch: Partial<SubtitlesNodeData>): void {
     }
 }
 
+function subtitle_field_message(field: string): string | null {
+    return selected_issues.find((issue) => issue.field === field)?.message ?? null
+}
+
+function on_subtitles_srt_file(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement | null
+    const file = input?.files?.[0] ?? null
+    if (input) {
+        input.value = ""
+    }
+    if (file) {
+        patch_subtitles({ file })
+    }
+}
+
 function patch_output(patch: Partial<OutputNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "output") {
@@ -154,6 +183,15 @@ function patch_color(patch: Partial<ColorNodeData>): void {
     if (node && node.type === "color") {
         Object.assign(node.data, patch)
     }
+}
+
+function normalize_hex_input(raw: string): string {
+    const match = /^#([0-9a-fA-F]{3})$/.exec(raw.trim())
+    if (!match) {
+        return raw
+    }
+    const [r, g, b] = match[1]
+    return `#${r}${r}${g}${g}${b}${b}`
 }
 
 function patch_rescale(patch: Partial<RescaleNodeData>): void {
@@ -565,30 +603,200 @@ function probe_summary(node: ComposeNode): string {
                 <p class="text-sm text-gray-500">Connect 2 or more inputs using handles in0, in1, …</p>
             {/if}
         {:else if selected.type === "subtitles"}
+            <div class="flex flex-col gap-1 text-sm font-medium">
+                SRT file (required)
+                <input
+                    type="file"
+                    accept=".srt"
+                    onchange={on_subtitles_srt_file}
+                    class="w-full rounded border border-gray-300 bg-white p-2 font-normal"
+                >
+                {#if selected.data.file}
+                    <p class="text-xs font-normal text-gray-500">File: {selected.data.file.name}</p>
+                {/if}
+                {#if subtitle_field_message("file")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("file")}</small>
+                {/if}
+            </div>
             <label class="flex flex-col gap-1 text-sm font-medium">
-                SRT content
-                <textarea
-                    value={selected.data.content ?? ""}
-                    oninput={(e) => patch_subtitles({ content: e.currentTarget.value })}
-                    placeholder={"1\n00:00:00,000 --> 00:00:02,000\nHello"}
-                    rows="6"
-                    class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
-                ></textarea>
-            </label>
-            {#if selected.data.file}
-                <p class="text-xs text-gray-500">File: {selected.data.file.name}</p>
-            {/if}
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                Mode
-                <select
-                    value={selected.data.mode}
-                    onchange={(e) => patch_subtitles({ mode: e.currentTarget.value as SubtitlesNodeData["mode"] })}
+                Font family (optional)
+                <input
+                    type="text"
+                    value={subtitle_font_family}
+                    oninput={(e) => patch_subtitles({ font_family: e.currentTarget.value })}
+                    placeholder="sans-serif"
+                    list={build_datalist_id(selected.id, 0)}
+                    spellcheck={false}
+                    autocomplete="off"
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
-                    <option value="mux">mux</option>
-                    <option value="burn">burn</option>
-                    <option value="sidecar">sidecar</option>
+                <datalist id={build_datalist_id(selected.id, 0)}>
+                    {#each font_options as fam (fam)}
+                        <option value={fam}></option>
+                    {/each}
+                </datalist>
+                {#if subtitle_font_family.trim() && !is_font_available_reactive(subtitle_font_family, $font_registry_version)}
+                    <p class="text-xs font-normal text-amber-700">
+                        ⚠ “{subtitle_font_family.trim()}” isn’t loaded — canvas will fall back.
+                    </p>
+                {/if}
+                {#if subtitle_field_message("font_family")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font_family")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Font size (8-160)
+                <input
+                    type="number"
+                    min="8"
+                    max="160"
+                    step="1"
+                    value={selected.data.font_size ?? SUBTITLE_BURN_DEFAULTS.font_size}
+                    oninput={(e) =>
+                        on_number_input(e.currentTarget.value, (value) => patch_subtitles({ font_size: value }))}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                {#if subtitle_field_message("font_size")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font_size")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Text color
+                <span class="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={strict_hex_or(selected.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color)}
+                        oninput={(e) => patch_subtitles({ text_color: e.currentTarget.value })}
+                        class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                    >
+                    <input
+                        type="text"
+                        value={selected.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color}
+                        oninput={(e) => patch_subtitles({ text_color: e.currentTarget.value })}
+                        placeholder="#ffff7f"
+                        spellcheck={false}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                    >
+                </span>
+                {#if subtitle_field_message("text_color")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("text_color")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Stroke color
+                <span class="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={strict_hex_or(selected.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color)}
+                        oninput={(e) => patch_subtitles({ stroke_color: e.currentTarget.value })}
+                        class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                    >
+                    <input
+                        type="text"
+                        value={selected.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color}
+                        oninput={(e) => patch_subtitles({ stroke_color: e.currentTarget.value })}
+                        placeholder="#000000"
+                        spellcheck={false}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                    >
+                </span>
+                {#if subtitle_field_message("stroke_color")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("stroke_color")}</small>
+                {/if}
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Outline (0-10)
+                    <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value={selected.data.outline_size ?? SUBTITLE_BURN_DEFAULTS.outline_size}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_subtitles({ outline_size: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("outline_size")}
+                        <small class="text-xs font-normal text-red-700">{subtitle_field_message("outline_size")}</small>
+                    {/if}
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Shadow (0-10)
+                    <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value={selected.data.shadow_size ?? SUBTITLE_BURN_DEFAULTS.shadow_size}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_subtitles({ shadow_size: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("shadow_size")}
+                        <small class="text-xs font-normal text-red-700">{subtitle_field_message("shadow_size")}</small>
+                    {/if}
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Horizontal margin (both sides) (0-2000)
+                    <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        step="1"
+                        value={selected.data.horizontal_margin ?? SUBTITLE_BURN_DEFAULTS.horizontal_margin}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) =>
+                                patch_subtitles({ horizontal_margin: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("horizontal_margin")}
+                        <small class="text-xs font-normal text-red-700">
+                            {subtitle_field_message("horizontal_margin")}
+                        </small>
+                    {/if}
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Vertical offset (0-2000)
+                    <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        step="1"
+                        value={selected.data.vertical_offset ?? SUBTITLE_BURN_DEFAULTS.vertical_offset}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) =>
+                                patch_subtitles({ vertical_offset: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("vertical_offset")}
+                        <small class="text-xs font-normal text-red-700">
+                            {subtitle_field_message("vertical_offset")}
+                        </small>
+                    {/if}
+                </label>
+            </div>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Vertical anchor
+                <select
+                    value={selected.data.vertical_anchor ?? SUBTITLE_BURN_DEFAULTS.vertical_anchor}
+                    onchange={(e) =>
+                        patch_subtitles({ vertical_anchor: e.currentTarget.value as SubtitlesNodeData["vertical_anchor"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="top">top</option>
+                    <option value="center">center</option>
+                    <option value="bottom">bottom</option>
                 </select>
+            </label>
+            <label class="flex items-center gap-2 text-sm font-medium">
+                <input
+                    type="checkbox"
+                    checked={selected.data.right_to_left ?? SUBTITLE_BURN_DEFAULTS.right_to_left}
+                    onchange={(e) => patch_subtitles({ right_to_left: e.currentTarget.checked })}
+                    class="h-4 w-4 rounded border-gray-300"
+                >
+                Right to left
             </label>
         {:else if selected.type === "overlay"}
             {#key selected.id}
@@ -694,14 +902,14 @@ function probe_summary(node: ComposeNode): string {
                 <span class="flex items-center gap-2">
                     <input
                         type="color"
-                        value={selected.data.color}
+                        value={normalize_hex_input(selected.data.color)}
                         oninput={(e) => patch_color({ color: e.currentTarget.value })}
                         class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
                     >
                     <input
                         type="text"
                         value={selected.data.color}
-                        oninput={(e) => patch_color({ color: e.currentTarget.value })}
+                        oninput={(e) => patch_color({ color: normalize_hex_input(e.currentTarget.value) })}
                         placeholder="#000000"
                         spellcheck={false}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"

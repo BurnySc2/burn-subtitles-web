@@ -1,6 +1,6 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
-import { compose_node_title, type SubtitlesNodeData } from "$lib/media/compose-types"
+import { compose_node_title, SUBTITLE_BURN_DEFAULTS, type SubtitlesNodeData } from "$lib/media/compose-types"
 
 let {
     id = "",
@@ -16,6 +16,17 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("subtitles", data.label))
+
+let family = $derived(
+    typeof data.font_family === "string" && data.font_family.trim() !== ""
+        ? data.font_family.trim()
+        : SUBTITLE_BURN_DEFAULTS.font_family,
+)
+let is_default_family = $derived(family === SUBTITLE_BURN_DEFAULTS.font_family)
+let badge = $derived.by(() => {
+    const source = data.file ? data.file.name : "no file"
+    return is_default_family ? source : `${source} · ${family}`
+})
 </script>
 
 <div
@@ -65,28 +76,11 @@ let title = $derived(compose_node_title("subtitles", data.label))
             class="nodrag mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
         >
     {/if}
-    <label class="mt-2 flex flex-col gap-1 text-xs text-gray-600">
-        SRT content
-        <textarea
-            id={id ? `${id}-content` : undefined}
-            value={data.content ?? ""}
-            oninput={(e) => update_data({ content: e.currentTarget.value })}
-            placeholder="1&#10;00:00:00,000 --> 00:00:02,000&#10;Hello"
-            rows="4"
-            class="nodrag w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs text-gray-900"
-        ></textarea>
-    </label>
-    <label class="mt-2 flex flex-col gap-1 text-xs text-gray-600">
-        Mode
-        <select
-            id={id ? `${id}-mode` : undefined}
-            value={data.mode}
-            onchange={(e) => update_data({ mode: e.currentTarget.value as SubtitlesNodeData["mode"] })}
-            class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-xs text-gray-900"
-        >
-            <option value="mux">mux</option>
-            <option value="burn">burn</option>
-            <option value="sidecar">sidecar</option>
-        </select>
-    </label>
+    <p
+        id={id ? `${id}-badge` : undefined}
+        class="mt-1 text-xs text-gray-500"
+        title={is_default_family ? undefined : `Font: ${family}`}
+    >
+        {badge}
+    </p>
 </div>

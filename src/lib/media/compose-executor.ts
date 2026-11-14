@@ -6,7 +6,7 @@ import {
     single_input,
 } from "./compose-fused"
 import { type ComposeOutputNode, find_output_node, topo_sort_compose } from "./compose-graph"
-import { srt_to_vtt } from "./compose-subtitles"
+import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip } from "./mediabunny-clip"
@@ -15,6 +15,7 @@ import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
+import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
 
@@ -39,10 +40,9 @@ async function execute_fused_segment(
     output_node: ComposeOutputNode | null,
     on_slice: (progress: number) => void,
     signal?: AbortSignal,
-): Promise<{ blob: Blob; sidecar_vtt: string | null }> {
-    return execute_shared_fused_segment(dispatch, by_id, incoming, memo, output_node, on_slice, signal, {
-        include_sidecar: true,
-    })
+): Promise<Blob> {
+    const blob = await execute_shared_fused_segment(dispatch, by_id, incoming, memo, output_node, on_slice, signal)
+    return blob
 }
 
 function incoming_by_target(edges: ComposeEdge[]): Map<string, ComposeEdge[]> {
@@ -147,45 +147,6 @@ async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> 
     }
 }
 
-async function burn_subtitles_into_video(video: Blob, srt_content: string, signal?: AbortSignal): Promise<Blob> {
-    throw_if_aborted(signal)
-    const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([import("@ffmpeg/ffmpeg"), import("@ffmpeg/util")])
-    const ffmpeg = new FFmpeg()
-    const on_abort = () => {
-        ffmpeg.terminate()
-    }
-    signal?.addEventListener("abort", on_abort, { once: true })
-    try {
-        const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
-        await ffmpeg.load({
-            coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
-            wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
-        })
-        throw_if_aborted(signal)
-        await ffmpeg.writeFile("compose-input.mp4", await fetchFile(video))
-        await ffmpeg.writeFile("compose-subtitles.srt", srt_content)
-        await ffmpeg.exec([
-            "-i",
-            "compose-input.mp4",
-            "-vf",
-            "subtitles=compose-subtitles.srt",
-            "-c:a",
-            "copy",
-            "compose-output.mp4",
-        ])
-        throw_if_aborted(signal)
-        const output_data = await ffmpeg.readFile("compose-output.mp4")
-        // @ts-expect-error
-        return new Blob([(output_data as Uint8Array).buffer], { type: "video/mp4" })
-    } finally {
-        signal?.removeEventListener("abort", on_abort)
-        await ffmpeg.deleteFile("compose-input.mp4").catch(() => {})
-        await ffmpeg.deleteFile("compose-subtitles.srt").catch(() => {})
-        await ffmpeg.deleteFile("compose-output.mp4").catch(() => {})
-        ffmpeg.terminate()
-    }
-}
-
 export async function execute_compose_graph(options: ExecuteComposeGraphOptions): Promise<ComposeRunResult> {
     const { nodes, edges, on_progress, signal } = options
     throw_if_aborted(signal)
@@ -198,7 +159,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     const incoming = incoming_by_target(edges)
     const output_node = find_output_node(nodes)
     const memo = new Map<string, Blob>()
-    let sidecar_vtt: string | null = null
     const total = Math.max(1, order.length)
     let done = 0
     const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
@@ -214,20 +174,9 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
         }
         if (fused && node_id === fused.end_id) {
             const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
-            const { blob, sidecar_vtt: fused_sidecar } = await execute_fused_segment(
-                fused,
-                by_id,
-                incoming,
-                memo,
-                output_node,
-                span_slice,
-                signal,
-            )
+            const blob = await execute_fused_segment(fused, by_id, incoming, memo, output_node, span_slice, signal)
             for (const fused_id of fused.fused_ids) {
                 memo.set(fused_id, blob)
-            }
-            if (fused_sidecar !== null) {
-                sidecar_vtt ??= fused_sidecar
             }
             done += fused.span
             on_progress?.(done / total)
@@ -369,19 +318,40 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             }
             case "subtitles": {
                 const input = single_input(node.id, incoming, memo)
-                const content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
-                if (content === null || content.trim() === "") {
-                    throw new ClipError("FAILED", "Subtitle content is empty.")
+                const srt_content = node.data.file ? await node.data.file.text() : null
+                if (srt_content === null) {
+                    throw new ClipError("FAILED", "Subtitle file is required.")
                 }
-                const vtt = srt_to_vtt(content)
-                if (node.data.mode === "burn") {
-                    memo.set(node.id, await burn_subtitles_into_video(input, content, signal))
-                } else {
-                    memo.set(node.id, input)
-                    if (node.data.mode === "sidecar") {
-                        sidecar_vtt ??= vtt
+                if (srt_content.trim() === "") {
+                    throw new ClipError("FAILED", "Subtitle file is empty.")
+                }
+                try {
+                    srt_to_vtt(srt_content)
+                } catch (error) {
+                    if (error instanceof SubtitleError) {
+                        throw new ClipError("FAILED", error.message)
                     }
+                    throw error
                 }
+                const style = normalize_subtitle_style(node.data)
+                memo.set(
+                    node.id,
+                    await render_subtitles_burn(
+                        blob_to_file(input, "burn-input.mp4"),
+                        {
+                            srt_content,
+                            ...style,
+                            width: output_node?.data.width ?? 1920,
+                            height: output_node?.data.height ?? 1080,
+                            fps: output_node?.data.fps ?? 30,
+                            quality: output_node?.data.quality ?? "medium",
+                            crf: output_node?.data.crf ?? null,
+                            audio_quality: output_node?.data.audio_quality ?? "source-max",
+                            on_progress: slice,
+                        },
+                        signal,
+                    ),
+                )
                 break
             }
             case "output": {
@@ -397,7 +367,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     if (!final_blob) {
         throw new ClipError("FAILED", "Composition produced no output.")
     }
-    const sidecar_url = sidecar_vtt === null ? null : URL.createObjectURL(new Blob([sidecar_vtt], { type: "text/vtt" }))
     return {
         ok: true,
         issues: [],
@@ -406,7 +375,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             mime: "video/mp4",
             ext: "mp4",
             size_bytes: final_blob.size,
-            sidecar_url,
         },
     }
 }

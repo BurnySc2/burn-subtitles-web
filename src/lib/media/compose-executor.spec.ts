@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { execute_compose_graph } from "./compose-executor"
+import { parse_compose_json, serialize_compose } from "./compose-state.svelte"
+import { normalize_subtitle_style } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip, probe_media } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
+import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_transition } from "./mediabunny-transition"
 
 vi.mock("./mediabunny-clip", async (importOriginal) => {
@@ -11,6 +14,8 @@ vi.mock("./mediabunny-clip", async (importOriginal) => {
 })
 
 vi.mock("./mediabunny-merge", () => ({ render_merge: vi.fn() }))
+
+vi.mock("./mediabunny-subtitles", () => ({ render_subtitles_burn: vi.fn() }))
 
 vi.mock("./mediabunny-transition", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./mediabunny-transition")>()
@@ -33,12 +38,14 @@ function transition(id: string, start = 0, duration = 1): ComposeNode {
     return { id, type: "transition", position: { x: 0, y: 0 }, data: { start, duration, easing: "linear" } }
 }
 
-function subtitles(id: string): ComposeNode {
+const VALID_SRT = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"
+
+function subtitles(id: string, file: File | null = new File([VALID_SRT], "test.srt")): ComposeNode {
     return {
         id,
         type: "subtitles",
         position: { x: 0, y: 0 },
-        data: { file: null, content: "1\n00:00:01,000 --> 00:00:02,000\nHi\n", mode: "mux" },
+        data: { file, mode: "burn" },
     }
 }
 
@@ -63,6 +70,7 @@ beforeEach(() => {
     vi.mocked(extract_clip).mockReset()
     vi.mocked(render_transition).mockReset()
     vi.mocked(render_merge).mockReset()
+    vi.mocked(render_subtitles_burn).mockReset()
     vi.mocked(probe_media).mockReset()
     vi.mocked(extract_clip).mockImplementation(async (options) => ({
         blob: mp4_blob(`trim-${options.start}-${options.end}`),
@@ -82,6 +90,7 @@ beforeEach(() => {
         mime: "video/mp4",
         cancel: () => Promise.resolve(),
     }))
+    vi.mocked(render_subtitles_burn).mockImplementation(async () => mp4_blob("burned"))
 })
 
 describe("execute_compose_graph validation gate", () => {
@@ -147,13 +156,18 @@ describe("execute_compose_graph transition flow", () => {
 })
 
 describe("execute_compose_graph subtitles flow", () => {
-    it("passes video through after validating srt content", async () => {
+    it("burns video with an attached srt file", async () => {
         const result = await execute_compose_graph({
             nodes: [source("src"), subtitles("sub"), output()],
             edges: [edge("e1", "src", "sub"), edge("e2", "sub", "out")],
         })
         expect(result.ok).toBe(true)
         expect(result.output?.mime).toBe("video/mp4")
+        expect(vi.mocked(render_subtitles_burn)).toHaveBeenCalledTimes(1)
+        const call = vi.mocked(render_subtitles_burn).mock.calls[0]
+        expect(call?.[0]).toBeInstanceOf(File)
+        expect(call?.[1]).toMatchObject({ srt_content: VALID_SRT, ...normalize_subtitle_style({}) })
+        expect(call?.[1].font_family).toBe("sans-serif")
         expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
         expect(vi.mocked(render_transition)).not.toHaveBeenCalled()
         if (result.output) {
@@ -161,20 +175,85 @@ describe("execute_compose_graph subtitles flow", () => {
         }
     })
 
-    it("rejects invalid srt content", async () => {
-        const bad: ComposeNode = {
+    it("drops legacy content field on parse and still requires a file at the validation gate", async () => {
+        const legacy_json = JSON.stringify({
+            version: 1,
+            nodes: [
+                { id: "src", type: "source", position: { x: 0, y: 0 }, data: { file: null } },
+                {
+                    id: "sub",
+                    type: "subtitles",
+                    position: { x: 0, y: 0 },
+                    data: { file: null, mode: "burn", content: VALID_SRT },
+                },
+                {
+                    id: "out",
+                    type: "output",
+                    position: { x: 0, y: 0 },
+                    data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                },
+            ],
+            edges: [
+                { id: "e1", source: "src", sourceHandle: null, target: "sub", targetHandle: null },
+                { id: "e2", source: "sub", sourceHandle: null, target: "out", targetHandle: null },
+            ],
+        })
+        const parsed = parse_compose_json(legacy_json)
+        const sub = parsed.nodes.find((node) => node.id === "sub")
+        expect(sub?.type).toBe("subtitles")
+        if (sub?.type === "subtitles") {
+            expect("content" in sub.data).toBe(false)
+        }
+        expect(serialize_compose(parsed.nodes, parsed.edges)).not.toContain("content")
+        for (const node of parsed.nodes) {
+            if (node.type === "source") {
+                node.data.file = mp4_file("src.mp4")
+            }
+        }
+        const result = await execute_compose_graph({ nodes: parsed.nodes, edges: parsed.edges })
+        expect(result.ok).toBe(false)
+        expect(result.output).toBeNull()
+        expect(result.issues).toContainEqual({
+            node_id: "sub",
+            field: "file",
+            message: "SRT file is required — attach an .srt file.",
+        })
+        expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
+    })
+
+    it("fails execution when the subtitle file is empty", async () => {
+        const empty: ComposeNode = {
             id: "sub",
             type: "subtitles",
             position: { x: 0, y: 0 },
-            data: { file: null, content: "not-a-subtitle", mode: "mux" },
+            data: { file: new File([], "empty.srt"), mode: "burn" },
         }
-        const result = await execute_compose_graph({
-            nodes: [source("src"), bad, output()],
-            edges: [edge("e1", "src", "sub"), edge("e2", "sub", "out")],
+        await expect(
+            execute_compose_graph({
+                nodes: [source("src"), empty, output()],
+                edges: [edge("e1", "src", "sub"), edge("e2", "sub", "out")],
+            }),
+        ).rejects.toMatchObject({ name: "ClipError", code: "FAILED", message: "Subtitle file is empty." })
+        expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
+    })
+
+    it("fails execution when the subtitle file is malformed", async () => {
+        const malformed: ComposeNode = {
+            id: "sub",
+            type: "subtitles",
+            position: { x: 0, y: 0 },
+            data: { file: new File(["not a subtitle"], "bad.srt"), mode: "burn" },
+        }
+        await expect(
+            execute_compose_graph({
+                nodes: [source("src"), malformed, output()],
+                edges: [edge("e1", "src", "sub"), edge("e2", "sub", "out")],
+            }),
+        ).rejects.toMatchObject({
+            name: "ClipError",
+            code: "FAILED",
+            message: "Invalid SRT block 1: expected index, timestamp line, and text",
         })
-        expect(result.ok).toBe(false)
-        expect(result.output).toBeNull()
-        expect(result.issues.some((issue) => issue.field === "content")).toBe(true)
         expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
     })
 })

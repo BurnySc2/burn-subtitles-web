@@ -1,6 +1,7 @@
 import { font_cache_key } from "./compose-font-library"
 import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
+import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { collect_stack_segments } from "./mediabunny-compose-stack"
@@ -8,6 +9,7 @@ import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
 import { render_solid_color } from "./mediabunny-solid"
+import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
 
@@ -35,7 +37,8 @@ function serialize_node(node: ComposeNode): string {
         return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(node.data.probe ?? null)].join(":")
     }
     if (node.type === "subtitles") {
-        return [node.id, node.type, file_stub_key(node.data.file), node.data.content ?? "", node.data.mode].join(":")
+        const style = normalize_subtitle_style(node.data)
+        return [node.id, node.type, file_stub_key(node.data.file), JSON.stringify(style)].join(":")
     }
     if (node.type === "overlay") {
         return [
@@ -74,11 +77,17 @@ export function collect_referenced_fonts(relevant: Set<string>, by_id: Map<strin
     const collected = new Set<string>()
     for (const id of relevant) {
         const node = by_id.get(id)
-        if (node?.type !== "text") {
+        if (node?.type === "text") {
+            for (const item of node.data.items ?? []) {
+                const family = item.font.trim().toLowerCase()
+                if (family) {
+                    collected.add(family)
+                }
+            }
             continue
         }
-        for (const item of node.data.items ?? []) {
-            const family = item.font.trim().toLowerCase()
+        if (node?.type === "subtitles") {
+            const family = normalize_subtitle_style(node.data).font_family.trim().toLowerCase()
             if (family) {
                 collected.add(family)
             }
@@ -226,45 +235,6 @@ async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> 
     }
 }
 
-async function burn_subtitles_into_video(video: Blob, srt_content: string, signal?: AbortSignal): Promise<Blob> {
-    throw_if_aborted(signal)
-    const [{ FFmpeg }, { fetchFile, toBlobURL }] = await Promise.all([import("@ffmpeg/ffmpeg"), import("@ffmpeg/util")])
-    const ffmpeg = new FFmpeg()
-    const on_abort = () => {
-        ffmpeg.terminate()
-    }
-    signal?.addEventListener("abort", on_abort, { once: true })
-    try {
-        const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
-        await ffmpeg.load({
-            coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
-            wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
-        })
-        throw_if_aborted(signal)
-        await ffmpeg.writeFile("compose-preview-input.mp4", await fetchFile(video))
-        await ffmpeg.writeFile("compose-preview-subtitles.srt", srt_content)
-        await ffmpeg.exec([
-            "-i",
-            "compose-preview-input.mp4",
-            "-vf",
-            "subtitles=compose-preview-subtitles.srt",
-            "-c:a",
-            "copy",
-            "compose-preview-output.mp4",
-        ])
-        throw_if_aborted(signal)
-        const output_data = await ffmpeg.readFile("compose-preview-output.mp4")
-        // @ts-expect-error
-        return new Blob([(output_data as Uint8Array).buffer], { type: "video/mp4" })
-    } finally {
-        signal?.removeEventListener("abort", on_abort)
-        await ffmpeg.deleteFile("compose-preview-input.mp4").catch(() => {})
-        await ffmpeg.deleteFile("compose-preview-subtitles.srt").catch(() => {})
-        await ffmpeg.deleteFile("compose-preview-output.mp4").catch(() => {})
-        ffmpeg.terminate()
-    }
-}
-
 export async function get_node_preview_blob(
     target_id: string,
     nodes: ComposeNode[],
@@ -321,7 +291,7 @@ export async function get_node_preview_blob(
         }
         if (fused_active && fused !== null && node_id === fused.end_id) {
             const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
-            const { blob } = await execute_fused_segment(fused, by_id, incoming, blobs, output_node, span_slice, signal)
+            const blob = await execute_fused_segment(fused, by_id, incoming, blobs, output_node, span_slice, signal)
             for (const fused_id of fused.fused_ids) {
                 store(fused_id, blob)
             }
@@ -374,15 +344,40 @@ export async function get_node_preview_blob(
             }
             case "subtitles": {
                 const input = single_input(node.id, incoming, blobs)
-                const content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
-                if (content === null || content.trim() === "") {
-                    throw new ClipError("FAILED", "Subtitle content is empty.")
+                const srt_content = node.data.file ? await node.data.file.text() : null
+                if (srt_content === null) {
+                    throw new ClipError("FAILED", "Subtitle file is required.")
                 }
-                if (node.data.mode === "burn") {
-                    store(node.id, await burn_subtitles_into_video(input, content, signal))
-                } else {
-                    store(node.id, input)
+                if (srt_content.trim() === "") {
+                    throw new ClipError("FAILED", "Subtitle file is empty.")
                 }
+                try {
+                    srt_to_vtt(srt_content)
+                } catch (error) {
+                    if (error instanceof SubtitleError) {
+                        throw new ClipError("FAILED", error.message)
+                    }
+                    throw error
+                }
+                const style = normalize_subtitle_style(node.data)
+                store(
+                    node.id,
+                    await render_subtitles_burn(
+                        blob_to_file(input, "burn-input.mp4"),
+                        {
+                            srt_content,
+                            ...style,
+                            width: output_node?.data.width ?? 1920,
+                            height: output_node?.data.height ?? 1080,
+                            fps: output_node?.data.fps ?? 30,
+                            quality: output_node?.data.quality ?? "medium",
+                            crf: output_node?.data.crf ?? null,
+                            audio_quality: output_node?.data.audio_quality ?? "source-max",
+                            on_progress: slice,
+                        },
+                        signal,
+                    ),
+                )
                 break
             }
             case "merge": {

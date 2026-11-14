@@ -10,6 +10,9 @@ Develop branch deployment: https://burn-subtitles-dev.netlify.app
 - Download SRT (`/download-srt`): builds an SRT file from subtitle lines in an ODS sheet.
 - Clip Extractor (`/clip`): trims video/audio in the browser, no upload.
 - Crossfade Transition (`/transition`): blends two videos with a crossfade in the browser, no upload.
+- Split Subtitles (`/split`): splits long SRT cues into balanced parts in the browser, no upload.
+- ASS Subtitles (`/ass`): previews and burns ASS-styled subtitles into video in the browser.
+- Compose (`/compose`): builds video from a node graph (trim/merge/transition/subtitles/text overlay) in the browser, no upload.
 
 > No uploads, no servers — your media stays on this device.
 

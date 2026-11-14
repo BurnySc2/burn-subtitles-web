@@ -1,5 +1,6 @@
+import { is_chromium } from "../utils/browser-detect"
+import { is_font_available } from "./compose-font-library"
 import { topo_sort_compose } from "./compose-graph"
-import { validate_srt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode, validate_range } from "./timecode"
@@ -172,7 +173,11 @@ export function compose_node_durations(nodes: ComposeNode[], edges: ComposeEdge[
     return duration_memo
 }
 
-export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): ValidationIssue[] {
+export function validate_compose(
+    nodes: ComposeNode[],
+    edges: ComposeEdge[],
+    is_chromium_browser: boolean = is_chromium(),
+): ValidationIssue[] {
     const issues: ValidationIssue[] = []
     const by_id = new Map(nodes.map((node) => [node.id, node]))
     const incoming = new Map<string, ComposeEdge[]>()
@@ -489,20 +494,84 @@ export function validate_compose(nodes: ComposeNode[], edges: ComposeEdge[]): Va
         } else if (node.type === "subtitles") {
             const wired = ins(node.id).length > 0 || outs(node.id).length > 0
             if (wired) {
-                const content = node.data.content
-                if (content === null || content.trim() === "") {
-                    if (!node.data.file) {
+                const subtitle_file = node.data.file
+                if (!subtitle_file) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "file",
+                        message: "SRT file is required — attach an .srt file.",
+                    })
+                } else {
+                    if (!/\.srt$/i.test(subtitle_file.name)) {
                         issues.push({
                             node_id: node.id,
-                            field: "content",
-                            message: "Subtitle content must not be empty",
+                            field: "file",
+                            message: "Subtitle file must be an .srt file",
                         })
                     }
-                } else {
-                    const check = validate_srt(content)
-                    for (const error of check.errors) {
-                        issues.push({ node_id: node.id, field: "content", message: error })
+                    if (subtitle_file.size > 5 * 1024 * 1024) {
+                        issues.push({
+                            node_id: node.id,
+                            field: "file",
+                            message: "Subtitle file must not exceed 5 MiB",
+                        })
                     }
+                }
+                for (const field of ["text_color", "stroke_color"] as const) {
+                    const value = node.data[field]
+                    if (value !== undefined && value !== null && !/^#[0-9a-fA-F]{6}$/.test(value)) {
+                        issues.push({
+                            node_id: node.id,
+                            field,
+                            message: `Subtitle ${field} must be a hex color like #ffffff`,
+                        })
+                    }
+                }
+                const range_checks = [
+                    { field: "font_size", raw: node.data.font_size, min: 8, max: 160 },
+                    { field: "outline_size", raw: node.data.outline_size, min: 0, max: 10 },
+                    { field: "shadow_size", raw: node.data.shadow_size, min: 0, max: 10 },
+                    { field: "horizontal_margin", raw: node.data.horizontal_margin, min: 0, max: 2000 },
+                    { field: "vertical_offset", raw: node.data.vertical_offset, min: 0, max: 2000 },
+                ] as const
+                for (const check of range_checks) {
+                    if (
+                        check.raw !== undefined &&
+                        check.raw !== null &&
+                        Number.isFinite(check.raw) &&
+                        (check.raw < check.min || check.raw > check.max)
+                    ) {
+                        issues.push({
+                            node_id: node.id,
+                            field: check.field,
+                            message: `Subtitle ${check.field} must be between ${check.min} and ${check.max}`,
+                        })
+                    }
+                }
+                const font_family = node.data.font_family
+                if (typeof font_family === "string" && font_family.length > 200) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "font_family",
+                        message: "Subtitle font_family must be at most 200 characters",
+                    })
+                } else if (
+                    typeof font_family === "string" &&
+                    font_family.trim() !== "" &&
+                    !is_font_available(font_family.trim())
+                ) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "font_family",
+                        message: "Subtitle font is not available — load it in the font library",
+                    })
+                }
+                if (!is_chromium_browser) {
+                    issues.push({
+                        node_id: node.id,
+                        field: "mode",
+                        message: "Burn mode subtitles render best in a Chromium browser such as Chrome or Edge",
+                    })
                 }
             }
         } else if (node.type === "overlay") {
