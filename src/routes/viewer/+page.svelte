@@ -387,6 +387,14 @@ onDestroy(() => {
                     on_fullscreen={toggle_fullscreen}
                 />
             </div>
+            {#if volume_text}
+                <p
+                    role="status"
+                    class="text-sm text-gray-500"
+                >
+                    {volume_text}
+                </p>
+            {/if}
             <ViewerInspector
                 {fps}
                 probe={viewer_state.source.probe}
@@ -396,14 +404,6 @@ onDestroy(() => {
                 loudness={viewer_state.source.loudness}
                 current_time={viewer_state.playback.current_time}
             />
-            {#if volume_text}
-                <p
-                    role="status"
-                    class="section text-sm text-gray-500"
-                >
-                    {volume_text}
-                </p>
-            {/if}
         {/if}
         {#if viewer_state.message}
             <div
