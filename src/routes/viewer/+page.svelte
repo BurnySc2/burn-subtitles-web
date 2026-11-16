@@ -242,10 +242,10 @@ onDestroy(() => {
 })
 </script>
 
-<div class="mx-auto max-w-5xl p-6">
+<div class="mx-auto max-w-5xl p-4">
     <h1 class="text-2xl font-bold">Frame Viewer</h1>
     <p class="mt-1 text-sm text-gray-500">Local only, no uploads — your media stays on this device.</p>
-    <div class="mt-4 flex flex-col gap-4">
+    <div class="mt-2 flex flex-col gap-3">
         <div class="section">
             <ComposeFileDrop
                 accept="video/*,audio/*"
@@ -262,7 +262,7 @@ onDestroy(() => {
             <p
                 id="viewer-file-status"
                 aria-live="polite"
-                class={file_name ? "mt-2 text-sm font-medium text-green-700" : "mt-2 text-sm text-gray-500"}
+                class={file_name ? "mt-1 text-sm font-medium text-green-700" : "mt-1 text-sm text-gray-500"}
             >
                 {#if file_name}
                     ✓ Accepted: {file_name}

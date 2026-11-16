@@ -119,14 +119,14 @@ function toggle_mute() {
 }
 </script>
 
-<div class="flex w-full flex-col gap-2">
+<div class="flex w-full flex-col gap-1">
     <p
         role="status"
         class="text-xs text-gray-700"
     >
         {readout}
     </p>
-    <div class="flex flex-wrap gap-2">
+    <div class="flex flex-wrap gap-1">
         <button
             type="button"
             onclick={() => copy_kind("seconds")}
@@ -165,7 +165,7 @@ function toggle_mute() {
             >
         {/if}
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-1">
         <input
             type="range"
             min="0"
@@ -191,7 +191,7 @@ function toggle_mute() {
             {/if}
         </span>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center gap-1">
         <button
             type="button"
             onclick={() => step(-10)}
@@ -278,7 +278,7 @@ function toggle_mute() {
             ⛶
         </button>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-1">
         <label
             for="viewer-volume"
             class="form-label shrink-0"
