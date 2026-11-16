@@ -50,7 +50,7 @@ function source(id: string, duration: number | null = 120): ComposeNode {
     }
 }
 
-function trim(id: string, start = 10, end = 20): ComposeNode {
+function trim(id: string, start: number | null = 10, end: number | null = 20): ComposeNode {
     return { id, type: "trim", position: { x: 0, y: 0 }, data: { start, end } }
 }
 
@@ -206,7 +206,43 @@ describe("validate_compose", () => {
     it("flags trim ranges where end is not after start", () => {
         const nodes = [source("src"), trim("trim", 20, 10), output()]
         const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
-        expect(validate_compose(nodes, edges).some((issue) => issue.field === "range")).toBe(true)
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "end",
+            message: "Trim end must be larger than start.",
+        })
+    })
+
+    it("flags trims with neither start nor end", () => {
+        const nodes = [source("src"), trim("trim", null, null), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "range",
+            message: "Trim needs a start or an end — both empty trims nothing.",
+        })
+    })
+
+    it("flags open-ended trims without an upstream duration", () => {
+        const nodes = [source("src", null), trim("trim", 5, null), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "end",
+            message: "Trim end needs an upstream duration or an explicit value.",
+        })
+    })
+
+    it("clamps a null trim start and resolves a null end from upstream", () => {
+        const null_start = [source("src"), trim("trim", null, 20), output()]
+        const null_start_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(null_start, null_start_edges)).toEqual([])
+        expect(compose_node_durations(null_start, null_start_edges).get("trim")).toBe(20)
+
+        const null_end = [source("src"), trim("trim", 10, null), output()]
+        const null_end_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(null_end, null_end_edges)).toEqual([])
+        expect(compose_node_durations(null_end, null_end_edges).get("trim")).toBe(110)
     })
 
     it("flags non-positive transition durations", () => {

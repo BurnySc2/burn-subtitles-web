@@ -353,6 +353,17 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                         label: node.data.label ?? null,
                     },
                 }
+            case "trim":
+                return {
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    data: {
+                        start: node.data.start ?? null,
+                        end: node.data.end ?? null,
+                        label: node.data.label ?? null,
+                    },
+                }
             default:
                 return {
                     id: node.id,
@@ -436,14 +447,19 @@ function parse_node(raw: unknown): ComposeNode {
                 },
             }
         case "trim": {
-            if (typeof raw.data.start !== "number" || typeof raw.data.end !== "number") {
-                throw new Error(`Node "${raw.id}": trim needs numeric start and end`)
+            const start = raw.data.start === undefined ? null : raw.data.start
+            const end = raw.data.end === undefined ? null : raw.data.end
+            if (start !== null && typeof start !== "number") {
+                throw new Error(`Node "${raw.id}": invalid trim start`)
+            }
+            if (end !== null && typeof end !== "number") {
+                throw new Error(`Node "${raw.id}": invalid trim end`)
             }
             return {
                 id: raw.id,
                 type: "trim",
                 position,
-                data: { start: raw.data.start, end: raw.data.end, label: parse_label(raw.data.label, raw.id) },
+                data: { start, end, label: parse_label(raw.data.label, raw.id) },
             }
         }
         case "transition": {

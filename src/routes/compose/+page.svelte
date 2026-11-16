@@ -66,7 +66,7 @@ function handle_add(kind: ComposeNodeKind): void {
             node = { id, type: "source", position, data: { file: null, probe: null } }
             break
         case "trim":
-            node = { id, type: "trim", position, data: { start: 0, end: 1 } }
+            node = { id, type: "trim", position, data: { start: 0, end: null } }
             break
         case "transition":
             node = {

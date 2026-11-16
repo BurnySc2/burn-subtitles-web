@@ -2,6 +2,7 @@
 import { is_accepted } from "$lib/media/compose-drop"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
+import { parse_trim_field } from "$lib/media/compose-trim"
 import type {
     ColorNodeData,
     ComposeNode,
@@ -278,6 +279,13 @@ function on_crf_input(raw: string): void {
     }
 }
 
+function on_trim_input(field: "start" | "end", raw: string): void {
+    const parsed = parse_trim_field(raw)
+    if (parsed !== undefined) {
+        patch_trim({ [field]: parsed })
+    }
+}
+
 function on_show_end_input(raw: string): void {
     if (raw.trim() === "") {
         patch_overlay({ show_end: null })
@@ -405,10 +413,12 @@ function probe_summary(node: ComposeNode): string {
                     type="number"
                     min="0"
                     step="0.001"
-                    value={selected.data.start}
-                    oninput={(e) => on_number_input(e.currentTarget.value, (value) => patch_trim({ start: value }))}
+                    value={selected.data.start ?? ""}
+                    placeholder="0 = from start"
+                    oninput={(e) => on_trim_input("start", e.currentTarget.value)}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
+                <small class="text-xs font-normal text-gray-500">Empty means from start.</small>
             </label>
             <label class="flex flex-col gap-1 text-sm font-medium">
                 End (s)
@@ -416,10 +426,12 @@ function probe_summary(node: ComposeNode): string {
                     type="number"
                     min="0"
                     step="0.001"
-                    value={selected.data.end}
-                    oninput={(e) => on_number_input(e.currentTarget.value, (value) => patch_trim({ end: value }))}
+                    value={selected.data.end ?? ""}
+                    placeholder="empty = to end"
+                    oninput={(e) => on_trim_input("end", e.currentTarget.value)}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
+                <small class="text-xs font-normal text-gray-500">Empty means to end; both empty is not allowed.</small>
             </label>
         {:else if selected.type === "transition"}
             <label class="flex flex-col gap-1 text-sm font-medium">

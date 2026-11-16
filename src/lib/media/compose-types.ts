@@ -25,8 +25,8 @@ export interface SourceNodeData {
 }
 
 export interface TrimNodeData {
-    start: number
-    end: number
+    start: number | null
+    end: number | null
     label?: string | null
 }
 

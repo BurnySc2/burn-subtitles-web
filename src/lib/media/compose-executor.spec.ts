@@ -3,7 +3,7 @@ import { execute_compose_graph } from "./compose-executor"
 import { parse_compose_json, serialize_compose } from "./compose-state.svelte"
 import { normalize_subtitle_style } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
-import { ClipError, extract_clip, probe_media } from "./mediabunny-clip"
+import { ClipError, extract_clip, type ProbeResult, probe_media } from "./mediabunny-clip"
 import { render_merge } from "./mediabunny-merge"
 import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_transition } from "./mediabunny-transition"
@@ -30,7 +30,16 @@ function source(id: string): ComposeNode {
     return { id, type: "source", position: { x: 0, y: 0 }, data: { file: mp4_file(`${id}.mp4`), probe: null } }
 }
 
-function trim(id: string, start = 10, end = 20): ComposeNode {
+function probed_source(id: string, duration: number): ComposeNode {
+    return {
+        id,
+        type: "source",
+        position: { x: 0, y: 0 },
+        data: { file: mp4_file(`${id}.mp4`), probe: { duration } as unknown as ProbeResult },
+    }
+}
+
+function trim(id: string, start: number | null = 10, end: number | null = 20): ComposeNode {
     return { id, type: "trim", position: { x: 0, y: 0 }, data: { start, end } }
 }
 
@@ -131,6 +140,64 @@ describe("execute_compose_graph trim flow", () => {
         if (result.output) {
             URL.revokeObjectURL(result.output.url)
         }
+    })
+
+    it("clamps a null trim start to zero", async () => {
+        const result = await execute_compose_graph({
+            nodes: [source("src"), trim("trim", null, 20), output()],
+            edges: [edge("e1", "src", "trim"), edge("e2", "trim", "out")],
+        })
+        expect(result.ok).toBe(true)
+        const call = vi.mocked(extract_clip).mock.calls[0]?.[0]
+        expect(call?.start).toBe(0)
+        expect(call?.end).toBe(20)
+        if (result.output) {
+            URL.revokeObjectURL(result.output.url)
+        }
+    })
+
+    it("resolves a null trim end from the upstream probe duration", async () => {
+        const result = await execute_compose_graph({
+            nodes: [probed_source("src", 120), trim("trim", 10, null), output()],
+            edges: [edge("e1", "src", "trim"), edge("e2", "trim", "out")],
+        })
+        expect(result.ok).toBe(true)
+        const call = vi.mocked(extract_clip).mock.calls[0]?.[0]
+        expect(call?.start).toBe(10)
+        expect(call?.end).toBe(120)
+        if (result.output) {
+            URL.revokeObjectURL(result.output.url)
+        }
+    })
+
+    it("rejects a both-empty trim at the validation gate", async () => {
+        const result = await execute_compose_graph({
+            nodes: [source("src"), trim("trim", null, null), output()],
+            edges: [edge("e1", "src", "trim"), edge("e2", "trim", "out")],
+        })
+        expect(result.ok).toBe(false)
+        expect(result.output).toBeNull()
+        expect(result.issues).toContainEqual({
+            node_id: "trim",
+            field: "range",
+            message: "Trim needs a start or an end — both empty trims nothing.",
+        })
+        expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
+    })
+
+    it("rejects a zero-length trim at the validation gate", async () => {
+        const result = await execute_compose_graph({
+            nodes: [source("src"), trim("trim", 0, 0), output()],
+            edges: [edge("e1", "src", "trim"), edge("e2", "trim", "out")],
+        })
+        expect(result.ok).toBe(false)
+        expect(result.output).toBeNull()
+        expect(result.issues).toContainEqual({
+            node_id: "trim",
+            field: "end",
+            message: "Trim end must be larger than start.",
+        })
+        expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
     })
 })
 

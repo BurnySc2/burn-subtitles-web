@@ -1,9 +1,10 @@
 import { is_chromium } from "../utils/browser-detect"
 import { is_font_available } from "./compose-font-library"
 import { topo_sort_compose } from "./compose-graph"
+import { resolve_trim_range } from "./compose-trim"
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
-import { format_timecode, validate_range } from "./timecode"
+import { format_timecode } from "./timecode"
 import {
     parse_crf_override,
     TRANSITION_AUDIO_MODE_DEFAULT,
@@ -102,9 +103,11 @@ function node_duration(
         const pred = sole_pred(node.id, incoming)
         if (pred !== null) {
             const up = node_duration(pred, by_id, incoming, memo, seen)
-            const { start, end } = node.data
-            const own = Number.isFinite(start) && Number.isFinite(end) && end > start ? end - start : null
-            result = up === null || own === null ? null : gate_duration(Math.min(up, own))
+            const resolved = resolve_trim_range(node.data, up)
+            if (resolved.ok) {
+                const own = resolved.end - resolved.start
+                result = up === null ? null : gate_duration(Math.min(up, own))
+            }
         }
     } else if (
         node.type === "rescale" ||
@@ -369,26 +372,33 @@ export function validate_compose(
             issues.push({ node_id: node.id, field: "file", message: "Source file is required" })
         }
         if (node.type === "trim") {
-            const { start, end } = node.data
-            const check = validate_range(format_timecode(start), format_timecode(end))
-            if (check.start_error) {
-                issues.push({ node_id: node.id, field: "start", message: check.start_error })
-            }
-            if (check.end_error) {
-                issues.push({ node_id: node.id, field: "end", message: check.end_error })
-            }
-            if (check.range_error) {
-                issues.push({ node_id: node.id, field: "range", message: check.range_error })
-            }
-            if (!Number.isFinite(start) || start < 0) {
-                issues.push({ node_id: node.id, field: "start", message: "Trim start must not be negative." })
-            }
-            if (!Number.isFinite(end) || !Number.isFinite(start) || end <= start) {
-                issues.push({ node_id: node.id, field: "end", message: "Trim end must be larger than start." })
-            }
             const duration = upstream_duration(node.id, by_id, incoming)
+            const resolved = resolve_trim_range(node.data, duration)
+            if (!resolved.ok) {
+                if (resolved.reason === "both-empty") {
+                    issues.push({
+                        node_id: node.id,
+                        field: "range",
+                        message: "Trim needs a start or an end — both empty trims nothing.",
+                    })
+                } else if (resolved.reason === "no-duration") {
+                    issues.push({
+                        node_id: node.id,
+                        field: "end",
+                        message: "Trim end needs an upstream duration or an explicit value.",
+                    })
+                } else {
+                    issues.push({
+                        node_id: node.id,
+                        field: "end",
+                        message: "Trim end must be larger than start.",
+                    })
+                }
+                continue
+            }
+            const { start, end } = resolved
             if (duration !== null) {
-                if (Number.isFinite(start) && start >= duration) {
+                if (start >= duration) {
                     issues.push({
                         node_id: node.id,
                         field: "start",
