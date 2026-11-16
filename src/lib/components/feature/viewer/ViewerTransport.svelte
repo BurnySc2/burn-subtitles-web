@@ -16,6 +16,7 @@ let {
 } = $props()
 
 let paused = $state(true)
+let volume_level = $state(1)
 
 $effect(() => {
     const el = video_el
@@ -31,6 +32,21 @@ $effect(() => {
     return () => {
         el.removeEventListener("play", sync)
         el.removeEventListener("pause", sync)
+    }
+})
+
+$effect(() => {
+    const el = video_el
+    if (!el) {
+        return
+    }
+    const sync_volume = () => {
+        volume_level = el.volume
+    }
+    sync_volume()
+    el.addEventListener("volumechange", sync_volume)
+    return () => {
+        el.removeEventListener("volumechange", sync_volume)
     }
 })
 
@@ -159,5 +175,32 @@ function toggle_play() {
         >
             +1s
         </button>
+    </div>
+    <div class="flex items-center gap-2">
+        <label
+            for="viewer-volume"
+            class="form-label shrink-0"
+            >Volume</label
+        >
+        <input
+            id="viewer-volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            aria-label="Volume"
+            value={volume_level}
+            disabled={controls_disabled}
+            class="w-full flex-1"
+            oninput={(e) => {
+                const next = Number(e.currentTarget.value)
+                if (video_el) {
+                    video_el.volume = next
+                    if (next > 0) {
+                        video_el.muted = false
+                    }
+                }
+            }}
+        >
     </div>
 </div>

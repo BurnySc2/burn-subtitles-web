@@ -12,6 +12,7 @@ import { effective_fps, step_frame, time_to_frame } from "$lib/media/viewer-step
 let file_token = 0
 let video_el: HTMLVideoElement | HTMLAudioElement | null = $state(null)
 let video_duration: number | null = $state(null)
+let stage_wrapper: HTMLDivElement | null = $state(null)
 
 let fps = $derived(effective_fps(viewer_state.source?.probe?.frame_rate))
 let duration = $derived(viewer_state.source?.probe?.duration ?? video_duration ?? null)
@@ -73,6 +74,17 @@ function handle_duration(value: number): void {
 
 function handle_error(): void {
     viewer_state.error = "Preview failed: this codec may not be supported by the browser."
+}
+
+function toggle_fullscreen(): void {
+    if (typeof document === "undefined") {
+        return
+    }
+    if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {})
+    } else {
+        void stage_wrapper?.requestFullscreen().catch(() => {})
+    }
 }
 
 function toggle_play(): void {
@@ -165,6 +177,9 @@ function on_keydown(event: KeyboardEvent): void {
     } else if (key === "c") {
         event.preventDefault()
         void copy_summary()
+    } else if (key === "f" || key === "F") {
+        event.preventDefault()
+        toggle_fullscreen()
     } else if (key === "Home") {
         event.preventDefault()
         seek_absolute(0)
@@ -197,6 +212,7 @@ onDestroy(() => {
             <div class="section">
                 <ViewerStage
                     video_ref={(el) => (video_el = el)}
+                    wrapper_ref={(el) => (stage_wrapper = el)}
                     url={viewer_state.source.url}
                     {has_video}
                     on_tick={handle_tick}

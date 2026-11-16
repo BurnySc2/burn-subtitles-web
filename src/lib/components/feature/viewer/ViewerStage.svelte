@@ -1,6 +1,7 @@
 <script lang="ts">
 let {
     video_ref,
+    wrapper_ref,
     url,
     has_video,
     on_tick,
@@ -9,6 +10,7 @@ let {
     on_seeked,
 }: {
     video_ref: (el: HTMLVideoElement | HTMLAudioElement | null) => void
+    wrapper_ref: (el: HTMLDivElement | null) => void
     url: string
     has_video: boolean
     on_tick: (t: { media_time: number; presented_frames?: number }) => void
@@ -19,6 +21,7 @@ let {
 
 let video_el: HTMLVideoElement | null = $state(null)
 let audio_el: HTMLAudioElement | null = $state(null)
+let wrapper_el: HTMLDivElement | null = $state(null)
 
 type RvfcCallback = (now: number, metadata: { mediaTime: number; presentedFrames: number }) => void
 
@@ -53,6 +56,10 @@ function handle_seeked(event: Event) {
 }
 
 $effect(() => {
+    wrapper_ref(wrapper_el)
+})
+
+$effect(() => {
     void url
     const current = has_video ? video_el : audio_el
     video_ref(current)
@@ -80,33 +87,34 @@ $effect(() => {
 })
 </script>
 
-{#if has_video}
-    <video
-        bind:this={video_el}
-        src={url}
-        controls
-        preload="auto"
-        class="w-full rounded"
-        onloadedmetadata={handle_loaded}
-        ontimeupdate={handle_time}
-        onseeked={handle_seeked}
-        onerror={() => on_error?.()}
-    >
-        <!-- WHY empty captions track: satisfies a11y media-caption rule -->
-        <track kind="captions">
-    </video>
-{:else}
-    <audio
-        bind:this={audio_el}
-        src={url}
-        controls
-        class="w-full"
-        onloadedmetadata={handle_loaded}
-        ontimeupdate={handle_time}
-        onseeked={handle_seeked}
-        onerror={() => on_error?.()}
-    >
-        <!-- WHY empty captions track: satisfies a11y media-caption rule -->
-        <track kind="captions">
-    </audio>
-{/if}
+<div
+    bind:this={wrapper_el}
+    class="w-full"
+>
+    {#if has_video}
+        <!-- biome-ignore lint/a11y/useMediaCaption: local-file viewer, no caption source -->
+        <video
+            bind:this={video_el}
+            src={url}
+            controls
+            preload="auto"
+            class="w-full rounded"
+            onloadedmetadata={handle_loaded}
+            ontimeupdate={handle_time}
+            onseeked={handle_seeked}
+            onerror={() => on_error?.()}
+        ></video>
+    {:else}
+        <!-- biome-ignore lint/a11y/useMediaCaption: local-file viewer, no caption source -->
+        <audio
+            bind:this={audio_el}
+            src={url}
+            controls
+            class="w-full"
+            onloadedmetadata={handle_loaded}
+            ontimeupdate={handle_time}
+            onseeked={handle_seeked}
+            onerror={() => on_error?.()}
+        ></audio>
+    {/if}
+</div>
