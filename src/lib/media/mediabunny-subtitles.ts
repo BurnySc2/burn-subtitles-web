@@ -29,6 +29,7 @@ export interface BurnSubtitlesOptions {
     height: number
     fps: number
     quality: TransitionQuality
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     on_progress?: (progress: number) => void
 }
@@ -189,7 +190,9 @@ export async function render_subtitles_burn(
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
         const { canvas, ctx: encode_ctx } = create_encode_canvas(opts.width, opts.height)
-        const video_source = create_encode_video_source(mb, opts.quality, opts.width, opts.height, opts.fps)
+        const video_source = create_encode_video_source(mb, opts.quality, opts.width, opts.height, opts.fps, {
+            video_bitrate: opts.video_bitrate ?? null,
+        })
         output.addVideoTrack(video_source)
         const audio_tracks = await input.getAudioTracks()
         const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null

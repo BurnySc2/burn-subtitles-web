@@ -1,5 +1,5 @@
 import type { ComposeNode, ComposeNodeKind, OutputNodeData } from "./compose-types"
-import { resolve_video_encode_config, type TransitionVideoConfig } from "./transition-utils"
+import { resolve_output_video_config, type TransitionVideoConfig } from "./transition-utils"
 
 // Mirrors canvas re-encode branches in compose-executor.ts:212-339
 export const REENCODE_NODE_KINDS: ReadonlySet<ComposeNodeKind> = new Set<ComposeNodeKind>([
@@ -17,7 +17,7 @@ export function has_reencode_sink(nodes: ComposeNode[]): boolean {
 }
 
 export function effective_encode_config(output: OutputNodeData): TransitionVideoConfig {
-    return resolve_video_encode_config(output.quality, output.width, output.height, output.fps)
+    return resolve_output_video_config(output)
 }
 
 export function format_encode_hint(config: TransitionVideoConfig): string {

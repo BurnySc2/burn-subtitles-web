@@ -36,6 +36,7 @@ export interface StackTarget {
     height: number
     fps: number
     quality: TransitionQuality
+    video_bitrate?: number | null
     audio_quality: TransitionAudioQuality
 }
 
@@ -229,6 +230,13 @@ function validate_stack_options(options: RenderStackOptions): void {
         throw new ClipError("INVALID_RANGE", "Unknown stack quality.")
     }
     if (
+        target.video_bitrate !== undefined &&
+        target.video_bitrate !== null &&
+        (!Number.isFinite(target.video_bitrate) || target.video_bitrate <= 0)
+    ) {
+        throw new ClipError("INVALID_RANGE", "Stack video bitrate must be greater than 0.")
+    }
+    if (
         target.audio_quality !== "96k" &&
         target.audio_quality !== "128k" &&
         target.audio_quality !== "192k" &&
@@ -308,6 +316,7 @@ export async function render_compose_stack(options: RenderStackOptions): Promise
             height,
             fps,
             quality,
+            video_bitrate: target.video_bitrate ?? null,
             audio_probe: probe,
             audio_quality: target.audio_quality,
             needs_audio: head_file !== null,
