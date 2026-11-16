@@ -37,7 +37,7 @@ function output(id = "out"): ComposeNode {
         id,
         type: "output",
         position: { x: 0, y: 0 },
-        data: { file_name: null, width: 320, height: 180, fps: 15, quality: "high" },
+        data: { file_name: null, width: 320, height: 180, fps: 15, video_bitrate_kbps: 8000 },
     }
 }
 
@@ -60,12 +60,13 @@ describe("execute_compose_graph color and rescale", () => {
         expect(call?.width).toBe(320)
         expect(call?.height).toBe(180)
         expect(call?.fps).toBe(15)
+        expect(call?.video_bitrate).toBe(8_000_000)
         if (result.output) {
             URL.revokeObjectURL(result.output.url)
         }
     })
 
-    it("forwards node dims and output quality to render_rescale", async () => {
+    it("forwards node dims and output bitrate to render_rescale", async () => {
         const result = await execute_compose_graph({
             nodes: [source("src"), rescale("r"), output()],
             edges: [edge("e1", "src", "r"), edge("e2", "r", "out")],
@@ -76,7 +77,7 @@ describe("execute_compose_graph color and rescale", () => {
         expect(options?.height).toBe(360)
         expect(options?.fps).toBe(24)
         expect(options?.fit).toBe("contain")
-        expect(options?.quality).toBe("high")
+        expect(options?.video_bitrate).toBe(8_000_000)
         if (result.output) {
             URL.revokeObjectURL(result.output.url)
         }

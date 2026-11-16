@@ -1,23 +1,25 @@
 import type { AudioBufferSink } from "mediabunny"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { TimecodeError } from "./timecode"
 import { transition_filename } from "./transition-filename"
 import {
     add_canvas_frame,
     type CanvasEncodeSetup,
+    clamp_video_bitrate_kbps,
     create_video_sample_source,
     decode_full_audio,
     EASING_REGISTRY,
     estimate_frame_count,
-    parse_crf_override,
+    estimate_output_bytes,
+    format_size_estimate,
     phase_at,
-    quality_to_video_config,
     resolve_audio_bitrate,
+    resolve_compose_video_bps,
     resolve_duration_seconds,
     resolve_output_dims,
     resolve_output_fps,
+    resolve_output_video_config,
     resolve_start_seconds,
-    resolve_video_encode_config,
     TRANSITION_AUDIO_MODE_HINTS,
     TRANSITION_AUDIO_MODES,
     total_transition_duration,
@@ -116,31 +118,63 @@ describe("validate_transition_range", () => {
     })
 })
 
-describe("quality_to_video_config", () => {
-    it("maps each quality to its bitrate ceiling", () => {
-        expect(quality_to_video_config("low", 1920, 1080, 30).bitrate).toBe(2_000_000)
-        expect(quality_to_video_config("medium", 1920, 1080, 30).bitrate).toBe(5_000_000)
-        expect(quality_to_video_config("high", 1920, 1080, 30).bitrate).toBe(10_000_000)
-        expect(quality_to_video_config("very-high", 1920, 1080, 30).bitrate).toBe(16_000_000)
-        expect(quality_to_video_config("ultra", 1920, 1080, 30).bitrate).toBe(50_000_000)
+describe("clamp_video_bitrate_kbps", () => {
+    it.each([
+        [499, null],
+        [500, 500],
+        [8000, 8000],
+        [100000, 100000],
+        [100001, null],
+    ] as const)("maps %i to %s", (raw, want) => {
+        expect(clamp_video_bitrate_kbps(raw)).toBe(want)
     })
 
-    it("labels ultra as high-bitrate rather than bit-exact", () => {
-        expect(quality_to_video_config("ultra", 1920, 1080, 30).description).toContain("not bit-exact")
+    it("rejects nullish and non-finite input", () => {
+        expect(clamp_video_bitrate_kbps(null)).toBeNull()
+        expect(clamp_video_bitrate_kbps(undefined)).toBeNull()
+        expect(clamp_video_bitrate_kbps(Number.NaN)).toBeNull()
+    })
+})
+
+describe("resolve_compose_video_bps", () => {
+    it("converts kbps to bps and nulls invalid input", () => {
+        expect(resolve_compose_video_bps(8000)).toBe(8_000_000)
+        expect(resolve_compose_video_bps(null)).toBeNull()
+        expect(resolve_compose_video_bps(499)).toBeNull()
+        expect(resolve_compose_video_bps(100001)).toBeNull()
+    })
+})
+
+describe("resolve_output_video_config", () => {
+    it("resolves 8000 kbps to an 8M config", () => {
+        const config = resolve_output_video_config({ video_bitrate_kbps: 8000, width: 1280, height: 720, fps: 30 })
+        expect(config.bitrate).toBe(8_000_000)
+        expect(config.description).toContain("8Mbps")
+    })
+})
+
+describe("estimate_output_bytes", () => {
+    it("computes bytes from duration and combined bitrates", () => {
+        expect(estimate_output_bytes(60, 2_000_000, 128_000)).toBe(15_960_000)
     })
 
-    it("maps tiers to CRF quantizers with ultra bitrate-only", () => {
-        expect(quality_to_video_config("low", 1920, 1080, 30).quantizer).toBe(30)
-        expect(quality_to_video_config("medium", 1920, 1080, 30).quantizer).toBe(26)
-        expect(quality_to_video_config("high", 1920, 1080, 30).quantizer).toBe(22)
-        expect(quality_to_video_config("very-high", 1920, 1080, 30).quantizer).toBe(18)
-        expect(quality_to_video_config("ultra", 1920, 1080, 30).quantizer).toBeNull()
+    it("returns null without full inputs", () => {
+        expect(estimate_output_bytes(null, 2_000_000, 128_000)).toBeNull()
+        expect(estimate_output_bytes(60, null, 128_000)).toBeNull()
+        expect(estimate_output_bytes(60, 2_000_000, null)).toBeNull()
+    })
+})
+
+describe("format_size_estimate", () => {
+    it("renders an em dash without full inputs", () => {
+        expect(format_size_estimate(null, 2_000_000, 128_000)).toBe("—")
+        expect(format_size_estimate(60, null, 128_000)).toBe("—")
     })
 
-    it("prefers an explicit CRF override with tier bitrate as fallback", () => {
-        const config = quality_to_video_config("ultra", 1920, 1080, 30, 22)
-        expect(config.quantizer).toBe(22)
-        expect(config.bitrate).toBe(50_000_000)
+    it("formats the 60s 2M plus 128k example", () => {
+        expect(format_size_estimate(60, 2_000_000, 128_000)).toBe(
+            "Est ≈ 16.0 MB · video 2 Mbps + audio 128 kbps · VBR varies",
+        )
     })
 })
 
@@ -173,28 +207,6 @@ describe("resolve_audio_bitrate", () => {
             ),
         ).toBe(200_000)
         expect(resolve_audio_bitrate(null, null, "source-max")).toBe(128_000)
-    })
-})
-
-describe("parse_crf_override", () => {
-    it("returns null for empty input", () => {
-        expect(parse_crf_override(null)).toBeNull()
-        expect(parse_crf_override(undefined)).toBeNull()
-        expect(parse_crf_override("")).toBeNull()
-    })
-
-    it("accepts numbers from 0 to 51", () => {
-        expect(parse_crf_override("22")).toBe(22)
-        expect(parse_crf_override(0)).toBe(0)
-        expect(parse_crf_override(51)).toBe(51)
-    })
-
-    it("rejects out-of-range or malformed CRF values", () => {
-        for (const raw of ["-1", "52", "abc"]) {
-            expect(() => parse_crf_override(raw)).toThrow(TimecodeError)
-        }
-        expect(() => parse_crf_override(-1)).toThrow(TimecodeError)
-        expect(() => parse_crf_override(99)).toThrow(TimecodeError)
     })
 })
 
@@ -263,17 +275,6 @@ describe("TRANSITION_AUDIO_MODE_HINTS", () => {
     })
 })
 
-describe("resolve_video_encode_config", () => {
-    it("maps quality tier to quantizer and honors a CRF override", () => {
-        const tier_default = resolve_video_encode_config("very-high", 1920, 1080, 30, null)
-        expect(tier_default.quantizer).toBe(18)
-        expect(tier_default.bitrate).toBe(16_000_000)
-        const overridden = resolve_video_encode_config("high", 1920, 1080, 30, 18)
-        expect(overridden.quantizer).toBe(18)
-        expect(overridden.bitrate).toBe(10_000_000)
-    })
-})
-
 describe("decode_full_audio", () => {
     it("returns null when the sink yields no buffers", async () => {
         const empty_sink = {
@@ -296,7 +297,6 @@ describe("with_canvas_encode", () => {
                 height: 64,
                 fps: 30,
                 quality: "low",
-                crf_raw: null,
                 audio_probe: null,
                 audio_quality: "source-max",
                 needs_audio: false,
@@ -319,7 +319,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: null,
             audio_quality: "source-max",
             needs_audio: false,
@@ -348,7 +347,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: { audio_bitrate: 128_000, overall_bitrate: null },
             audio_quality: "source-max",
             needs_audio: true,
@@ -373,7 +371,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: { audio_bitrate: 128_000, overall_bitrate: null },
             audio_quality: "192k",
             needs_audio: true,
@@ -399,7 +396,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: null,
             audio_quality: "128k",
             needs_audio: false,
@@ -433,7 +429,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: null,
             audio_quality: "source-max",
             needs_audio: false,
@@ -466,7 +461,6 @@ describe("with_canvas_encode", () => {
                 height: 64,
                 fps: 30,
                 quality: "low",
-                crf_raw: null,
                 audio_probe: null,
                 audio_quality: "source-max",
                 needs_audio: false,
@@ -530,7 +524,7 @@ describe("post-revert encoder defaults", () => {
         expect(sample_inits[0]).toEqual({ timestamp: 1.5, duration: 0.5 })
     })
 
-    it("passes no packet/config callbacks to VideoSampleSource", () => {
+    it("passes onEncoderConfig to VideoSampleSource and logs the encode report", () => {
         let captured: Record<string, unknown> | null = null
         const stub_mb = {
             Quality: class {
@@ -545,17 +539,31 @@ describe("post-revert encoder defaults", () => {
                 }
             },
         }
-        create_video_sample_source(stub_mb as unknown as typeof import("mediabunny"), {
-            bitrate: 5_000_000,
-            quantizer: 26,
-            description: "medium",
-        })
+        const reported: unknown[] = []
+        create_video_sample_source(
+            stub_mb as unknown as typeof import("mediabunny"),
+            {
+                bitrate: 5_000_000,
+                description: "medium",
+            },
+            { on_encode_report: (r: unknown) => reported.push(r) },
+        )
         expect(captured).not.toBeNull()
         expect(Object.keys(captured ?? {}).sort()).toEqual(
-            ["bitrateMode", "codec", "hardwareAcceleration", "latencyMode", "quality"].sort(),
+            ["bitrateMode", "codec", "hardwareAcceleration", "latencyMode", "onEncoderConfig", "quality"].sort(),
         )
         expect(captured ?? {}).not.toHaveProperty("onEncodedPacket")
-        expect(captured ?? {}).not.toHaveProperty("onEncoderConfig")
+        expect(typeof (captured as unknown as Record<string, unknown>).onEncoderConfig).toBe("function")
+        const log_spy = vi.spyOn(console, "log").mockImplementation(() => {})
+        try {
+            const on_config = (captured as unknown as { onEncoderConfig: (enc: VideoEncoderConfig) => void })
+                .onEncoderConfig
+            on_config({ codec: "avc", width: 1920, height: 1080 } as VideoEncoderConfig)
+            expect(log_spy).toHaveBeenCalledWith("[encode]", expect.anything())
+            expect(reported).toHaveLength(1)
+        } finally {
+            log_spy.mockRestore()
+        }
     })
 
     it("exposes no OUTPUT_COLOR_SPACE export", async () => {

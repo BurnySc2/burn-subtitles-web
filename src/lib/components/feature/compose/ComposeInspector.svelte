@@ -1,5 +1,7 @@
 <script lang="ts">
 import { is_accepted } from "$lib/media/compose-drop"
+import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
+import { resolve_output_audio_bps } from "$lib/media/compose-probe-union"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import { parse_trim_field } from "$lib/media/compose-trim"
@@ -17,8 +19,11 @@ import type {
 } from "$lib/media/compose-types"
 import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
+import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
+import { format_audio_label, format_kbps } from "$lib/media/probe-audio-label"
 import {
-    QUALITY_QUANTIZER,
+    format_size_estimate,
+    resolve_compose_video_bps,
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
 } from "$lib/media/transition-utils"
@@ -54,9 +59,21 @@ let selected_edge_id: string | null = $derived(
         ? compose_state.selected_edge_id
         : null,
 )
-let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
+let issues = $derived.by(() => {
+    $font_registry_version
+    return validate_compose(compose_state.nodes, compose_state.edges)
+})
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
+let encode_hint = $derived.by(() => {
+    if (selected?.type !== "output") {
+        return { reencodes: false, text: null as string | null }
+    }
+    return encode_hint_for_graph(compose_state.nodes, selected.data)
+})
+// WHY no-report-yet: executor stays console.log-only, follow-up threads on_encode_report here
+let last_report: EffectiveEncodeReport | null = $state(null)
+let encode_badge = $derived(format_encode_badge(last_report))
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
 let font_options = $derived.by(() => {
     $font_registry_version
@@ -261,21 +278,32 @@ function patch_output_name(file_name: string): void {
     patch_output({ file_name: file_name.trim() === "" ? null : file_name.trim() })
 }
 
+function on_bitrate_input(raw: string): void {
+    on_number_input(raw, (value) => patch_output({ video_bitrate_kbps: Number(value) }))
+}
+
+let output_effective_video_bps = $derived(
+    selected?.type === "output" ? resolve_compose_video_bps(selected.data.video_bitrate_kbps) : null,
+)
+let output_audio_bps = $derived(
+    selected?.type === "output"
+        ? resolve_output_audio_bps(
+              compose_state.nodes,
+              compose_state.edges,
+              selected.data.audio_quality ?? "source-max",
+          )
+        : null,
+)
+let size_estimate = $derived(
+    !encode_hint.reencodes
+        ? "—"
+        : format_size_estimate(selected_duration, output_effective_video_bps, output_audio_bps),
+)
+
 function on_number_input(raw: string, apply: (value: number) => void): void {
     const parsed = Number(raw)
     if (raw.trim() !== "" && Number.isFinite(parsed)) {
         apply(parsed)
-    }
-}
-
-function on_crf_input(raw: string): void {
-    if (raw.trim() === "") {
-        patch_output({ crf: null })
-        return
-    }
-    const parsed = Number(raw)
-    if (Number.isFinite(parsed)) {
-        patch_output({ crf: parsed })
     }
 }
 
@@ -351,6 +379,13 @@ function probe_summary(node: ComposeNode): string {
     if (probe.display_width !== null && probe.display_height !== null) {
         parts.push(`${probe.display_width}x${probe.display_height}`)
     }
+    if (probe.frame_rate !== null) {
+        parts.push(`${probe.frame_rate.toFixed(2)} fps`)
+    }
+    const audio_label = format_audio_label(probe)
+    if (audio_label) {
+        parts.push(audio_label)
+    }
     return parts.join(" · ")
 }
 </script>
@@ -405,6 +440,63 @@ function probe_summary(node: ComposeNode): string {
         </label>
         {#if selected.type === "source"}
             <p class="text-sm text-gray-700">{probe_summary(selected)}</p>
+            {#if selected.data.probe}
+                {@const probe = selected.data.probe}
+                <dl
+                    data-testid="source-probe-details"
+                    class="grid grid-cols-2 gap-1 text-sm text-gray-500"
+                >
+                    {#if probe.has_video}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Video codec:</dt>
+                            <dd>
+                                {probe.video_codec
+                                    ? `${probe.video_codec}${probe.video_codec_param ? ` (${probe.video_codec_param})` : ""}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Resolution:</dt>
+                            <dd>
+                                {probe.display_width !== null && probe.display_height !== null
+                                    ? `${probe.display_width}x${probe.display_height}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Frame rate:</dt>
+                            <dd>{probe.frame_rate !== null ? `${probe.frame_rate.toFixed(2)} fps` : "—"}</dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Video bitrate:</dt>
+                            <dd>{format_kbps(probe.video_bitrate) ?? "—"}</dd>
+                        </div>
+                    {/if}
+                    {#if probe.has_audio}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio codec:</dt>
+                            <dd>
+                                {probe.audio_codec
+                                    ? `${probe.audio_codec}${probe.audio_codec_param ? ` (${probe.audio_codec_param})` : ""}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio bitrate:</dt>
+                            <dd>{format_kbps(probe.audio_bitrate) ?? "—"}</dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Channels:</dt>
+                            <dd>{probe.audio_channels ?? "—"}</dd>
+                        </div>
+                    {:else}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio:</dt>
+                            <dd>—</dd>
+                        </div>
+                    {/if}
+                </dl>
+            {/if}
             <ComposeSourcePicker node_id={selected.id} />
         {:else if selected.type === "trim"}
             <label class="flex flex-col gap-1 text-sm font-medium">
@@ -1327,18 +1419,17 @@ function probe_summary(node: ComposeNode): string {
                 </label>
             </div>
             <label class="flex flex-col gap-1 text-sm font-medium">
-                Quality
-                <select
-                    value={selected.data.quality}
-                    onchange={(e) => patch_output({ quality: e.currentTarget.value as OutputNodeData["quality"] })}
+                Video bitrate (kbit/s)
+                <input
+                    type="number"
+                    min="500"
+                    max="100000"
+                    step="100"
+                    value={selected.data.video_bitrate_kbps}
+                    oninput={(e) => on_bitrate_input(e.currentTarget.value)}
+                    placeholder="e.g. 8000"
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="very-high">very-high</option>
-                    <option value="ultra">ultra</option>
-                </select>
             </label>
             <label
                 class="flex flex-col gap-1 text-sm font-medium"
@@ -1359,24 +1450,28 @@ function probe_summary(node: ComposeNode): string {
                     <option value="320k">320k</option>
                 </select>
             </label>
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                CRF override
-                <input
-                    type="number"
-                    min="0"
-                    max="51"
-                    step="1"
-                    value={selected.data.crf ?? ""}
-                    oninput={(e) => on_crf_input(e.currentTarget.value)}
-                    placeholder={`auto (${QUALITY_QUANTIZER[selected.data.quality] ?? "bitrate"})`}
-                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+            <p
+                class="text-xs font-normal text-gray-500"
+                data-testid="size-estimate"
+            >
+                {size_estimate}
+            </p>
+            {#if encode_hint.text}
+                <small
+                    class="text-xs font-normal text-gray-500"
+                    data-testid="encode-hint"
                 >
-                {#if selected.data.quality === "ultra"}
-                    <small class="text-xs font-normal text-gray-500">
-                        Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.
-                    </small>
-                {/if}
-            </label>
+                    {encode_hint.text}
+                </small>
+            {/if}
+            {#if encode_badge}
+                <span
+                    class="text-xs font-normal text-gray-500"
+                    data-testid="encode-badge"
+                >
+                    {encode_badge}
+                </span>
+            {/if}
             <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
         {/if}
         {#key selected.id}

@@ -9,10 +9,8 @@ import type {
 } from "./transition-utils"
 import {
     add_canvas_frame,
-    CRF_INVALID_MESSAGE,
     decode_full_audio,
     draw_contain_fit,
-    parse_crf_override,
     phase_at,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
@@ -45,7 +43,7 @@ export interface RenderTransitionOptions {
     height: number
     fps: number
     quality: TransitionQuality
-    crf?: number | string | null
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     audio_bitrate?: number
     easing: TransitionEasing
@@ -81,14 +79,6 @@ function resolve_render_audio_bitrate(options: RenderTransitionOptions): number 
     )
 }
 
-function resolve_render_crf(options: RenderTransitionOptions): number | null {
-    try {
-        return parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
-    }
-}
-
 function validate_transition_options(options: RenderTransitionOptions): void {
     const { file_a, file_b, duration, width, height, fps, quality, easing, total_duration } = options
     const start_a = options.start_a ?? 0
@@ -122,7 +112,6 @@ function validate_transition_options(options: RenderTransitionOptions): void {
     if (options.audio_mode !== undefined && !TRANSITION_AUDIO_MODES.includes(options.audio_mode)) {
         throw new ClipError("INVALID_RANGE", "Unknown transition audio mode.")
     }
-    resolve_render_crf(options)
     if (options.audio_bitrate !== undefined) {
         if (!Number.isFinite(options.audio_bitrate) || options.audio_bitrate <= 0) {
             throw new ClipError("INVALID_RANGE", "Audio bitrate must be greater than 0.")
@@ -250,7 +239,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             height,
             fps,
             quality,
-            crf_raw: options.crf ?? null,
+            video_bitrate: options.video_bitrate ?? null,
             audio_probe: null,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: false,

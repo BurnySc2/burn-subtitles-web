@@ -1,13 +1,11 @@
 import { concat_audio_buffers } from "./compose-audio"
 import type { ProbeResult } from "./mediabunny-clip"
 import { ClipError, probe_media } from "./mediabunny-clip"
-import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
+import type { TransitionAudioBitrateProbe, TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
     add_canvas_frame,
-    CRF_INVALID_MESSAGE,
     decode_full_audio,
     draw_contain_fit,
-    parse_crf_override,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
     TRANSITION_AUDIO_BITRATE_MIN,
@@ -20,8 +18,10 @@ export interface RenderMergeOptions {
     height: number
     fps: number
     quality: TransitionQuality
-    crf?: number | string | null
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
+    audio_probes?: readonly ProbeResult[] | null
+    audio_probe?: TransitionAudioBitrateProbe | null
     on_progress?: (progress: number) => void
     signal?: AbortSignal
 }
@@ -63,11 +63,6 @@ function validate_merge_options(options: RenderMergeOptions): void {
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown merge quality.")
     }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
-    }
     if (options.audio_quality !== undefined) {
         if (
             options.audio_quality !== "96k" &&
@@ -82,7 +77,7 @@ function validate_merge_options(options: RenderMergeOptions): void {
     }
 }
 
-function resolve_merge_audio_bitrate(probes: Array<ProbeResult | null>, choice: TransitionAudioQuality): number {
+function resolve_merge_audio_bitrate(probes: readonly (ProbeResult | null)[], choice: TransitionAudioQuality): number {
     let peak: number | null = null
     for (const probe of probes) {
         const candidate = probe?.audio_bitrate ?? probe?.overall_bitrate ?? null
@@ -123,6 +118,7 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
             }
         }
         const durations = probes.map((probe) => probe.duration as number)
+        const bitrate_probes = options.audio_probes ?? probes
         const total = durations.reduce((sum, value) => sum + value, 0)
         if (!Number.isFinite(total) || total <= 0) {
             throw new ClipError("INVALID_RANGE", "Merge total duration must be greater than 0.")
@@ -136,8 +132,8 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
             height,
             fps,
             quality,
-            crf_raw: options.crf ?? null,
-            audio_probe: null,
+            video_bitrate: options.video_bitrate ?? null,
+            audio_probe: options.audio_probe ?? null,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: false,
             probe_has_audio: false,
@@ -170,7 +166,7 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
                         }
                         return {
                             buffer: mixed,
-                            bitrate: resolve_merge_audio_bitrate(probes, options.audio_quality ?? "source-max"),
+                            bitrate: resolve_merge_audio_bitrate(bitrate_probes, options.audio_quality ?? "source-max"),
                         }
                     } finally {
                         for (const input of audio_inputs) {

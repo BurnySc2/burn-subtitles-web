@@ -18,7 +18,6 @@ export interface TransitionSettingsPatch {
     fps?: TransitionFps
     quality?: TransitionQuality
     audio_quality?: TransitionAudioQuality
-    crf_override?: string
     easing?: TransitionEasing
 }
 
@@ -29,7 +28,6 @@ let {
     fps,
     quality,
     audio_quality,
-    crf_override,
     easing,
     on_change,
 }: {
@@ -39,7 +37,6 @@ let {
     fps: TransitionFps
     quality: TransitionQuality
     audio_quality: TransitionAudioQuality
-    crf_override: string
     easing: TransitionEasing
     on_change?: (patch: TransitionSettingsPatch) => void
 } = $props()
@@ -157,25 +154,6 @@ let {
             <option value="256k">256k</option>
             <option value="320k">320k</option>
         </select>
-    </div>
-    <div>
-        <label
-            for="transition-crf"
-            class="form-label"
-        >
-            CRF override (optional)
-        </label>
-        <input
-            id="transition-crf"
-            type="number"
-            min="0"
-            max="51"
-            step="1"
-            value={crf_override}
-            oninput={(event) => on_change?.({ crf_override: event.currentTarget.value })}
-            placeholder="22"
-            inputmode="decimal"
-        >
     </div>
     <div>
         <label

@@ -84,7 +84,7 @@ function output(id = "out"): ComposeNode {
         id,
         type: "output",
         position: { x: 0, y: 0 },
-        data: { file_name: null, width: 640, height: 360, fps: 30, quality: "medium" },
+        data: { file_name: null, width: 640, height: 360, fps: 30, video_bitrate_kbps: 8000 },
     }
 }
 

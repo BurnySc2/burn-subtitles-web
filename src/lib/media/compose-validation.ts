@@ -5,7 +5,7 @@ import { node_output_duration, pred_by_handle, resolve_trim_range, trim_upstream
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode } from "./timecode"
-import { parse_crf_override, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
+import { clamp_video_bitrate_kbps, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
 
 export { compose_node_durations } from "./compose-trim"
 
@@ -316,6 +316,14 @@ export function validate_compose(
             if (!Number.isFinite(node.data.fps) || node.data.fps < 1 || node.data.fps > 120) {
                 issues.push({ node_id: node.id, field: "fps", message: "Output fps must be from 1 to 120" })
             }
+            const video_bitrate = node.data.video_bitrate_kbps
+            if (!Number.isInteger(video_bitrate) || clamp_video_bitrate_kbps(video_bitrate) === null) {
+                issues.push({
+                    node_id: node.id,
+                    field: "video_bitrate_kbps",
+                    message: "Output video_bitrate_kbps must be an integer from 500 to 100000",
+                })
+            }
             const audio_quality = node.data.audio_quality ?? "source-max"
             if (
                 audio_quality !== "96k" &&
@@ -329,15 +337,6 @@ export function validate_compose(
                     node_id: node.id,
                     field: "audio_quality",
                     message: "Unknown output audio quality.",
-                })
-            }
-            try {
-                parse_crf_override(node.data.crf ?? null)
-            } catch {
-                issues.push({
-                    node_id: node.id,
-                    field: "crf",
-                    message: "CRF must be a number from 0 to 51.",
                 })
             }
         } else if (node.type === "subtitles") {

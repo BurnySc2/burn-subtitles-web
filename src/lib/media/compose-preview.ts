@@ -1,10 +1,17 @@
 import { font_cache_key } from "./compose-font-library"
 import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
+import { peak_audio_probe, union_probe_lists } from "./compose-probe-union"
 import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
-import { resolve_trim_range, trim_range_error, trim_upstream_duration } from "./compose-trim"
+import {
+    node_output_duration,
+    pred_by_handle,
+    resolve_trim_range,
+    trim_range_error,
+    trim_upstream_duration,
+} from "./compose-trim"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
-import { ClipError, extract_clip } from "./mediabunny-clip"
+import { ClipError, extract_clip, type ProbeResult } from "./mediabunny-clip"
 import { collect_stack_segments } from "./mediabunny-compose-stack"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
@@ -13,6 +20,7 @@ import { render_solid_color } from "./mediabunny-solid"
 import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
+import { resolve_output_video_config } from "./transition-utils"
 
 export interface NodePreviewOptions {
     signal?: AbortSignal
@@ -111,8 +119,7 @@ function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: Co
               output.data.width,
               output.data.height,
               output.data.fps,
-              output.data.quality,
-              output.data.crf ?? "null",
+              output.data.video_bitrate_kbps,
               output.data.audio_quality,
           ].join(":")
         : "no-output"
@@ -185,6 +192,65 @@ function merge_inputs(node_id: string, incoming: Map<string, ComposeEdge[]>, mem
         throw new ClipError("FAILED", "Merge inputs are missing.")
     }
     return blobs as Blob[]
+}
+
+function single_probe_list(
+    node_id: string,
+    incoming: Map<string, ComposeEdge[]>,
+    probe_memo: Map<string, ProbeResult[]>,
+): ProbeResult[] {
+    const edges = incoming.get(node_id) ?? []
+    if (edges.length !== 1) {
+        return []
+    }
+    return [...(probe_memo.get(edges[0].source) ?? [])]
+}
+
+function transition_probe_lists(
+    node_id: string,
+    incoming: Map<string, ComposeEdge[]>,
+    probe_memo: Map<string, ProbeResult[]>,
+): { list_a: ProbeResult[]; list_b: ProbeResult[] } {
+    const edges = incoming.get(node_id) ?? []
+    const by_handle = (handle: string): ProbeResult[] | null => {
+        const edge = edges.find((candidate) => candidate.targetHandle === handle) ?? null
+        if (!edge) {
+            return null
+        }
+        const list = probe_memo.get(edge.source)
+        return list ? [...list] : null
+    }
+    const fallbacks = edges.map((edge) => [...(probe_memo.get(edge.source) ?? [])])
+    return { list_a: by_handle("a") ?? fallbacks[0] ?? [], list_b: by_handle("b") ?? fallbacks[1] ?? [] }
+}
+
+function merge_probe_lists(
+    node_id: string,
+    incoming: Map<string, ComposeEdge[]>,
+    probe_memo: Map<string, ProbeResult[]>,
+): Array<readonly ProbeResult[] | null | undefined> {
+    const edges = (incoming.get(node_id) ?? []).slice().sort((a, b) => {
+        const index_a = merge_handle_index(a.targetHandle)
+        const index_b = merge_handle_index(b.targetHandle)
+        if (index_a !== index_b) {
+            return index_a - index_b
+        }
+        return a.source < b.source ? -1 : a.source > b.source ? 1 : 0
+    })
+    return edges.map((edge) => probe_memo.get(edge.source))
+}
+
+function peak_probe_for_render(list: readonly ProbeResult[]): ProbeResult | null {
+    const valid = list.filter((probe): probe is ProbeResult => probe !== null && probe !== undefined)
+    const base = valid[0] ?? null
+    if (!base) {
+        return null
+    }
+    const peak = peak_audio_probe(valid)
+    if (!peak || (base.audio_bitrate === peak.audio_bitrate && base.overall_bitrate === peak.overall_bitrate)) {
+        return base
+    }
+    return { ...base, audio_bitrate: peak.audio_bitrate, overall_bitrate: peak.overall_bitrate }
 }
 
 async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> {
@@ -264,12 +330,43 @@ export async function get_node_preview_blob(
     const order = topo_sort_compose(nodes, edges).filter((id) => relevant.has(id))
     const incoming = incoming_by_target(edges)
     const blobs = new Map<string, Blob>()
+    const probe_memo = new Map<string, ProbeResult[]>()
+    for (const node_id of order) {
+        const probe_node = by_id.get(node_id)
+        if (!probe_node) {
+            continue
+        }
+        switch (probe_node.type) {
+            case "source": {
+                probe_memo.set(node_id, probe_node.data.probe ? [probe_node.data.probe] : [])
+                break
+            }
+            case "color": {
+                probe_memo.set(node_id, [])
+                break
+            }
+            case "transition": {
+                const { list_a, list_b } = transition_probe_lists(node_id, incoming, probe_memo)
+                probe_memo.set(node_id, union_probe_lists([list_a, list_b]))
+                break
+            }
+            case "merge": {
+                probe_memo.set(node_id, union_probe_lists(merge_probe_lists(node_id, incoming, probe_memo)))
+                break
+            }
+            default: {
+                probe_memo.set(node_id, single_probe_list(node_id, incoming, probe_memo))
+                break
+            }
+        }
+    }
     const store = (node_id: string, blob: Blob): void => {
         blobs.set(node_id, blob)
         preview_memo.set(node_id, { upstream: subgraph_fingerprint(node_id, nodes, edges), blob })
     }
     const output_node = find_output_node(nodes)
     const total = Math.max(1, order.length)
+    const video_config = output_node ? resolve_output_video_config(output_node.data) : null
     let done = 0
     const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
     for (const node_id of order) {
@@ -328,16 +425,31 @@ export async function get_node_preview_blob(
             }
             case "transition": {
                 const { blob_a, blob_b } = transition_inputs(node.id, incoming, blobs)
+                const { list_a, list_b } = transition_probe_lists(node.id, incoming, probe_memo)
+                const base_a = peak_probe_for_render(list_a)
+                const base_b = peak_probe_for_render(list_b)
+                const pred_a = pred_by_handle(node.id, "a", incoming)
+                const pred_b = pred_by_handle(node.id, "b", incoming)
+                const dur_a = pred_a
+                    ? node_output_duration(pred_a, by_id, incoming, new Map<string, number | null>(), new Set<string>())
+                    : null
+                const dur_b = pred_b
+                    ? node_output_duration(pred_b, by_id, incoming, new Map<string, number | null>(), new Set<string>())
+                    : null
+                const probe_a = base_a && dur_a !== null ? { ...base_a, duration: dur_a } : null
+                const probe_b = base_b && dur_b !== null ? { ...base_b, duration: dur_b } : null
                 const result = await render_transition({
                     file_a: blob_to_file(blob_a, "transition-a.mp4"),
                     file_b: blob_to_file(blob_b, "transition-b.mp4"),
+                    probe_a,
+                    probe_b,
                     duration: node.data.duration,
                     start_a: node.data.start,
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
+                    quality: "medium",
+                    video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     easing: node.data.easing,
                     audio_mode: node.data.audio_mode,
@@ -375,8 +487,8 @@ export async function get_node_preview_blob(
                             width: output_node?.data.width ?? 1920,
                             height: output_node?.data.height ?? 1080,
                             fps: output_node?.data.fps ?? 30,
-                            quality: output_node?.data.quality ?? "medium",
-                            crf: output_node?.data.crf ?? null,
+                            quality: "medium",
+                            video_bitrate: video_config?.bitrate ?? null,
                             audio_quality: output_node?.data.audio_quality ?? "source-max",
                             on_progress: slice,
                         },
@@ -392,9 +504,10 @@ export async function get_node_preview_blob(
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
+                    quality: "medium",
+                    video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    audio_probe: peak_audio_probe(probe_memo.get(node.id) ?? []),
                     on_progress: slice,
                     signal,
                 })
@@ -419,8 +532,8 @@ export async function get_node_preview_blob(
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
+                    quality: "medium",
+                    video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
                     signal,
@@ -436,8 +549,8 @@ export async function get_node_preview_blob(
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
+                    quality: "medium",
+                    video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
                     signal,
@@ -452,8 +565,8 @@ export async function get_node_preview_blob(
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
+                    quality: "medium",
+                    video_bitrate: video_config?.bitrate ?? null,
                     on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
                     signal,
                 })
@@ -467,8 +580,8 @@ export async function get_node_preview_blob(
                     height: node.data.height,
                     fps: node.data.fps,
                     fit: node.data.fit,
-                    quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
+                    quality: "medium",
+                    video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
                     signal,

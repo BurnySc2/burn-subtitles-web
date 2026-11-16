@@ -1,8 +1,12 @@
 <script lang="ts">
 import { compose_state } from "$lib/media/compose-state.svelte"
 import { validate_compose } from "$lib/media/compose-validation"
+import { font_registry_version } from "../../../media/compose-font-library"
 
-let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
+let issues = $derived.by(() => {
+    $font_registry_version
+    return validate_compose(compose_state.nodes, compose_state.edges)
+})
 </script>
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">

@@ -1,12 +1,6 @@
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
-import {
-    add_canvas_frame,
-    CRF_INVALID_MESSAGE,
-    draw_contain_fit,
-    parse_crf_override,
-    with_canvas_encode,
-} from "./transition-utils"
+import { add_canvas_frame, draw_contain_fit, with_canvas_encode } from "./transition-utils"
 
 export interface RenderRescaleOptions {
     width: number
@@ -14,7 +8,7 @@ export interface RenderRescaleOptions {
     fps: number | null
     fit: "contain"
     quality?: TransitionQuality
-    crf?: number | string | null
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     signal?: AbortSignal
     on_progress?: (done: number, total: number) => void
@@ -47,11 +41,6 @@ function validate_rescale_options(options: RenderRescaleOptions): void {
         ) {
             throw new ClipError("INVALID_RANGE", "Unknown rescale quality.")
         }
-    }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
     if (options.audio_quality !== undefined) {
         if (
@@ -108,7 +97,7 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
             height,
             fps,
             quality,
-            crf_raw: options.crf ?? null,
+            video_bitrate: options.video_bitrate ?? null,
             audio_probe: probe,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: true,

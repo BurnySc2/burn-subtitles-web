@@ -29,7 +29,7 @@ Develop branch deployment: https://burn-subtitles-dev.netlify.app
 - Dual `video/*` upload, rendered MediaBunny-only (no FFmpeg); both sources must be readable video.
 - Output resolution follows Source A or B (selector); the other side is contain-fit letterboxed on black.
 - Frame rate follows Source A, Source B, 24, 30, or 60 with no cap (falls back to 30 when the probe has none); renders over 1000 frames (duration × fps) show a yellow warning banner (may OOM tab) — slow and memory-heavy.
-- Quality Low (2 Mbps) … Ultra (~50 Mbps, high-bitrate for further processing, not bit-exact).
+- Video bitrate is a VBR input in kbps (default 8000, range 500-100000; high-bitrate for further processing, not bit-exact).
 - Easing `linear` / `exponential`; audio mixed to AAC 128 kbps when either source has audio (bundled AAC encoder registers automatically).
 - Requires Secure Context (HTTPS/localhost) + WebCodecs; output is buffered fully in RAM, so large files may run out of memory.
 

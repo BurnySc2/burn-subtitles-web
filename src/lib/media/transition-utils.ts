@@ -1,4 +1,5 @@
 import type { AudioBufferSink, AudioBufferSource, BufferTarget, Output, VideoSampleSource } from "mediabunny"
+import { capture_encode_report, type EffectiveEncodeReport } from "./encode-report"
 import { ClipError } from "./mediabunny-clip"
 import { TimecodeError } from "./timecode"
 
@@ -67,7 +68,6 @@ export interface TransitionFpsProbe {
 
 export interface TransitionVideoConfig {
     bitrate: number
-    quantizer: number | null
     description: string
 }
 
@@ -172,20 +172,13 @@ const QUALITY_BITRATE: Record<TransitionQuality, number> = {
     ultra: 50_000_000,
 }
 
+// VBR-only: never "constant"
 const QUALITY_LABEL: Record<TransitionQuality, string> = {
     low: "low",
     medium: "medium",
     high: "high",
     "very-high": "very-high",
-    ultra: "Ultra (~50 Mbps, high-bitrate for further processing, not bit-exact)",
-}
-
-export const QUALITY_QUANTIZER: Record<TransitionQuality, number | null> = {
-    low: 30,
-    medium: 26,
-    high: 22,
-    "very-high": 18,
-    ultra: null,
+    ultra: "ultra",
 }
 
 export const TRANSITION_AUDIO_BITRATE_DEFAULT = 128_000
@@ -222,42 +215,92 @@ export function resolve_audio_bitrate(
     return Math.min(TRANSITION_AUDIO_BITRATE_MAX, Math.max(TRANSITION_AUDIO_BITRATE_MIN, Math.round(peak)))
 }
 
-export function parse_crf_override(raw: number | string | null | undefined): number | null {
-    if (raw === null || raw === undefined) {
-        return null
-    }
-    if (typeof raw === "string" && raw.trim() === "") {
-        return null
-    }
-    const parsed = typeof raw === "number" ? raw : Number(String(raw).trim())
-    if (typeof raw !== "number" && !/^-?(\d+(\.\d*)?|\.\d+)$/.test(String(raw).trim())) {
-        throw new TimecodeError(`Invalid CRF "${raw}": expected a number from 0 to 51`)
-    }
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 51) {
-        throw new TimecodeError(`Invalid CRF "${raw}": expected a number from 0 to 51`)
-    }
-    return parsed
-}
-
 export function quality_to_video_config(
     quality: TransitionQuality,
     width: number,
     height: number,
     fps: number,
-    crf_override?: number | null,
 ): TransitionVideoConfig {
     const bitrate = QUALITY_BITRATE[quality]
-    const quantizer =
-        crf_override === null || crf_override === undefined
-            ? QUALITY_QUANTIZER[quality]
-            : Number.isFinite(crf_override)
-              ? crf_override
-              : QUALITY_QUANTIZER[quality]
     return {
         bitrate,
-        quantizer,
         description: `${QUALITY_LABEL[quality]} ${width}x${height}@${fps}fps ${bitrate / 1_000_000}Mbps`,
     }
+}
+
+export const VIDEO_BITRATE_KBPS_MIN = 500
+export const VIDEO_BITRATE_KBPS_MAX = 100000
+export const VIDEO_BITRATE_KBPS_DEFAULT = 8000
+
+export function clamp_video_bitrate_kbps(raw: number | null | undefined): number | null {
+    if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return null
+    }
+    if (raw < VIDEO_BITRATE_KBPS_MIN || raw > VIDEO_BITRATE_KBPS_MAX) {
+        return null
+    }
+    return raw
+}
+
+export function resolve_compose_video_bps(kbps: number | null | undefined): number | null {
+    const clamped = clamp_video_bitrate_kbps(kbps)
+    if (clamped === null) {
+        return null
+    }
+    return Math.round(clamped * 1000)
+}
+
+export interface ComposeOutputVideoConfigInput {
+    video_bitrate_kbps: number
+    width: number
+    height: number
+    fps: number
+}
+
+export function resolve_output_video_config(output: ComposeOutputVideoConfigInput): TransitionVideoConfig {
+    const bitrate = resolve_compose_video_bps(output.video_bitrate_kbps)
+    if (bitrate === null) {
+        throw new ClipError(
+            "INVALID_RANGE",
+            `Invalid video bitrate "${output.video_bitrate_kbps}": expected ${VIDEO_BITRATE_KBPS_MIN}-${VIDEO_BITRATE_KBPS_MAX} kbps`,
+        )
+    }
+    return {
+        bitrate,
+        description: `custom ${output.width}x${output.height}@${output.fps}fps ${bitrate / 1_000_000}Mbps`,
+    }
+}
+
+export function estimate_output_bytes(
+    duration_seconds: number | null,
+    video_bps: number | null,
+    audio_bps: number | null,
+): number | null {
+    if (duration_seconds === null || video_bps === null || audio_bps === null) {
+        return null
+    }
+    if (!Number.isFinite(duration_seconds) || !Number.isFinite(video_bps) || !Number.isFinite(audio_bps)) {
+        return null
+    }
+    if (duration_seconds <= 0 || video_bps <= 0 || audio_bps < 0) {
+        return null
+    }
+    return (duration_seconds * (video_bps + audio_bps)) / 8
+}
+
+export function format_size_estimate(
+    duration_seconds: number | null,
+    video_bps: number | null,
+    audio_bps: number | null,
+): string {
+    const bytes = estimate_output_bytes(duration_seconds, video_bps, audio_bps)
+    if (bytes === null || video_bps === null || audio_bps === null) {
+        return "—"
+    }
+    const mb = (bytes / 1_000_000).toFixed(1)
+    const video_mbps = video_bps / 1_000_000
+    const audio_kbps = Math.round(audio_bps / 1000)
+    return `Est ≈ ${mb} MB · video ${video_mbps} Mbps + audio ${audio_kbps} kbps · VBR varies`
 }
 
 export const FRAME_COUNT_WARNING_THRESHOLD = 1000
@@ -325,8 +368,6 @@ export async function add_canvas_frame(
     }
 }
 
-export const CRF_INVALID_MESSAGE = "CRF override must be a number from 0 to 51."
-
 let aac_encoder_promise: Promise<void> | null = null
 
 export async function ensure_aac_encoder(mb: typeof import("mediabunny")): Promise<void> {
@@ -366,9 +407,8 @@ export function resolve_video_encode_config(
     width: number,
     height: number,
     fps: number,
-    crf_raw: number | string | null | undefined,
 ): TransitionVideoConfig {
-    return quality_to_video_config(quality, width, height, fps, parse_crf_override(crf_raw ?? null))
+    return quality_to_video_config(quality, width, height, fps)
 }
 
 export function create_video_sample_source(
@@ -376,18 +416,21 @@ export function create_video_sample_source(
     config: TransitionVideoConfig,
     overrides?: {
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+        on_encode_report?: (r: EffectiveEncodeReport) => void
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
-    const quality =
-        config.quantizer !== null
-            ? new mb.Quality({ quantizer: config.quantizer, bitrate: config.bitrate, bitrateMode: "variable" })
-            : new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
+    const quality = new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
     return new mb.VideoSampleSource({
         codec: "avc",
         quality,
         latencyMode: "quality",
         hardwareAcceleration: overrides?.hardware_acceleration ?? "no-preference",
         bitrateMode: "variable",
+        onEncoderConfig: (enc: VideoEncoderConfig) => {
+            const r = capture_encode_report(enc, config)
+            console.log("[encode]", r)
+            overrides?.on_encode_report?.(r)
+        },
     })
 }
 
@@ -397,12 +440,21 @@ export function create_encode_video_source(
     width: number,
     height: number,
     fps: number,
-    crf_raw: number | string | null | undefined,
     overrides?: {
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+        on_encode_report?: (r: EffectiveEncodeReport) => void
+        video_bitrate?: number | null
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
-    return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw), overrides)
+    const override = overrides?.video_bitrate ?? null
+    if (override !== null && (!Number.isFinite(override) || override <= 0)) {
+        throw new ClipError("INVALID_RANGE", "Video bitrate must be greater than 0.")
+    }
+    const config =
+        override !== null
+            ? { bitrate: Math.round(override), description: `custom ${width}x${height}@${fps}fps` }
+            : resolve_video_encode_config(quality, width, height, fps)
+    return create_video_sample_source(mb, config, overrides)
 }
 
 export function draw_contain_fit(
@@ -481,7 +533,7 @@ export interface CanvasEncodeOptions<T> {
     height: number
     fps: number
     quality: TransitionQuality
-    crf_raw: number | string | null | undefined
+    video_bitrate?: number | null
     audio_probe: TransitionAudioBitrateProbe | null
     audio_quality: TransitionAudioQuality
     needs_audio: boolean
@@ -511,7 +563,9 @@ export async function with_canvas_encode<T>(options: CanvasEncodeOptions<T>): Pr
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
         const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps, options.crf_raw)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, {
+            video_bitrate: options.video_bitrate ?? null,
+        })
         output.addVideoTrack(video_source)
         let audio_source: AudioBufferSource | null = null
         let decoded: AudioBuffer | null = null

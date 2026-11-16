@@ -8,7 +8,6 @@ import { reset_output_transition, revoke_all_transition, transition_state } from
 import {
     estimate_frame_count,
     FRAME_COUNT_WARNING_THRESHOLD,
-    parse_crf_override,
     resolve_audio_bitrate,
     resolve_duration_seconds,
     resolve_output_dims,
@@ -68,9 +67,6 @@ function apply_patch(patch: TransitionSettingsPatch) {
     }
     if (patch.audio_quality !== undefined) {
         transition_state.audio_quality = patch.audio_quality
-    }
-    if (patch.crf_override !== undefined) {
-        transition_state.crf_override = patch.crf_override
     }
     if (patch.easing !== undefined) {
         transition_state.easing = patch.easing
@@ -135,7 +131,6 @@ async function handle_render() {
         }
         const fps = resolve_output_fps(source_a.probe, source_b.probe, transition_state.fps_mode)
         const audio_bitrate = resolve_audio_bitrate(source_a.probe, source_b.probe, transition_state.audio_quality)
-        const crf = parse_crf_override(transition_state.crf_override ?? null)
         aborter = new AbortController()
         const rendered = await render_transition({
             file_a,
@@ -149,7 +144,6 @@ async function handle_render() {
             height: dims.height,
             fps,
             quality: transition_state.quality,
-            crf,
             audio_quality: transition_state.audio_quality,
             audio_bitrate,
             easing: transition_state.easing,
@@ -260,7 +254,6 @@ onDestroy(() => {
         fps={transition_state.fps_mode}
         quality={transition_state.quality}
         audio_quality={transition_state.audio_quality}
-        crf_override={transition_state.crf_override == null ? "" : String(transition_state.crf_override)}
         easing={transition_state.easing}
         on_change={apply_patch}
     />
