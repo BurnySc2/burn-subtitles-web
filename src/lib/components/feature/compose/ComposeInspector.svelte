@@ -1,0 +1,1499 @@
+<script lang="ts">
+import { is_accepted } from "$lib/media/compose-drop"
+import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
+import { resolve_output_audio_bps } from "$lib/media/compose-probe-union"
+import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
+import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
+import { parse_trim_field } from "$lib/media/compose-trim"
+import type {
+    ColorNodeData,
+    ComposeNode,
+    MergeNodeData,
+    OutputNodeData,
+    OverlayNodeData,
+    RescaleNodeData,
+    SubtitlesNodeData,
+    TextItem,
+    TransitionNodeData,
+    TrimNodeData,
+} from "$lib/media/compose-types"
+import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
+import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
+import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
+import { format_audio_label, format_kbps } from "$lib/media/probe-audio-label"
+import {
+    format_size_estimate,
+    resolve_compose_video_bps,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODE_HINTS,
+} from "$lib/media/transition-utils"
+import {
+    build_datalist_id,
+    font_registry_version,
+    get_font_suggestions,
+    is_font_available,
+} from "../../../media/compose-font-library"
+import { create_default_text_item, MAX_TEXT_ITEMS } from "../../../media/compose-types"
+import ComposeFileDrop from "./ComposeFileDrop.svelte"
+import ComposeNodePreview from "./ComposeNodePreview.svelte"
+import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
+import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
+
+let {
+    on_preview,
+}: {
+    on_preview?: (preview: {
+        node_id: string | null
+        node_type: string | null
+        url: string | null
+        blob: Blob | null
+    }) => void
+} = $props()
+
+let selected: ComposeNode | null = $derived(
+    compose_state.nodes.find((node) => node.id === compose_state.selected_id) ?? null,
+)
+let selected_edge_id: string | null = $derived(
+    compose_state.selected_edge_id !== null &&
+        compose_state.edges.some((edge) => edge.id === compose_state.selected_edge_id)
+        ? compose_state.selected_edge_id
+        : null,
+)
+let issues = $derived.by(() => {
+    $font_registry_version
+    return validate_compose(compose_state.nodes, compose_state.edges)
+})
+let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
+let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
+let encode_hint = $derived.by(() => {
+    if (selected?.type !== "output") {
+        return { reencodes: false, text: null as string | null }
+    }
+    return encode_hint_for_graph(compose_state.nodes, selected.data)
+})
+// WHY no-report-yet: executor stays console.log-only, follow-up threads on_encode_report here
+let last_report: EffectiveEncodeReport | null = $state(null)
+let encode_badge = $derived(format_encode_badge(last_report))
+let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
+let font_options = $derived.by(() => {
+    $font_registry_version
+    return get_font_suggestions()
+})
+
+function is_font_available_reactive(family: string, _version: number): boolean {
+    return is_font_available(family)
+}
+
+function strict_hex_or(raw: string | undefined, fallback: string): string {
+    return typeof raw === "string" && STRICT_HEX_6.test(raw) ? raw : fallback
+}
+
+let subtitle_font_family = $derived.by(() => {
+    if (selected?.type !== "subtitles") {
+        return ""
+    }
+    const family = selected.data.font_family
+    return typeof family === "string" ? family : ""
+})
+
+function handle_preview(preview: { url: string | null; blob: Blob | null }): void {
+    on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
+}
+
+function patch_trim(patch: Partial<TrimNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "trim") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function patch_transition(patch: Partial<TransitionNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "transition") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function patch_merge(patch: Partial<MergeNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "merge") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function merge_handle_index(handle: string | null): number {
+    if (typeof handle !== "string") {
+        return Number.MAX_SAFE_INTEGER
+    }
+    const match = /^in(\d+)$/.exec(handle)
+    return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER
+}
+
+let merge_edges = $derived.by(() => {
+    if (!selected || selected.type !== "merge") {
+        return []
+    }
+    return compose_state.edges
+        .filter((edge) => edge.target === selected.id)
+        .slice()
+        .sort((a, b) => merge_handle_index(a.targetHandle) - merge_handle_index(b.targetHandle))
+})
+
+function move_merge_edge(index: number, direction: -1 | 1): void {
+    if (!selected || selected.type !== "merge") {
+        return
+    }
+    const ordered = merge_edges
+    const other = index + direction
+    if (index < 0 || other < 0 || index >= ordered.length || other >= ordered.length) {
+        return
+    }
+    const current = ordered[index]
+    const sibling = ordered[other]
+    const handle_a = current.targetHandle
+    current.targetHandle = sibling.targetHandle
+    sibling.targetHandle = handle_a
+}
+
+function on_merge_count_input(raw: string): void {
+    const parsed = Number(raw)
+    if (raw.trim() !== "" && Number.isInteger(parsed)) {
+        patch_merge({ input_count: Math.min(8, Math.max(2, parsed)) })
+    }
+}
+
+function patch_subtitles(patch: Partial<SubtitlesNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "subtitles") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function subtitle_field_message(field: string): string | null {
+    return selected_issues.find((issue) => issue.field === field)?.message ?? null
+}
+
+let subtitle_file_error = $state<string | null>(null)
+
+function patch_output(patch: Partial<OutputNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "output") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function patch_overlay(patch: Partial<OverlayNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "overlay") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function patch_color(patch: Partial<ColorNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "color") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function normalize_hex_input(raw: string): string {
+    const match = /^#([0-9a-fA-F]{3})$/.exec(raw.trim())
+    if (!match) {
+        return raw
+    }
+    const [r, g, b] = match[1]
+    return `#${r}${r}${g}${g}${b}${b}`
+}
+
+function patch_rescale(patch: Partial<RescaleNodeData>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "rescale") {
+        Object.assign(node.data, patch)
+    }
+}
+
+function patch_text_item(index: number, patch: Partial<TextItem>): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "text") {
+        const item = node.data.items[index]
+        if (item) {
+            Object.assign(item, patch)
+        }
+    }
+}
+
+function add_text_item(): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (!node || node.type !== "text" || node.data.items.length >= MAX_TEXT_ITEMS) {
+        return
+    }
+    node.data.items.push(create_default_text_item())
+}
+
+function remove_text_item(index: number): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node && node.type === "text") {
+        node.data.items.splice(index, 1)
+    }
+}
+
+function move_text_item(index: number, direction: -1 | 1): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (!node || node.type !== "text") {
+        return
+    }
+    const other = index + direction
+    if (index < 0 || other < 0 || index >= node.data.items.length || other >= node.data.items.length) {
+        return
+    }
+    const current = node.data.items[index]
+    node.data.items[index] = node.data.items[other]
+    node.data.items[other] = current
+}
+
+function on_text_show_end_input(index: number, raw: string): void {
+    if (raw.trim() === "") {
+        patch_text_item(index, { show_end: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_text_item(index, { show_end: value }))
+}
+
+function on_text_max_width_input(index: number, raw: string): void {
+    if (raw.trim() === "") {
+        patch_text_item(index, { max_width: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_text_item(index, { max_width: value }))
+}
+
+function patch_label(label: string): void {
+    const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
+    if (node) {
+        node.data.label = label === "" ? null : label
+    }
+}
+
+function patch_output_name(file_name: string): void {
+    patch_output({ file_name: file_name.trim() === "" ? null : file_name.trim() })
+}
+
+function on_bitrate_input(raw: string): void {
+    on_number_input(raw, (value) => patch_output({ video_bitrate_kbps: Number(value) }))
+}
+
+let output_effective_video_bps = $derived(
+    selected?.type === "output" ? resolve_compose_video_bps(selected.data.video_bitrate_kbps) : null,
+)
+let output_audio_bps = $derived(
+    selected?.type === "output"
+        ? resolve_output_audio_bps(
+              compose_state.nodes,
+              compose_state.edges,
+              selected.data.audio_quality ?? "source-max",
+          )
+        : null,
+)
+let size_estimate = $derived(
+    !encode_hint.reencodes
+        ? "—"
+        : format_size_estimate(selected_duration, output_effective_video_bps, output_audio_bps),
+)
+
+function on_number_input(raw: string, apply: (value: number) => void): void {
+    const parsed = Number(raw)
+    if (raw.trim() !== "" && Number.isFinite(parsed)) {
+        apply(parsed)
+    }
+}
+
+function on_trim_input(field: "start" | "end", raw: string): void {
+    const parsed = parse_trim_field(raw)
+    if (parsed !== undefined) {
+        patch_trim({ [field]: parsed })
+    }
+}
+
+function on_show_end_input(raw: string): void {
+    if (raw.trim() === "") {
+        patch_overlay({ show_end: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_overlay({ show_end: value }))
+}
+
+function on_rescale_fps_input(raw: string): void {
+    if (raw.trim() === "") {
+        patch_rescale({ fps: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_rescale({ fps: value }))
+}
+
+function delete_selected_edge(): void {
+    if (selected_edge_id === null) {
+        return
+    }
+    const edge_id = selected_edge_id
+    compose_state.edges = compose_state.edges.filter((edge) => edge.id !== edge_id)
+    compose_state.selected_edge_id = null
+}
+
+function delete_selected_node(): void {
+    if (selected !== null) {
+        remove_compose_nodes([selected.id])
+    }
+}
+
+function delete_selected(): void {
+    if (selected_edge_id !== null) {
+        delete_selected_edge()
+        return
+    }
+    delete_selected_node()
+}
+
+function on_inspector_keydown(event: KeyboardEvent): void {
+    if (event.key !== "Backspace" && event.key !== "Delete") {
+        return
+    }
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable]")) {
+        return
+    }
+    delete_selected()
+}
+
+function probe_summary(node: ComposeNode): string {
+    if (node.type !== "source") {
+        return ""
+    }
+    const probe = node.data.probe
+    if (!probe) {
+        return node.data.file ? node.data.file.name : "No file selected"
+    }
+    const parts: string[] = [node.data.file?.name ?? probe.file_name]
+    if (probe.duration !== null) {
+        parts.push(`${probe.duration.toFixed(2)}s`)
+    }
+    if (probe.display_width !== null && probe.display_height !== null) {
+        parts.push(`${probe.display_width}x${probe.display_height}`)
+    }
+    if (probe.frame_rate !== null) {
+        parts.push(`${probe.frame_rate.toFixed(2)} fps`)
+    }
+    const audio_label = format_audio_label(probe)
+    if (audio_label) {
+        parts.push(audio_label)
+    }
+    return parts.join(" · ")
+}
+</script>
+
+<svelte:window onkeydown={on_inspector_keydown} />
+<div class="flex h-full w-full flex-col gap-2 overflow-y-auto rounded-lg bg-gray-100 p-4">
+    <h2 class="text-lg font-semibold">Inspector</h2>
+    {#if selected_edge_id}
+        <p class="text-sm text-gray-600">
+            <span class="font-medium">Edge</span>
+            <span class="font-mono text-xs"> · {selected_edge_id}</span>
+        </p>
+        <button
+            type="button"
+            onclick={delete_selected_edge}
+            class="btn btn-sm self-start bg-red-600 text-white transition-colors hover:bg-red-700"
+        >
+            Delete edge
+        </button>
+        <p class="text-xs text-gray-500">Tip: click canvas before pressing Del, or use the button.</p>
+    {/if}
+    {#if !selected}
+        {#if !selected_edge_id}
+            <p class="text-sm text-gray-500">No node selected — click a node on the canvas.</p>
+        {/if}
+        <ComposeNodePreview
+            node_id={null}
+            hide_output
+            on_preview={handle_preview}
+        />
+    {:else}
+        <p class="text-sm text-gray-600">
+            <span class="font-medium capitalize">{selected.type}</span>
+            <span class="font-mono text-xs"> · {selected.id}</span>
+        </p>
+        <button
+            type="button"
+            onclick={delete_selected_node}
+            class="btn btn-sm self-start bg-red-600 text-white transition-colors hover:bg-red-700"
+        >
+            Delete node
+        </button>
+        <label class="flex flex-col gap-1 text-sm font-medium">
+            Name (optional)
+            <input
+                type="text"
+                value={selected.data.label ?? ""}
+                oninput={(e) => patch_label(e.currentTarget.value)}
+                placeholder={selected.type.charAt(0).toUpperCase() + selected.type.slice(1)}
+                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+            >
+        </label>
+        {#if selected.type === "source"}
+            <p class="text-sm text-gray-700">{probe_summary(selected)}</p>
+            {#if selected.data.probe}
+                {@const probe = selected.data.probe}
+                <dl
+                    data-testid="source-probe-details"
+                    class="grid grid-cols-2 gap-1 text-sm text-gray-500"
+                >
+                    {#if probe.has_video}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Video codec:</dt>
+                            <dd>
+                                {probe.video_codec
+                                    ? `${probe.video_codec}${probe.video_codec_param ? ` (${probe.video_codec_param})` : ""}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Resolution:</dt>
+                            <dd>
+                                {probe.display_width !== null && probe.display_height !== null
+                                    ? `${probe.display_width}x${probe.display_height}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Frame rate:</dt>
+                            <dd>{probe.frame_rate !== null ? `${probe.frame_rate.toFixed(2)} fps` : "—"}</dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Video bitrate:</dt>
+                            <dd>{format_kbps(probe.video_bitrate) ?? "—"}</dd>
+                        </div>
+                    {/if}
+                    {#if probe.has_audio}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio codec:</dt>
+                            <dd>
+                                {probe.audio_codec
+                                    ? `${probe.audio_codec}${probe.audio_codec_param ? ` (${probe.audio_codec_param})` : ""}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio bitrate:</dt>
+                            <dd>{format_kbps(probe.audio_bitrate) ?? "—"}</dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Channels:</dt>
+                            <dd>{probe.audio_channels ?? "—"}</dd>
+                        </div>
+                    {:else}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio:</dt>
+                            <dd>—</dd>
+                        </div>
+                    {/if}
+                </dl>
+            {/if}
+            <ComposeSourcePicker node_id={selected.id} />
+        {:else if selected.type === "trim"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Start (s)
+                <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={selected.data.start ?? ""}
+                    placeholder="0 = from start"
+                    oninput={(e) => on_trim_input("start", e.currentTarget.value)}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                End (s)
+                <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={selected.data.end ?? ""}
+                    placeholder="empty = to end"
+                    oninput={(e) => on_trim_input("end", e.currentTarget.value)}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+        {:else if selected.type === "transition"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Start (s)
+                <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={selected.data.start}
+                    oninput={(e) =>
+                        on_number_input(e.currentTarget.value, (value) => patch_transition({ start: value }))}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Duration (s)
+                <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={selected.data.duration}
+                    oninput={(e) =>
+                        on_number_input(e.currentTarget.value, (value) => patch_transition({ duration: value }))}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Easing
+                <select
+                    value={selected.data.easing}
+                    onchange={(e) =>
+                        patch_transition({ easing: e.currentTarget.value as TransitionNodeData["easing"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="linear">linear</option>
+                    <option value="exponential">exponential</option>
+                </select>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Audio
+                <select
+                    value={selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT}
+                    onchange={(e) =>
+                        patch_transition({ audio_mode: e.currentTarget.value as TransitionNodeData["audio_mode"] })}
+                    title={TRANSITION_AUDIO_MODE_HINTS[selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT]}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option
+                        value="crossfade"
+                        title={TRANSITION_AUDIO_MODE_HINTS.crossfade}
+                    >
+                        crossfade
+                    </option>
+                    <option
+                        value="a-flat"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-flat"]}
+                    >
+                        a-flat
+                    </option>
+                    <option
+                        value="a-fadeout"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-fadeout"]}
+                    >
+                        a-fadeout
+                    </option>
+                    <option
+                        value="b-flat"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-flat"]}
+                    >
+                        b-flat
+                    </option>
+                    <option
+                        value="b-fadein"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-fadein"]}
+                    >
+                        b-fadein
+                    </option>
+                    <option
+                        value="mute"
+                        title={TRANSITION_AUDIO_MODE_HINTS.mute}
+                    >
+                        mute
+                    </option>
+                    <option
+                        value="dip"
+                        title={TRANSITION_AUDIO_MODE_HINTS.dip}
+                    >
+                        dip
+                    </option>
+                    <option
+                        value="a-only"
+                        title={TRANSITION_AUDIO_MODE_HINTS["a-only"]}
+                    >
+                        a-only
+                    </option>
+                    <option
+                        value="b-only"
+                        title={TRANSITION_AUDIO_MODE_HINTS["b-only"]}
+                    >
+                        b-only
+                    </option>
+                </select>
+                <small class="text-xs font-normal text-gray-500">
+                    {TRANSITION_AUDIO_MODE_HINTS[selected.data.audio_mode ?? TRANSITION_AUDIO_MODE_DEFAULT]}
+                </small>
+            </label>
+        {:else if selected.type === "merge"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Inputs (2-8)
+                <span class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onclick={() => patch_merge({ input_count: Math.max(2, selected.data.input_count - 1) })}
+                        disabled={selected.data.input_count <= 2}
+                        class="btn btn-secondary btn-sm"
+                        aria-label="Decrease merge inputs"
+                    >
+                        -
+                    </button>
+                    <input
+                        type="number"
+                        min="2"
+                        max="8"
+                        step="1"
+                        value={selected.data.input_count}
+                        oninput={(e) => on_merge_count_input(e.currentTarget.value)}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    <button
+                        type="button"
+                        onclick={() => patch_merge({ input_count: Math.min(8, selected.data.input_count + 1) })}
+                        disabled={selected.data.input_count >= 8}
+                        class="btn btn-secondary btn-sm"
+                        aria-label="Increase merge inputs"
+                    >
+                        +
+                    </button>
+                </span>
+            </label>
+            {#if merge_edges.length > 0}
+                <div class="flex flex-col gap-1">
+                    <p class="text-sm font-medium">Input order (in0 first)</p>
+                    <ol class="flex flex-col gap-1">
+                        {#each merge_edges as edge, index (edge.id)}
+                            <li
+                                class="flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-sm"
+                            >
+                                <span class="font-mono text-xs text-gray-500">{edge.targetHandle ?? "?"}</span>
+                                <span class="min-w-0 flex-1 truncate font-mono text-xs">{edge.source}</span>
+                                <button
+                                    type="button"
+                                    onclick={() => move_merge_edge(index, -1)}
+                                    disabled={index === 0}
+                                    class="btn btn-secondary btn-sm"
+                                    aria-label={`Move ${edge.targetHandle} up`}
+                                >
+                                    Up
+                                </button>
+                                <button
+                                    type="button"
+                                    onclick={() => move_merge_edge(index, 1)}
+                                    disabled={index === merge_edges.length - 1}
+                                    class="btn btn-secondary btn-sm"
+                                    aria-label={`Move ${edge.targetHandle} down`}
+                                >
+                                    Down
+                                </button>
+                            </li>
+                        {/each}
+                    </ol>
+                </div>
+            {:else}
+                <p class="text-sm text-gray-500">Connect 2 or more inputs using handles in0, in1, …</p>
+            {/if}
+        {:else if selected.type === "subtitles"}
+            <div class="flex flex-col gap-1 text-sm font-medium">
+                SRT file (required)
+                <ComposeFileDrop
+                    accept=".srt"
+                    input_id={`inspector-${selected.id}-srt-file`}
+                    describedby={`inspector-${selected.id}-srt-status`}
+                    choose_label={selected.data.file ? "Replace SRT" : "Choose SRT"}
+                    choose_aria={selected.data.file ? "Replace SRT file" : "Choose SRT file"}
+                    file_name={selected.data.file?.name ?? null}
+                    show_remove={selected.data.file !== null}
+                    remove_aria={selected.data.file
+                        ? `Remove SRT file ${selected.data.file.name}`
+                        : "Remove SRT file"}
+                    disabled={false}
+                    on_file={(file) => {
+                        if (file) {
+                            if (!is_accepted(file, "subtitles")) {
+                                subtitle_file_error = "Please select an .srt file."
+                                return
+                            }
+                            subtitle_file_error = null
+                            patch_subtitles({ file })
+                        }
+                    }}
+                    on_remove={() => {
+                        subtitle_file_error = null
+                        patch_subtitles({ file: null })
+                    }}
+                />
+                <p
+                    id={`inspector-${selected.id}-srt-status`}
+                    aria-live="polite"
+                    class="text-xs font-normal text-red-700"
+                >
+                    {subtitle_file_error ?? ""}
+                </p>
+                {#if selected.data.file}
+                    <p class="text-xs font-normal text-gray-500">File: {selected.data.file.name}</p>
+                {/if}
+                {#if subtitle_field_message("file")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("file")}</small>
+                {/if}
+            </div>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Font family (optional)
+                <input
+                    type="text"
+                    value={subtitle_font_family}
+                    oninput={(e) => patch_subtitles({ font_family: e.currentTarget.value })}
+                    placeholder="sans-serif"
+                    list={build_datalist_id(selected.id, 0)}
+                    spellcheck={false}
+                    autocomplete="off"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                <datalist id={build_datalist_id(selected.id, 0)}>
+                    {#each font_options as fam (fam)}
+                        <option value={fam}></option>
+                    {/each}
+                </datalist>
+                {#if subtitle_font_family.trim() && !is_font_available_reactive(subtitle_font_family, $font_registry_version)}
+                    <p class="text-xs font-normal text-amber-700">
+                        ⚠ “{subtitle_font_family.trim()}” isn’t loaded — canvas will fall back.
+                    </p>
+                {/if}
+                {#if subtitle_field_message("font_family")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font_family")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Font size (8-160)
+                <input
+                    type="number"
+                    min="8"
+                    max="160"
+                    step="1"
+                    value={selected.data.font_size ?? SUBTITLE_BURN_DEFAULTS.font_size}
+                    oninput={(e) =>
+                        on_number_input(e.currentTarget.value, (value) => patch_subtitles({ font_size: value }))}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                {#if subtitle_field_message("font_size")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("font_size")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Text color
+                <span class="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={strict_hex_or(selected.data.text_color, SUBTITLE_BURN_DEFAULTS.text_color)}
+                        oninput={(e) => patch_subtitles({ text_color: e.currentTarget.value })}
+                        class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                    >
+                    <input
+                        type="text"
+                        value={selected.data.text_color ?? SUBTITLE_BURN_DEFAULTS.text_color}
+                        oninput={(e) => patch_subtitles({ text_color: e.currentTarget.value })}
+                        placeholder="#ffff7f"
+                        spellcheck={false}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                    >
+                </span>
+                {#if subtitle_field_message("text_color")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("text_color")}</small>
+                {/if}
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Stroke color
+                <span class="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={strict_hex_or(selected.data.stroke_color, SUBTITLE_BURN_DEFAULTS.stroke_color)}
+                        oninput={(e) => patch_subtitles({ stroke_color: e.currentTarget.value })}
+                        class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                    >
+                    <input
+                        type="text"
+                        value={selected.data.stroke_color ?? SUBTITLE_BURN_DEFAULTS.stroke_color}
+                        oninput={(e) => patch_subtitles({ stroke_color: e.currentTarget.value })}
+                        placeholder="#000000"
+                        spellcheck={false}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                    >
+                </span>
+                {#if subtitle_field_message("stroke_color")}
+                    <small class="text-xs font-normal text-red-700">{subtitle_field_message("stroke_color")}</small>
+                {/if}
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Outline (0-10)
+                    <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value={selected.data.outline_size ?? SUBTITLE_BURN_DEFAULTS.outline_size}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_subtitles({ outline_size: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("outline_size")}
+                        <small class="text-xs font-normal text-red-700">{subtitle_field_message("outline_size")}</small>
+                    {/if}
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Shadow (0-10)
+                    <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value={selected.data.shadow_size ?? SUBTITLE_BURN_DEFAULTS.shadow_size}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_subtitles({ shadow_size: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("shadow_size")}
+                        <small class="text-xs font-normal text-red-700">{subtitle_field_message("shadow_size")}</small>
+                    {/if}
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Horizontal margin (both sides) (0-2000)
+                    <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        step="1"
+                        value={selected.data.horizontal_margin ?? SUBTITLE_BURN_DEFAULTS.horizontal_margin}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) =>
+                                patch_subtitles({ horizontal_margin: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("horizontal_margin")}
+                        <small class="text-xs font-normal text-red-700">
+                            {subtitle_field_message("horizontal_margin")}
+                        </small>
+                    {/if}
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Vertical offset (0-2000)
+                    <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        step="1"
+                        value={selected.data.vertical_offset ?? SUBTITLE_BURN_DEFAULTS.vertical_offset}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) =>
+                                patch_subtitles({ vertical_offset: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                    {#if subtitle_field_message("vertical_offset")}
+                        <small class="text-xs font-normal text-red-700">
+                            {subtitle_field_message("vertical_offset")}
+                        </small>
+                    {/if}
+                </label>
+            </div>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Vertical anchor
+                <select
+                    value={selected.data.vertical_anchor ?? SUBTITLE_BURN_DEFAULTS.vertical_anchor}
+                    onchange={(e) =>
+                        patch_subtitles({ vertical_anchor: e.currentTarget.value as SubtitlesNodeData["vertical_anchor"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="top">top</option>
+                    <option value="center">center</option>
+                    <option value="bottom">bottom</option>
+                </select>
+            </label>
+            <label class="flex items-center gap-2 text-sm font-medium">
+                <input
+                    type="checkbox"
+                    checked={selected.data.right_to_left ?? SUBTITLE_BURN_DEFAULTS.right_to_left}
+                    onchange={(e) => patch_subtitles({ right_to_left: e.currentTarget.checked })}
+                    class="h-4 w-4 rounded border-gray-300"
+                >
+                Right to left
+            </label>
+        {:else if selected.type === "overlay"}
+            {#key selected.id}
+                <ComposeOverlayPicker node_id={selected.id} />
+            {/key}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Position
+                <select
+                    value={selected.data.position}
+                    onchange={(e) => patch_overlay({ position: e.currentTarget.value as OverlayNodeData["position"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="top-left">top-left</option>
+                    <option value="top-center">top-center</option>
+                    <option value="top-right">top-right</option>
+                    <option value="center-left">center-left</option>
+                    <option value="center">center</option>
+                    <option value="center-right">center-right</option>
+                    <option value="bottom-left">bottom-left</option>
+                    <option value="bottom-center">bottom-center</option>
+                    <option value="bottom-right">bottom-right</option>
+                </select>
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Scale [%]
+                    <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={selected.data.scale}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ scale: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Opacity
+                    <input
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={selected.data.opacity}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ opacity: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Offset X (px, right +)
+                    <input
+                        type="number"
+                        step="1"
+                        value={selected.data.offset_x}
+                        placeholder="0 = anchor (+ right / - left)"
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ offset_x: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Offset Y (px, down +)
+                    <input
+                        type="number"
+                        step="1"
+                        value={selected.data.offset_y}
+                        placeholder="0 = anchor (+ down / - up)"
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ offset_y: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Show start (s)
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={selected.data.show_start}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_overlay({ show_start: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Show end (s)
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={selected.data.show_end ?? ""}
+                        oninput={(e) => on_show_end_input(e.currentTarget.value)}
+                        placeholder="end of video"
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+            </div>
+            <p class="text-xs text-gray-500">
+                Offsets are canvas-space for every anchor: +X right, +Y down. Negatives move left/up; canvas clips
+                offscreen.
+            </p>
+        {:else if selected.type === "color"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Color
+                <span class="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={normalize_hex_input(selected.data.color)}
+                        oninput={(e) => patch_color({ color: e.currentTarget.value })}
+                        class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                    >
+                    <input
+                        type="text"
+                        value={selected.data.color}
+                        oninput={(e) => patch_color({ color: normalize_hex_input(e.currentTarget.value) })}
+                        placeholder="#000000"
+                        spellcheck={false}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                    >
+                </span>
+            </label>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Duration (s)
+                <input
+                    type="number"
+                    min="0"
+                    max="3600"
+                    step="0.001"
+                    value={selected.data.duration}
+                    oninput={(e) => on_number_input(e.currentTarget.value, (value) => patch_color({ duration: value }))}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <p class="text-xs text-gray-500">Duration must be above 0, max 3600s.</p>
+        {:else if selected.type === "rescale"}
+            <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Width
+                    <input
+                        type="number"
+                        min="2"
+                        step="2"
+                        value={selected.data.width}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_rescale({ width: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Height
+                    <input
+                        type="number"
+                        min="2"
+                        step="2"
+                        value={selected.data.height}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_rescale({ height: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+            </div>
+            <p class="text-xs text-gray-500">Width and height must be even numbers.</p>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                FPS (empty = keep source)
+                <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    step="1"
+                    value={selected.data.fps ?? ""}
+                    oninput={(e) => on_rescale_fps_input(e.currentTarget.value)}
+                    placeholder="source"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <p class="text-xs text-gray-500">FPS must be 1-120 when set.</p>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Fit
+                <select
+                    value={selected.data.fit}
+                    disabled
+                    class="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 font-normal text-gray-500"
+                >
+                    <option value="contain">contain</option>
+                </select>
+            </label>
+            <p class="text-xs text-gray-500">v1 supports contain only.</p>
+        {:else if selected.type === "text"}
+            <p class="text-sm text-gray-600">{selected.data.items.length}/ {MAX_TEXT_ITEMS} items (last item on top)</p>
+            <button
+                type="button"
+                onclick={add_text_item}
+                disabled={selected.data.items.length >= MAX_TEXT_ITEMS}
+                class="btn btn-secondary btn-sm self-start"
+            >
+                Add text item
+            </button>
+            {#each selected.data.items as item, i (item)}
+                <div class="flex flex-col gap-2 rounded border border-gray-200 bg-white p-2">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium">Item {i + 1}</span>
+                        <span class="flex-1"></span>
+                        <button
+                            type="button"
+                            onclick={() => move_text_item(i, -1)}
+                            disabled={i === 0}
+                            class="btn btn-secondary btn-sm"
+                            aria-label={`Move text item ${i + 1} up`}
+                        >
+                            Up
+                        </button>
+                        <button
+                            type="button"
+                            onclick={() => move_text_item(i, 1)}
+                            disabled={i === selected.data.items.length - 1}
+                            class="btn btn-secondary btn-sm"
+                            aria-label={`Move text item ${i + 1} down`}
+                        >
+                            Down
+                        </button>
+                        <button
+                            type="button"
+                            onclick={() => remove_text_item(i)}
+                            disabled={selected.data.items.length <= 1}
+                            class="btn btn-sm bg-red-600 text-white transition-colors hover:bg-red-700"
+                            aria-label={`Remove text item ${i + 1}`}
+                        >
+                            Remove
+                        </button>
+                    </div>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Text
+                        <textarea
+                            value={item.text}
+                            oninput={(e) => patch_text_item(i, { text: e.currentTarget.value })}
+                            rows="2"
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        ></textarea>
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Font family
+                        <input
+                            type="text"
+                            value={item.font}
+                            oninput={(e) => patch_text_item(i, { font: e.currentTarget.value })}
+                            placeholder="sans-serif"
+                            list={build_datalist_id(selected.id, i)}
+                            spellcheck={false}
+                            autocomplete="off"
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        >
+                        <datalist id={build_datalist_id(selected.id, i)}>
+                            {#each font_options as fam (fam)}
+                                <option value={fam}></option>
+                            {/each}
+                        </datalist>
+                        {#if item.font.trim() && !is_font_available_reactive(item.font, $font_registry_version)}
+                            <p class="text-xs font-normal text-amber-700">
+                                ⚠ “{item.font.trim()}” isn’t loaded — canvas will fall back.
+                            </p>
+                        {/if}
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Size start (px)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.size_start}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { size_start: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Size end (px)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.size_end}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { size_end: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                    </div>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Color
+                        <span class="flex items-center gap-2">
+                            <input
+                                type="color"
+                                value={item.color}
+                                oninput={(e) => patch_text_item(i, { color: e.currentTarget.value })}
+                                class="h-10 w-16 cursor-pointer rounded border border-gray-300 p-1 font-normal"
+                            >
+                            <input
+                                type="text"
+                                value={item.color}
+                                oninput={(e) => patch_text_item(i, { color: e.currentTarget.value })}
+                                placeholder="#ffffff"
+                                spellcheck={false}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-mono text-xs font-normal"
+                            >
+                        </span>
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Opacity (0-1)
+                        <input
+                            type="number"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={item.opacity}
+                            oninput={(e) =>
+                                on_number_input(e.currentTarget.value, (value) =>
+                                    patch_text_item(i, { opacity: value }))}
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        >
+                    </label>
+                    <label class="flex flex-col gap-1 text-sm font-medium">
+                        Position anchor
+                        <select
+                            value={item.anchor}
+                            onchange={(e) =>
+                                patch_text_item(i, { anchor: e.currentTarget.value as TextItem["anchor"] })}
+                            class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                        >
+                            <option value="top-left">top-left</option>
+                            <option value="top-center">top-center</option>
+                            <option value="top-right">top-right</option>
+                            <option value="center-left">center-left</option>
+                            <option value="center">center</option>
+                            <option value="center-right">center-right</option>
+                            <option value="bottom-left">bottom-left</option>
+                            <option value="bottom-center">bottom-center</option>
+                            <option value="bottom-right">bottom-right</option>
+                        </select>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Offset X (px, right +)
+                            <input
+                                type="number"
+                                step="1"
+                                value={item.offset_x}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { offset_x: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Offset Y (px, down +)
+                            <input
+                                type="number"
+                                step="1"
+                                value={item.offset_y}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { offset_y: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Line alignment
+                            <select
+                                value={item.align}
+                                onchange={(e) =>
+                                    patch_text_item(i, { align: e.currentTarget.value as TextItem["align"] })}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                                <option value="left">left</option>
+                                <option value="center">center</option>
+                                <option value="right">right</option>
+                            </select>
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Max width (px, empty = auto)
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={item.max_width ?? ""}
+                                oninput={(e) => on_text_max_width_input(i, e.currentTarget.value)}
+                                placeholder="auto"
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Show start (s)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                value={item.show_start}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { show_start: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Show end (s, empty = video end)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.001"
+                                value={item.show_end ?? ""}
+                                oninput={(e) => on_text_show_end_input(i, e.currentTarget.value)}
+                                placeholder="end of video"
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Fade in (s, from show start)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={item.fade_in}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { fade_in: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                        <label class="flex flex-col gap-1 text-sm font-medium">
+                            Fade out (s, before show end)
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.1"
+                                value={item.fade_out}
+                                oninput={(e) =>
+                                    on_number_input(e.currentTarget.value, (value) =>
+                                        patch_text_item(i, { fade_out: value }))}
+                                class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                            >
+                        </label>
+                    </div>
+                </div>
+            {/each}
+        {:else if selected.type === "output"}
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                File name
+                <input
+                    type="text"
+                    value={selected.data.file_name ?? ""}
+                    oninput={(e) => patch_output_name(e.currentTarget.value)}
+                    placeholder="composition.mp4"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <div class="grid grid-cols-3 gap-2">
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Width
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={selected.data.width}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_output({ width: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Height
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={selected.data.height}
+                        oninput={(e) =>
+                            on_number_input(e.currentTarget.value, (value) => patch_output({ height: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    FPS
+                    <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={selected.data.fps}
+                        oninput={(e) => on_number_input(e.currentTarget.value, (value) => patch_output({ fps: value }))}
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+            </div>
+            <label class="flex flex-col gap-1 text-sm font-medium">
+                Video bitrate (kbit/s)
+                <input
+                    type="number"
+                    min="500"
+                    max="100000"
+                    step="100"
+                    value={selected.data.video_bitrate_kbps}
+                    oninput={(e) => on_bitrate_input(e.currentTarget.value)}
+                    placeholder="e.g. 8000"
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+            </label>
+            <label
+                class="flex flex-col gap-1 text-sm font-medium"
+                title="AAC bitrate"
+            >
+                Audio quality (AAC)
+                <select
+                    value={selected.data.audio_quality ?? "source-max"}
+                    onchange={(e) =>
+                        patch_output({ audio_quality: e.currentTarget.value as OutputNodeData["audio_quality"] })}
+                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                >
+                    <option value="source-max">source-max</option>
+                    <option value="96k">96k</option>
+                    <option value="128k">128k</option>
+                    <option value="192k">192k</option>
+                    <option value="256k">256k</option>
+                    <option value="320k">320k</option>
+                </select>
+            </label>
+            <p
+                class="text-xs font-normal text-gray-500"
+                data-testid="size-estimate"
+            >
+                {size_estimate}
+            </p>
+            {#if encode_hint.text}
+                <small
+                    class="text-xs font-normal text-gray-500"
+                    data-testid="encode-hint"
+                >
+                    {encode_hint.text}
+                </small>
+            {/if}
+            {#if encode_badge}
+                <span
+                    class="text-xs font-normal text-gray-500"
+                    data-testid="encode-badge"
+                >
+                    {encode_badge}
+                </span>
+            {/if}
+            <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
+        {/if}
+        {#key selected.id}
+            <ComposeNodePreview
+                node_id={selected.id}
+                hide_output
+                on_preview={handle_preview}
+            />
+        {/key}
+        {#if selected_issues.length > 0}
+            <ul class="flex flex-col gap-1">
+                {#each selected_issues as issue, j (j)}
+                    <li class="rounded bg-red-100 p-2 text-sm text-red-800">
+                        {#if issue.field}
+                            {issue.field}:
+                        {/if}
+                        {issue.message}
+                    </li>
+                {/each}
+            </ul>
+        {:else}
+            <p class="text-sm font-medium text-green-700">✓ Node valid</p>
+        {/if}
+    {/if}
+</div>

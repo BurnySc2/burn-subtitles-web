@@ -2,6 +2,7 @@ import { FFmpeg, type LogEvent } from "@ffmpeg/ffmpeg"
 import { fetchFile, toBlobURL } from "@ffmpeg/util"
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { get_effective_font_family } from "./custom-font"
 import { available_fonts } from "./fonts"
 import { parse_timestamp } from "./format_time"
 import { generate_ass_file, load_selected_font } from "./subtitle-processing"
@@ -82,7 +83,6 @@ export async function load_ffmpeg() {
     try {
         temp_state.ffmpeg.message = "Loading FFmpeg core"
         const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
-        // const base_url = page.url.origin
         await new_ffmpeg.load({
             coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
             wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),
@@ -127,11 +127,16 @@ export async function render_prepare(): Promise<boolean> {
     )
     // Generate and write .ass file
     const srt_content = await temp_state.ffmpeg.srt_file.text()
+    const font_family = get_effective_font_family(
+        perma_state.subtitle_settings.font.index ?? 0,
+        temp_state.ffmpeg.custom_font,
+    )
     const ass_content = generate_ass_file(
         srt_content,
         temp_state.ffmpeg.video_width !== null && temp_state.ffmpeg.video_height !== null
             ? { x: temp_state.ffmpeg.video_width, y: temp_state.ffmpeg.video_height }
             : undefined,
+        font_family,
     )
     const ass_bytes = new TextEncoder().encode(ass_content)
     await temp_state.ffmpeg.ffmpeg.writeFile("subtitles.ass", ass_bytes)

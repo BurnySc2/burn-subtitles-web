@@ -1,0 +1,347 @@
+<script lang="ts">
+import { onDestroy, onMount } from "svelte"
+import { browser } from "$app/environment"
+import ComposeBrowserWarning from "$lib/components/feature/compose/ComposeBrowserWarning.svelte"
+import ComposeCanvas from "$lib/components/feature/compose/ComposeCanvas.svelte"
+import ComposeFontDialog from "$lib/components/feature/compose/ComposeFontDialog.svelte"
+import ComposeInspector from "$lib/components/feature/compose/ComposeInspector.svelte"
+import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPanel.svelte"
+import ComposeJsonBar from "$lib/components/feature/compose/ComposeJsonBar.svelte"
+import ComposePalette from "$lib/components/feature/compose/ComposePalette.svelte"
+import ComposeProjectToolbar from "$lib/components/feature/compose/ComposeProjectToolbar.svelte"
+import ComposeQuickAddList from "$lib/components/feature/compose/ComposeQuickAddList.svelte"
+import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.svelte"
+import { execute_compose_graph } from "$lib/media/compose-executor"
+import { compose_filename } from "$lib/media/compose-filename"
+import { clear_font_registry } from "$lib/media/compose-font-library"
+import { restore_saved_url_fonts } from "$lib/media/compose-font-restore"
+import { get_font_url_auto_restore, load_font_url_index } from "$lib/media/compose-font-url-index"
+import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
+import {
+    type ComposeNode,
+    type ComposeNodeKind,
+    create_default_text_item,
+    SUBTITLE_BURN_DEFAULTS,
+} from "$lib/media/compose-types"
+import { validate_compose } from "$lib/media/compose-validation"
+import { ClipError } from "$lib/media/mediabunny-clip"
+import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
+
+let aborter: AbortController | null = null
+
+function format_elapsed(ms: number): string {
+    const total_seconds = ms / 1000
+    if (total_seconds < 60) {
+        return `${total_seconds.toFixed(1)}s`
+    }
+    if (total_seconds < 3600) {
+        const minutes = Math.floor(total_seconds / 60)
+        const seconds = total_seconds - minutes * 60
+        return `${minutes}m ${seconds.toFixed(1)}s`
+    }
+    const hours = Math.floor(total_seconds / 3600)
+    const remainder = total_seconds - hours * 3600
+    const minutes = Math.floor(remainder / 60)
+    const seconds = Math.floor(remainder - minutes * 60)
+    return `${hours}h ${minutes}m ${seconds}s`
+}
+
+function handle_add(kind: ComposeNodeKind): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
+    const id = crypto.randomUUID()
+    const center = flow_center_position()
+    // WHY deterministic-grid: ?deterministic=1 gives stable node positions for Playwright
+    const deterministic = new URLSearchParams(window.location.search).get("deterministic") === "1"
+    const node_index = compose_state.nodes.length
+    const position = deterministic
+        ? { x: Math.round(center.x + node_index * 40), y: Math.round(center.y + node_index * 40) }
+        : {
+              x: Math.round(center.x + (Math.random() * 120 - 60)),
+              y: Math.round(center.y + (Math.random() * 120 - 60)),
+          }
+    let node: ComposeNode
+    switch (kind) {
+        case "source":
+            node = { id, type: "source", position, data: { file: null, probe: null } }
+            break
+        case "trim":
+            node = { id, type: "trim", position, data: { start: 0, end: null } }
+            break
+        case "transition":
+            node = {
+                id,
+                type: "transition",
+                position,
+                data: { start: 0, duration: 1, easing: "linear", audio_mode: TRANSITION_AUDIO_MODE_DEFAULT },
+            }
+            break
+        case "merge":
+            node = { id, type: "merge", position, data: { input_count: 2 } }
+            break
+        case "subtitles":
+            node = {
+                id,
+                type: "subtitles",
+                position,
+                data: { file: null, mode: "burn", ...SUBTITLE_BURN_DEFAULTS },
+            }
+            break
+        case "overlay":
+            node = {
+                id,
+                type: "overlay",
+                position,
+                data: {
+                    image: null,
+                    position: "top-right",
+                    scale: 100,
+                    opacity: 1,
+                    offset_x: 0,
+                    offset_y: 0,
+                    show_start: 0,
+                    show_end: null,
+                },
+            }
+            break
+        case "color":
+            node = { id, type: "color", position, data: { color: "#000000", duration: 20, label: null } }
+            break
+        case "rescale":
+            node = {
+                id,
+                type: "rescale",
+                position,
+                data: { width: 1920, height: 1080, fps: null, fit: "contain", label: null },
+            }
+            break
+        case "text":
+            node = { id, type: "text", position, data: { items: [create_default_text_item()], label: null } }
+            break
+        case "output":
+            node = {
+                id,
+                type: "output",
+                position,
+                data: {
+                    file_name: null,
+                    width: 1920,
+                    height: 1080,
+                    fps: 30,
+                    video_bitrate_kbps: 8000,
+                    audio_quality: "source-max",
+                },
+            }
+            break
+    }
+    compose_state.nodes.push(node)
+    compose_state.selected_id = id
+    compose_state.selected_edge_id = null
+}
+
+async function handle_render(): Promise<void> {
+    if (compose_state.run_status === "running") {
+        return
+    }
+    const issues = validate_compose(compose_state.nodes, compose_state.edges)
+    if (issues.length > 0) {
+        compose_state.run_status = "error"
+        compose_state.run_error = `${issues.length} issue${issues.length === 1 ? "" : "s"} — see issues below canvas`
+        compose_state.run_elapsed_ms = null
+        return
+    }
+    aborter?.abort()
+    if (compose_state.result) {
+        URL.revokeObjectURL(compose_state.result.url)
+        compose_state.result = null
+    }
+    compose_state.run_status = "running"
+    compose_state.run_progress = 0
+    compose_state.run_error = null
+    compose_state.run_elapsed_ms = null
+    const started_at = performance.now()
+    aborter = new AbortController()
+    try {
+        const result = await execute_compose_graph({
+            nodes: compose_state.nodes,
+            edges: compose_state.edges,
+            on_progress: (progress) => {
+                compose_state.run_progress = progress
+            },
+            signal: aborter.signal,
+        })
+        if (!result.ok || !result.output) {
+            compose_state.run_status = "error"
+            compose_state.run_error = result.issues[0]?.message ?? "Composition failed."
+            compose_state.run_elapsed_ms = null
+            return
+        }
+        compose_state.result = {
+            url: result.output.url,
+            mime: result.output.mime,
+            ext: result.output.ext,
+        }
+        compose_state.run_elapsed_ms = Math.round(performance.now() - started_at)
+        compose_state.run_status = "done"
+    } catch (error) {
+        if (error instanceof ClipError && error.code === "CANCELLED") {
+            compose_state.run_status = "idle"
+        } else {
+            compose_state.run_status = "error"
+            compose_state.run_error = error instanceof Error ? error.message : "Composition failed."
+        }
+        compose_state.run_elapsed_ms = null
+    } finally {
+        aborter = null
+    }
+}
+
+function handle_cancel(): void {
+    aborter?.abort()
+}
+
+let preview_node_id = $state<string | null>(null)
+let preview_node_type = $state<string | null>(null)
+let preview_url = $state<string | null>(null)
+let preview_blob = $state<Blob | null>(null)
+
+function handle_node_preview(preview: {
+    node_id: string | null
+    node_type: string | null
+    url: string | null
+    blob: Blob | null
+}): void {
+    preview_node_id = preview.node_id
+    preview_node_type = preview.node_type
+    preview_url = preview.url
+    preview_blob = preview.blob
+}
+
+let preview_name = $derived.by(() => {
+    const ext = preview_blob?.type.split("/")[1]?.split(";")[0] ?? "mp4"
+    return compose_filename(`${preview_node_type ?? "node"}-preview`, ext || "mp4")
+})
+
+let preview_is_audio = $derived((preview_blob?.type ?? "").startsWith("audio/"))
+
+let download_name = $derived.by(() => {
+    if (!compose_state.result) {
+        return compose_filename("composition", "mp4")
+    }
+    let stem = "composition"
+    for (const node of compose_state.nodes) {
+        if (node.type === "output" && node.data.file_name?.trim()) {
+            stem = node.data.file_name
+        }
+    }
+    return compose_filename(stem, compose_state.result.ext)
+})
+
+onMount(() => {
+    if (!browser) {
+        return
+    }
+    if (!get_font_url_auto_restore()) {
+        return
+    }
+    const entries = load_font_url_index().entries
+    if (entries.length === 0) {
+        return
+    }
+    void restore_saved_url_fonts(entries)
+})
+
+onDestroy(() => {
+    aborter?.abort()
+    clear_font_registry()
+    if (compose_state.result) {
+        URL.revokeObjectURL(compose_state.result.url)
+        compose_state.result = null
+    }
+})
+</script>
+
+<div class="flex w-full flex-col gap-2 p-3">
+    <ComposeBrowserWarning />
+    <ComposeProjectToolbar>
+        {#snippet left()}
+            <ComposeJsonBar />
+        {/snippet}
+        {#snippet right()}
+            <!-- WHY dialog-draft: font dialog unmounts on close so its URL draft resets; lifting it would touch dialog internals -->
+            <ComposeFontDialog />
+        {/snippet}
+    </ComposeProjectToolbar>
+    <div class="flex h-[calc(100vh-240px)] w-full items-start gap-4">
+        <div class="w-[220px] shrink-0">
+            <ComposePalette on_add={handle_add} />
+            <div class="mt-2 overflow-y-auto"><ComposeQuickAddList /></div>
+        </div>
+        <div class="flex h-full min-w-0 flex-1 flex-col rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
+        <div class="flex h-full w-80 shrink-0 flex-col gap-2 overflow-y-auto">
+            <ComposeInspector on_preview={handle_node_preview} />
+        </div>
+    </div>
+    {#if preview_url && preview_blob}
+        <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
+            <h2 class="text-lg font-semibold">Node preview · {preview_node_type ?? "node"}</h2>
+            {#if preview_is_audio}
+                <audio
+                    src={preview_url}
+                    controls
+                    class="w-full"
+                >
+                    <track kind="captions">
+                </audio>
+            {:else}
+                <video
+                    src={preview_url}
+                    controls
+                    class="max-h-[60vh] w-full rounded bg-black"
+                >
+                    <track kind="captions">
+                </video>
+            {/if}
+            <a
+                href={preview_url}
+                download={preview_name}
+                class="btn btn-secondary inline-flex items-center justify-center"
+            >
+                Download {preview_name}
+            </a>
+        </div>
+    {/if}
+    <ComposeIssuesPanel />
+    <ComposeRenderBar
+        on_render={() => void handle_render()}
+        on_cancel={handle_cancel}
+    />
+    {#if compose_state.result}
+        <div class="flex flex-col gap-2 rounded-lg bg-gray-100 p-4">
+            <h2 class="text-lg font-semibold">Result</h2>
+            {#if compose_state.run_status === "done" && compose_state.run_elapsed_ms !== null}
+                <p
+                    class="text-sm text-gray-600"
+                    title={`${compose_state.run_elapsed_ms} ms`}
+                >
+                    Rendered in {format_elapsed(compose_state.run_elapsed_ms)}
+                </p>
+            {/if}
+            <video
+                src={compose_state.result.url}
+                controls
+                class="w-full rounded"
+            >
+                <track kind="captions">
+            </video>
+            <a
+                href={compose_state.result.url}
+                download={download_name}
+                class="btn btn-primary inline-flex items-center justify-center"
+            >
+                Download {download_name}
+            </a>
+        </div>
+    {/if}
+</div>

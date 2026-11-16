@@ -1,0 +1,201 @@
+import { describe, expect, it } from "vitest"
+import {
+    find_output_node,
+    is_compose_root,
+    is_single_upstream_passthrough,
+    ordered_merge_inputs,
+    topo_sort_compose,
+    upstream_of,
+} from "./compose-graph"
+import type { ComposeEdge, ComposeNode } from "./compose-types"
+import { ClipError } from "./mediabunny-clip"
+
+function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
+    const position = { x: 0, y: 0 }
+    switch (type) {
+        case "source":
+            return { id, type, position, data: { file: null, probe: null } }
+        case "trim":
+            return { id, type, position, data: { start: 0, end: 1 } }
+        case "transition":
+            return { id, type, position, data: { start: 0, duration: 1, easing: "linear" } }
+        case "merge":
+            return { id, type, position, data: { input_count: 2 } }
+        case "subtitles":
+            return { id, type, position, data: { file: null, mode: "burn" } }
+        case "overlay":
+            return {
+                id,
+                type,
+                position,
+                data: {
+                    image: null,
+                    position: "top-right",
+                    scale: 100,
+                    opacity: 1,
+                    offset_x: 0,
+                    offset_y: 0,
+                    show_start: 0,
+                    show_end: null,
+                },
+            }
+        case "color":
+            return { id, type, position, data: { color: "#000000", duration: 20 } }
+        case "rescale":
+            return { id, type, position, data: { width: 1920, height: 1080, fps: null, fit: "contain" } }
+        case "text":
+            return {
+                id,
+                type,
+                position,
+                data: {
+                    items: [
+                        {
+                            text: "Hello",
+                            font: "sans-serif",
+                            size_start: 48,
+                            size_end: 48,
+                            color: "#ffffff",
+                            opacity: 1,
+                            anchor: "bottom-center",
+                            offset_x: 0,
+                            offset_y: 0,
+                            align: "center",
+                            max_width: null,
+                            show_start: 0,
+                            show_end: null,
+                            fade_in: 0,
+                            fade_out: 0,
+                        },
+                    ],
+                },
+            }
+        case "output":
+            return {
+                id,
+                type,
+                position,
+                data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000 },
+            }
+    }
+}
+
+function edge(id: string, source: string, target: string): ComposeEdge {
+    return { id, source, sourceHandle: null, target, targetHandle: null }
+}
+
+function handle_edge(id: string, source: string, target: string, targetHandle: string | null): ComposeEdge {
+    return { id, source, sourceHandle: null, target, targetHandle }
+}
+
+describe("topo_sort_compose", () => {
+    it("orders a linear chain source to output", () => {
+        const nodes = [node("src", "source"), node("trim"), node("out", "output")]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(topo_sort_compose(nodes, edges)).toEqual(["src", "trim", "out"])
+    })
+
+    it("respects diamond dependencies and keeps input order for isolated nodes", () => {
+        const nodes = [node("a"), node("b"), node("c"), node("d"), node("solo")]
+        const edges = [edge("e1", "a", "b"), edge("e2", "a", "c"), edge("e3", "b", "d"), edge("e4", "c", "d")]
+        const order = topo_sort_compose(nodes, edges)
+        expect(order.indexOf("a")).toBeLessThan(order.indexOf("b"))
+        expect(order.indexOf("a")).toBeLessThan(order.indexOf("c"))
+        expect(order.indexOf("b")).toBeLessThan(order.indexOf("d"))
+        expect(order.indexOf("c")).toBeLessThan(order.indexOf("d"))
+        expect(topo_sort_compose([node("x"), node("y")], [])).toEqual(["x", "y"])
+    })
+
+    it("returns an empty order for empty input and ignores unknown endpoints", () => {
+        expect(topo_sort_compose([], [])).toEqual([])
+        const nodes = [node("a"), node("b")]
+        expect(topo_sort_compose(nodes, [edge("e1", "a", "ghost"), edge("e2", "ghost", "b")])).toEqual(["a", "b"])
+    })
+
+    it("throws ClipError INVALID_RANGE on cycles and self loops", () => {
+        const nodes = [node("a"), node("b")]
+        const cycle = [edge("e1", "a", "b"), edge("e2", "b", "a")]
+        try {
+            topo_sort_compose(nodes, cycle)
+            expect.unreachable()
+        } catch (error) {
+            expect(error).toBeInstanceOf(ClipError)
+            expect((error as ClipError).code).toBe("INVALID_RANGE")
+        }
+        expect(() => topo_sort_compose([node("a")], [edge("e1", "a", "a")])).toThrow(ClipError)
+    })
+})
+
+describe("find_output_node", () => {
+    it("returns the output node and null when absent", () => {
+        const nodes = [node("src", "source"), node("out", "output")]
+        expect(find_output_node(nodes)?.id).toBe("out")
+        expect(find_output_node([node("src", "source")])).toBeNull()
+        expect(find_output_node([])).toBeNull()
+    })
+
+    it("returns the first output node when several exist", () => {
+        const nodes = [node("o1", "output"), node("o2", "output")]
+        expect(find_output_node(nodes)?.id).toBe("o1")
+    })
+})
+
+describe("upstream_of", () => {
+    it("returns ancestors in topological order", () => {
+        const nodes = [node("src", "source"), node("trim"), node("sub", "subtitles"), node("out", "output")]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out"), edge("e3", "sub", "out")]
+        expect(upstream_of("out", nodes, edges)).toEqual(["src", "sub", "trim"])
+        expect(upstream_of("trim", nodes, edges)).toEqual(["src"])
+    })
+
+    it("returns empty for sources, unknown targets, and excludes downstream nodes", () => {
+        const nodes = [node("a"), node("b"), node("c")]
+        const edges = [edge("e1", "a", "b"), edge("e2", "b", "c")]
+        expect(upstream_of("a", nodes, edges)).toEqual([])
+        expect(upstream_of("ghost", nodes, edges)).toEqual([])
+        expect(upstream_of("b", nodes, edges)).toEqual(["a"])
+    })
+})
+
+describe("ordered_merge_inputs", () => {
+    it("orders by in-handle, not insertion order", () => {
+        const edges = [
+            handle_edge("e1", "b", "m", "in1"),
+            handle_edge("e2", "a", "m", "in0"),
+            handle_edge("e3", "c", "m", "in2"),
+        ]
+        expect(ordered_merge_inputs("m", edges)).toEqual(["a", "b", "c"])
+    })
+
+    it("keeps duplicate handles with a source-id tie-break and sorts unknown handles last", () => {
+        const edges = [
+            handle_edge("e1", "b", "m", "in0"),
+            handle_edge("e2", "a", "m", "in0"),
+            handle_edge("e3", "c", "m", null),
+        ]
+        expect(ordered_merge_inputs("m", edges)).toEqual(["a", "b", "c"])
+        const other_target = [handle_edge("e1", "a", "m", "in0"), handle_edge("e2", "b", "other", "in0")]
+        expect(ordered_merge_inputs("m", other_target)).toEqual(["a"])
+    })
+})
+
+describe("is_single_upstream_passthrough", () => {
+    it("returns true for trim, rescale, subtitles, overlay, and text", () => {
+        expect(is_single_upstream_passthrough(node("a", "trim"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("b", "rescale"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("c", "subtitles"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("d", "overlay"))).toBe(true)
+        expect(is_single_upstream_passthrough(node("e", "text"))).toBe(true)
+    })
+
+    it("returns false for source and output", () => {
+        expect(is_single_upstream_passthrough(node("s", "source"))).toBe(false)
+        expect(is_single_upstream_passthrough(node("o", "output"))).toBe(false)
+    })
+})
+
+describe("is_compose_root", () => {
+    it("returns false for text", () => {
+        expect(is_compose_root(node("t", "text"))).toBe(false)
+    })
+})

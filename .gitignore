@@ -19,6 +19,7 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+.npmrc
 
 # Vite
 vite.config.js.timestamp-*
@@ -32,3 +33,8 @@ vite.config.ts.timestamp-*
 /static/fonts/Arial*.ttf
 /static/fonts/Candara*.ttf
 /static/fonts/Tahoma*.ttf
+
+# Core dumps (chromium headless-shell crashes during vitest browser mode)
+core
+core.*
+*.core

@@ -2,42 +2,31 @@
 // This is a helper file to extract .srt from .ods file
 import JSZip from "jszip"
 import Spinner from "$lib/components/ui/Spinner.svelte"
+import { parse_ods_content_xml, slice_ods_column } from "$lib/media/ods-parse"
 import { temp_state } from "$lib/temporary-storage.svelte"
 
-export async function parse_odt(file: File) {
+async function read_content_xml(file: File): Promise<string | null> {
     const zip = await JSZip.loadAsync(file)
-
     const content = zip.file("content.xml")
     if (content === null) {
         return null
     }
-    const xml = await content.async("text")
-
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, "text/xml")
-
-    const data = doc.getElementsByTagName("table:table")
-    // @ts-expect-error
-    const sheet_row_column = [...data].map((sheet: HTMLElement) => {
-        // console.log(data)
-        // @ts-expect-error
-        return [...sheet.getElementsByTagName("table:table-row")].map((row: HTMLElement) => {
-            // console.log(row)
-            // @ts-expect-error
-            return [...row.getElementsByTagName("table:table-cell")].map((cell: HTMLElement) => {
-                // console.log(cell)
-                return cell.textContent
-            })
-        })
-    })
-    return sheet_row_column
+    return await content.async("text")
 }
 
 const ods_data_promise = $derived.by(async () => {
     if (temp_state.extract_srt.file === null) {
         return null
     }
-    return await parse_odt(temp_state.extract_srt.file)
+    const xml = await read_content_xml(temp_state.extract_srt.file)
+    if (xml === null) {
+        return null
+    }
+    try {
+        return parse_ods_content_xml(xml)
+    } catch {
+        return null
+    }
 })
 
 const srt_data = $derived.by(async () => {
@@ -50,22 +39,21 @@ const srt_data = $derived.by(async () => {
     if (resolved === null) {
         return null
     }
-    return resolved[sheet - 1]
-        .filter((_data, index) => {
-            return start <= index && index <= end
-        })
-        .map((row) => {
-            // console.log(row)
-            return row[column - 1] ?? ""
-        })
+    return slice_ods_column(resolved, sheet, column, start, end)
 })
 async function process_file(file: File) {
     if (file.name.endsWith(".ods")) {
-        const parsed = await parse_odt(file)
-        if (parsed !== null) {
-            temp_state.extract_srt.file = file
-            return true
+        const xml = await read_content_xml(file)
+        if (xml === null) {
+            return false
         }
+        try {
+            parse_ods_content_xml(xml)
+        } catch {
+            return false
+        }
+        temp_state.extract_srt.file = file
+        return true
     }
     return false
 }
