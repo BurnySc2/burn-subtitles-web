@@ -1,6 +1,5 @@
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
-import { get_effective_font_family } from "./custom-font"
 import { available_fonts } from "./fonts"
 
 export async function load_selected_font(): Promise<boolean> {
@@ -122,7 +121,11 @@ function escape_ass_text(text: string): string[] {
 }
 
 // Generate ASS file from SRT content and styling parameters
-export function generate_ass_file(srt_content?: string, play_res?: { x: number; y: number }): string {
+export function generate_ass_file(
+    srt_content: string | undefined,
+    play_res: { x: number; y: number } | undefined,
+    font_family: string,
+): string {
     const alignment_map = {
         top: "8",
         bottom: "2",
@@ -130,8 +133,6 @@ export function generate_ass_file(srt_content?: string, play_res?: { x: number; 
     } as const
 
     const state = perma_state.subtitle_settings
-    const custom = temp_state.ffmpeg.custom_font
-    const font_family = get_effective_font_family(state.font.index ?? 0, custom)
 
     const ass_header = `[Script Info]
 Title: Generated Subtitles

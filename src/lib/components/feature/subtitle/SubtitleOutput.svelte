@@ -1,6 +1,7 @@
 <script lang="ts">
 import { perma_state } from "$lib/persistent-storage.svelte"
 import { temp_state } from "$lib/temporary-storage.svelte"
+import { get_effective_font_family } from "$lib/utils/custom-font"
 import { download_video, generate_ass_file } from "$lib/utils/subtitle-processing"
 import {
     build_ffmpeg_command,
@@ -19,8 +20,15 @@ const ass_content_promise = $derived.by(async () => {
         temp_state.ffmpeg.video_width !== null && temp_state.ffmpeg.video_height !== null
             ? { x: temp_state.ffmpeg.video_width, y: temp_state.ffmpeg.video_height }
             : undefined
+    // Svelte 5 tracks deps only before first await — read custom font here
+    const font_family = get_effective_font_family(
+        perma_state.subtitle_settings.font.index ?? 0,
+        temp_state.ffmpeg.custom_font,
+    )
+    const custom_url = temp_state.ffmpeg.custom_font?.object_url
+    void custom_url
     const srt_content = await temp_state.ffmpeg.srt_file.text()
-    return generate_ass_file(srt_content, play_res)
+    return generate_ass_file(srt_content, play_res, font_family)
 })
 
 const selected_font_name = $derived(get_selected_font_name(perma_state.subtitle_settings.font.index))
