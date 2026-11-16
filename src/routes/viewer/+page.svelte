@@ -2,13 +2,12 @@
 import { onDestroy, onMount } from "svelte"
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
 import ViewerInspector from "$lib/components/feature/viewer/ViewerInspector.svelte"
-import ViewerLoudnessPanel from "$lib/components/feature/viewer/ViewerLoudnessPanel.svelte"
 import ViewerStage from "$lib/components/feature/viewer/ViewerStage.svelte"
 import ViewerTransport from "$lib/components/feature/viewer/ViewerTransport.svelte"
 import { is_accepted } from "$lib/media/compose-drop"
 import { copy_text, format_viewer_summary } from "$lib/media/framecode"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
-import { analyze_loudness, loudness_at } from "$lib/media/viewer-loudness"
+import { analyze_loudness, loudness_at, peak_to_dbfs } from "$lib/media/viewer-loudness"
 import { reset_playback, revoke_viewer, viewer_state } from "$lib/media/viewer-state.svelte"
 import { effective_fps, step_frame, time_to_frame } from "$lib/media/viewer-step"
 
@@ -38,17 +37,22 @@ let has_video = $derived.by(() => {
 })
 
 let loudness_text = $derived.by(() => {
-    const cache = viewer_state.source?.loudness
-    const time = viewer_state.playback.current_time
-    if (!cache || time === null) {
+    const source = viewer_state.source
+    if (!source) {
         return null
     }
-    const point = loudness_at(cache, time)
-    if (!point) {
-        return null
+    if (source.loudness_status === "analyzing") {
+        const progress =
+            typeof loudness_progress !== "number" || !Number.isFinite(loudness_progress)
+                ? 0
+                : Math.min(1, Math.max(0, loudness_progress))
+        return `Analyzing… ${Math.round(progress * 100)}%`
     }
-    const db = Number.isFinite(point.dbfs) ? `${point.dbfs.toFixed(1)} dBFS` : "-∞ dBFS"
-    return `Loudness at playhead: ${db}`
+    if (source.loudness_status === "ready" && source.loudness) {
+        const db = peak_to_dbfs(source.loudness.peak_overall)
+        return `peak ${Number.isFinite(db) ? `${db.toFixed(1)}` : "-∞"} dBFS`
+    }
+    return null
 })
 
 function cancel_loudness(): void {
@@ -103,14 +107,6 @@ async function handle_analyze_loudness(): Promise<void> {
     }
 }
 
-function handle_cancel_loudness(): void {
-    cancel_loudness()
-    loudness_progress = 0
-    if (viewer_state.source?.loudness_status === "analyzing") {
-        viewer_state.source.loudness_status = "idle"
-    }
-}
-
 async function handle_file(file: File): Promise<void> {
     const mine = ++file_token
     cancel_loudness()
@@ -122,6 +118,7 @@ async function handle_file(file: File): Promise<void> {
     video_duration = null
     video_el = null
     viewer_state.source = { file, url: URL.createObjectURL(file), probe: null, loudness: null, loudness_status: "idle" }
+    void handle_analyze_loudness()
     try {
         const probe = await probe_media(file)
         if (mine !== file_token || viewer_state.source?.file !== file) {
@@ -396,23 +393,7 @@ onDestroy(() => {
                 loudness={viewer_state.source.loudness}
                 current_time={viewer_state.playback.current_time}
             />
-            {#if loudness_text}
-                <p
-                    role="status"
-                    class="section text-sm text-gray-500"
-                >
-                    {loudness_text}
-                </p>
-            {/if}
         {/if}
-        <ViewerLoudnessPanel
-            has_file={viewer_state.source !== null}
-            status={viewer_state.source?.loudness_status ?? "idle"}
-            cache={viewer_state.source?.loudness ?? null}
-            progress={loudness_progress}
-            on_analyze={() => void handle_analyze_loudness()}
-            on_cancel={handle_cancel_loudness}
-        />
         {#if viewer_state.message}
             <div
                 class="section"
