@@ -35,5 +35,10 @@ export function encode_hint_for_graph(
     if (!output) {
         return { reencodes, text: null }
     }
-    return { reencodes, text: format_encode_hint(effective_encode_config(output)) }
+    try {
+        return { reencodes, text: format_encode_hint(effective_encode_config(output)) }
+    } catch {
+        // WHY total-hint: reactive context has no error boundary
+        return { reencodes, text: null }
+    }
 }

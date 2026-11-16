@@ -108,9 +108,14 @@ function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: Co
         .sort()
     const output = find_output_node(nodes)
     const output_settings = output
-        ? [output.data.width, output.data.height, output.data.fps, output.data.quality, output.data.audio_quality].join(
-              ":",
-          )
+        ? [
+              output.data.width,
+              output.data.height,
+              output.data.fps,
+              output.data.quality,
+              output.data.audio_quality,
+              output.data.custom_bitrate ?? "null",
+          ].join(":")
         : "no-output"
     return JSON.stringify([
         serial_nodes,
