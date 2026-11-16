@@ -54,6 +54,17 @@ async function handle_file(file: File): Promise<void> {
     }
 }
 
+function handle_remove(): void {
+    file_token++
+    if (viewer_state.source) {
+        URL.revokeObjectURL(viewer_state.source.url)
+    }
+    video_el = null
+    video_duration = null
+    viewer_state.source = null
+    reset_playback()
+}
+
 function handle_tick(tick: { media_time: number; presented_frames?: number }): void {
     viewer_state.playback.current_time = tick.media_time
     viewer_state.playback.presented_frame = time_to_frame(tick.media_time, fps)
@@ -208,9 +219,12 @@ onDestroy(() => {
     <h1 class="text-2xl font-bold">Frame Viewer</h1>
     <p class="mt-1 text-sm text-gray-500">Local only, no uploads — your media stays on this device.</p>
     <div class="mt-4 flex flex-col gap-4">
-        {#if !viewer_state.source}
-            <div class="section"><ViewerFilePicker on_file={handle_file} /></div>
-        {/if}
+        <div class="section">
+            <ViewerFilePicker
+                on_file={handle_file}
+                on_remove={handle_remove}
+            />
+        </div>
         {#if viewer_state.source}
             <div class="section">
                 <ViewerStage
