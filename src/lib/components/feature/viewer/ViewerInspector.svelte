@@ -1,5 +1,5 @@
 <script lang="ts">
-import { copy_text, format_framecode, format_viewer_summary, format_viewer_time } from "$lib/media/framecode"
+import { format_framecode, format_viewer_time } from "$lib/media/framecode"
 import type { ProbeResult } from "$lib/media/mediabunny-clip"
 import { format_timecode } from "$lib/media/timecode"
 import { time_to_frame } from "$lib/media/viewer-step"
@@ -17,26 +17,11 @@ interface Props {
 
 let { current_time, fps, duration, probe, measured_fps, rvfc_supported, message }: Props = $props()
 
-let copied: string | null = $state(null)
-
 const valid_fps = $derived(Number.isFinite(fps) && fps > 0)
 const frame_index = $derived(current_time === null || !valid_fps ? null : time_to_frame(current_time, fps))
 const viewer_time = $derived(current_time === null ? "—" : format_viewer_time(current_time))
 const framecode = $derived(current_time === null ? "—" : format_framecode(current_time, fps))
 const vfr_unknown = $derived(probe?.frame_rate == null)
-
-async function copy_kind(kind: "seconds" | "frames" | "both"): Promise<void> {
-    if (current_time === null || frame_index === null) {
-        return
-    }
-    const text =
-        kind === "seconds"
-            ? current_time.toFixed(3)
-            : kind === "frames"
-              ? `${frame_index}`
-              : format_viewer_summary(current_time, fps, duration)
-    copied = (await copy_text(text)) ? kind : "failed"
-}
 </script>
 
 <div class="section">
@@ -86,34 +71,6 @@ async function copy_kind(kind: "seconds" | "frames" | "both"): Promise<void> {
     {#if message}
         <p class="mt-2 text-sm text-gray-600">{message}</p>
     {/if}
-    <div class="mt-3 flex flex-wrap gap-2">
-        <button
-            class="btn btn-secondary btn-sm"
-            onclick={() => copy_kind("seconds")}
-            disabled={current_time === null}
-        >
-            Copy seconds
-        </button>
-        <button
-            class="btn btn-secondary btn-sm"
-            onclick={() => copy_kind("frames")}
-            disabled={frame_index === null}
-        >
-            Copy frames
-        </button>
-        <button
-            class="btn btn-secondary btn-sm"
-            onclick={() => copy_kind("both")}
-            disabled={frame_index === null}
-        >
-            Copy both
-        </button>
-        {#if copied === "failed"}
-            <span class="self-center text-sm text-red-600">Copy failed</span>
-        {:else if copied !== null}
-            <span class="self-center text-sm text-green-700">Copied {copied}</span>
-        {/if}
-    </div>
     {#if probe}
         <details class="mt-3">
             <summary class="cursor-pointer text-sm font-medium text-gray-700">Media details</summary>

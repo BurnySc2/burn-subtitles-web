@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { render } from "vitest-browser-svelte"
+import { format_viewer_summary } from "$lib/media/framecode"
 import ViewerTransport from "./ViewerTransport.svelte"
 
 function readout_text(screen: { container: HTMLElement }): string {
@@ -85,5 +86,79 @@ describe("ViewerTransport", () => {
         fullscreen.click()
         expect(on_fullscreen).toHaveBeenCalledTimes(1)
         await screen.unmount()
+    })
+
+    it("disables copy buttons when time is unknown", async () => {
+        const screen = await render(ViewerTransport, {
+            video_el: null,
+            fps: 30,
+            duration: null,
+            current_time: null,
+            disabled: true,
+            on_fullscreen: vi.fn(),
+        })
+        for (const label of ["Copy seconds", "Copy frames", "Copy both"]) {
+            const button = Array.from(screen.container.querySelectorAll("button")).find((el) =>
+                el.textContent?.includes(label),
+            ) as HTMLButtonElement
+            expect(button.disabled).toBe(true)
+        }
+        await screen.unmount()
+    })
+
+    it("copies seconds, frames and summary to clipboard", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined)
+        vi.stubGlobal("navigator", { clipboard: { writeText } })
+        const screen = await render(ViewerTransport, {
+            video_el: make_media(1.5),
+            fps: 30,
+            duration: 10,
+            current_time: 1.5,
+            disabled: false,
+            on_fullscreen: vi.fn(),
+        })
+        const button_for = (label: string) =>
+            Array.from(screen.container.querySelectorAll("button")).find((el) =>
+                el.textContent?.includes(label),
+            ) as HTMLButtonElement
+        const feedback = () => {
+            const spans = screen.container.querySelectorAll('span[role="status"]')
+            return spans[spans.length - 1]?.textContent?.trim() ?? ""
+        }
+        button_for("Copy seconds").click()
+        await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("1.500"))
+        await vi.waitFor(() => expect(feedback()).toBe("Copied seconds"))
+        button_for("Copy frames").click()
+        await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("45"))
+        await vi.waitFor(() => expect(feedback()).toBe("Copied frames"))
+        button_for("Copy both").click()
+        await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(format_viewer_summary(1.5, 30, 10)))
+        await vi.waitFor(() => expect(feedback()).toBe("Copied both"))
+        await screen.unmount()
+        vi.unstubAllGlobals()
+    })
+
+    it("shows Copy failed when clipboard rejects", async () => {
+        const writeText = vi.fn().mockRejectedValue(new Error("denied"))
+        vi.stubGlobal("navigator", { clipboard: { writeText } })
+        const screen = await render(ViewerTransport, {
+            video_el: make_media(1.5),
+            fps: 30,
+            duration: 10,
+            current_time: 1.5,
+            disabled: false,
+            on_fullscreen: vi.fn(),
+        })
+        const button = Array.from(screen.container.querySelectorAll("button")).find((el) =>
+            el.textContent?.includes("Copy seconds"),
+        ) as HTMLButtonElement
+        button.click()
+        await vi.waitFor(() => {
+            const spans = screen.container.querySelectorAll('span[role="status"]')
+            const text = spans[spans.length - 1]?.textContent?.trim() ?? ""
+            expect(text).toBe("Copy failed")
+        })
+        await screen.unmount()
+        vi.unstubAllGlobals()
     })
 })

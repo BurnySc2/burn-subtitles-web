@@ -1,4 +1,5 @@
 <script lang="ts">
+import { copy_text, format_viewer_summary } from "$lib/media/framecode"
 import { step_frame, time_to_frame, VIEWER_FALLBACK_FPS } from "$lib/media/viewer-step"
 
 let {
@@ -63,6 +64,26 @@ let readout = $derived(
         : `${current_time.toFixed(2)} s (frame ${time_to_frame(current_time, fps)}) of ${duration.toFixed(1)} s`,
 )
 
+let copied: string | null = $state(null)
+
+const frame_index = $derived(current_time === null ? null : time_to_frame(current_time, fps))
+
+async function copy_kind(kind: "seconds" | "frames" | "both"): Promise<void> {
+    if (current_time === null) {
+        return
+    }
+    if (kind !== "seconds" && frame_index === null) {
+        return
+    }
+    const text =
+        kind === "seconds"
+            ? current_time.toFixed(3)
+            : kind === "frames"
+              ? `${frame_index}`
+              : format_viewer_summary(current_time, fps, duration)
+    copied = (await copy_text(text)) ? kind : "failed"
+}
+
 function step(delta_frames: number) {
     if (!video_el) {
         return
@@ -105,6 +126,45 @@ function toggle_mute() {
     >
         {readout}
     </p>
+    <div class="flex flex-wrap gap-2">
+        <button
+            type="button"
+            onclick={() => copy_kind("seconds")}
+            disabled={current_time === null}
+            class="btn btn-secondary btn-sm"
+        >
+            Copy seconds
+        </button>
+        <button
+            type="button"
+            onclick={() => copy_kind("frames")}
+            disabled={frame_index === null}
+            class="btn btn-secondary btn-sm"
+        >
+            Copy frames
+        </button>
+        <button
+            type="button"
+            onclick={() => copy_kind("both")}
+            disabled={frame_index === null}
+            class="btn btn-secondary btn-sm"
+        >
+            Copy both
+        </button>
+        {#if copied === "failed"}
+            <span
+                role="status"
+                class="self-center text-sm text-red-600"
+                >Copy failed</span
+            >
+        {:else if copied !== null}
+            <span
+                role="status"
+                class="self-center text-sm text-green-700"
+                >Copied {copied}</span
+            >
+        {/if}
+    </div>
     <div class="flex items-center gap-3">
         <input
             type="range"
@@ -202,6 +262,7 @@ function toggle_mute() {
             onclick={toggle_mute}
             disabled={controls_disabled}
             aria-label={is_muted ? "Unmute" : "Mute"}
+            title="Shortcut: m"
             class="btn btn-secondary btn-sm"
         >
             {is_muted ? "🔇" : "🔊"}
