@@ -33,6 +33,17 @@ describe("resolve_trim_range", () => {
     it("rejects NaN", () => {
         expect(resolve_trim_range({ start: Number.NaN, end: 5 }, 10)).toEqual({ ok: false, reason: "invalid-range" })
     })
+
+    it("rejects null start with zero end", () => {
+        expect(resolve_trim_range({ start: null, end: 0 }, 10)).toEqual({ ok: false, reason: "invalid-range" })
+    })
+
+    it("rejects Infinity", () => {
+        expect(resolve_trim_range({ start: Number.POSITIVE_INFINITY, end: 5 }, 10)).toEqual({
+            ok: false,
+            reason: "invalid-range",
+        })
+    })
 })
 
 describe("parse_trim_field", () => {
@@ -54,5 +65,9 @@ describe("parse_trim_field", () => {
 
     it("parses Infinity to undefined", () => {
         expect(parse_trim_field("Infinity")).toBeUndefined()
+    })
+
+    it("parses negative string to number", () => {
+        expect(parse_trim_field("-1")).toBe(-1)
     })
 })

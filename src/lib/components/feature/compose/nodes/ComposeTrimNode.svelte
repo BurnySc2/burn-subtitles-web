@@ -92,7 +92,6 @@ function on_trim_input(field: "start" | "end", raw: string): void {
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>
-        <p class="text-xs text-gray-600">Empty start means from start.</p>
         <label class="flex flex-col gap-1 text-xs text-gray-600">
             End (s)
             <input
@@ -106,7 +105,6 @@ function on_trim_input(field: "start" | "end", raw: string): void {
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>
-        <p class="text-xs text-gray-600">Empty end means to end; both empty is not allowed.</p>
         <p class="text-xs text-gray-600">Result: {result_duration?.toFixed(2) ?? "—"}s</p>
     </div>
 </div>

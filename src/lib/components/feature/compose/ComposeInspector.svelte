@@ -418,7 +418,6 @@ function probe_summary(node: ComposeNode): string {
                     oninput={(e) => on_trim_input("start", e.currentTarget.value)}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
-                <small class="text-xs font-normal text-gray-500">Empty means from start.</small>
             </label>
             <label class="flex flex-col gap-1 text-sm font-medium">
                 End (s)
@@ -431,7 +430,6 @@ function probe_summary(node: ComposeNode): string {
                     oninput={(e) => on_trim_input("end", e.currentTarget.value)}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
-                <small class="text-xs font-normal text-gray-500">Empty means to end; both empty is not allowed.</small>
             </label>
         {:else if selected.type === "transition"}
             <label class="flex flex-col gap-1 text-sm font-medium">

@@ -1,5 +1,6 @@
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError } from "./mediabunny-clip"
+import { total_transition_duration } from "./transition-utils"
 
 export type TrimRangeReason = "both-empty" | "no-duration" | "invalid-range"
 
@@ -45,12 +46,32 @@ export function gate_positive(value: number | null): number | null {
     return value
 }
 
+function sole_pred(id: string, incoming: Map<string, ComposeEdge[]>): string | null {
+    const edges = incoming.get(id) ?? []
+    if (edges.length !== 1) {
+        return null
+    }
+    return edges[0].source
+}
+
+export function pred_by_handle(id: string, handle: string, incoming: Map<string, ComposeEdge[]>): string | null {
+    const matches = (incoming.get(id) ?? []).filter((edge) => edge.targetHandle === handle)
+    if (matches.length !== 1) {
+        return null
+    }
+    return matches[0].source
+}
+
 export function node_output_duration(
     id: string,
     by_id: Map<string, ComposeNode>,
     incoming: Map<string, ComposeEdge[]>,
+    memo: Map<string, number | null>,
     seen: Set<string>,
 ): number | null {
+    if (memo.has(id)) {
+        return memo.get(id) ?? null
+    }
     if (seen.has(id)) {
         return null
     }
@@ -59,54 +80,99 @@ export function node_output_duration(
         return null
     }
     seen.add(id)
+    let result: number | null = null
     if (node.type === "source") {
-        return gate_positive(node.data.probe?.duration ?? null)
-    }
-    if (node.type === "color") {
-        return gate_positive(node.data.duration)
-    }
-    if (node.type === "trim") {
-        const edges = incoming.get(node.id) ?? []
-        if (edges.length !== 1) {
-            return null
+        result = gate_positive(node.data.probe?.duration ?? null)
+    } else if (node.type === "color") {
+        result = gate_positive(node.data.duration)
+    } else if (node.type === "trim") {
+        const pred = sole_pred(node.id, incoming)
+        if (pred !== null) {
+            const up = node_output_duration(pred, by_id, incoming, memo, seen)
+            const resolved = resolve_trim_range(node.data, up)
+            if (resolved.ok) {
+                const own = resolved.end - resolved.start
+                result = gate_positive(up === null ? own : Math.min(up, own))
+            }
         }
-        const up = node_output_duration(edges[0].source, by_id, incoming, seen)
-        const resolved = resolve_trim_range(node.data, up)
-        if (!resolved.ok) {
-            return null
-        }
-        const own = resolved.end - resolved.start
-        if (!Number.isFinite(own) || own <= 0) {
-            return null
-        }
-        return up === null ? own : Math.min(up, own)
-    }
-    if (
+    } else if (
         node.type === "rescale" ||
         node.type === "subtitles" ||
         node.type === "overlay" ||
-        node.type === "text" ||
-        node.type === "output"
+        node.type === "output" ||
+        node.type === "text"
     ) {
-        const edges = incoming.get(node.id) ?? []
-        if (edges.length !== 1) {
-            return null
+        const pred = sole_pred(node.id, incoming)
+        if (pred !== null) {
+            result = node_output_duration(pred, by_id, incoming, memo, seen)
         }
-        return node_output_duration(edges[0].source, by_id, incoming, seen)
+    } else if (node.type === "transition") {
+        const pred_a = pred_by_handle(node.id, "a", incoming)
+        const pred_b = pred_by_handle(node.id, "b", incoming)
+        const start_a = node.data.start
+        if (pred_a !== null && pred_b !== null && Number.isFinite(start_a) && start_a >= 0) {
+            const len_b = node_output_duration(pred_b, by_id, incoming, memo, seen)
+            if (len_b !== null && Number.isFinite(len_b) && len_b > 0) {
+                result = gate_positive(total_transition_duration(start_a, len_b))
+            }
+        }
+    } else if (node.type === "merge") {
+        const edges = incoming.get(node.id) ?? []
+        const handles = edges.map((edge) => edge.targetHandle)
+        if (
+            edges.length >= 2 &&
+            handles.every((handle) => typeof handle === "string" && /^in\d+$/.test(handle)) &&
+            new Set(handles).size === handles.length
+        ) {
+            let sum = 0
+            let ok = true
+            for (const edge of edges) {
+                const part = node_output_duration(edge.source, by_id, incoming, memo, seen)
+                if (part === null) {
+                    ok = false
+                    break
+                }
+                sum += part
+            }
+            if (ok) {
+                result = gate_positive(sum)
+            }
+        }
     }
-    return null
+    memo.set(id, result)
+    seen.delete(id)
+    return result
+}
+
+export function compose_node_durations(nodes: ComposeNode[], edges: ComposeEdge[]): Map<string, number | null> {
+    const by_id = new Map(nodes.map((node) => [node.id, node]))
+    const incoming = new Map<string, ComposeEdge[]>()
+    for (const node of nodes) {
+        incoming.set(node.id, [])
+    }
+    for (const edge of edges) {
+        if (incoming.has(edge.target)) {
+            incoming.get(edge.target)?.push(edge)
+        }
+    }
+    const duration_memo = new Map<string, number | null>()
+    for (const node of nodes) {
+        node_output_duration(node.id, by_id, incoming, duration_memo, new Set<string>())
+    }
+    return duration_memo
 }
 
 export function trim_upstream_duration(
     node_id: string,
     by_id: Map<string, ComposeNode>,
     incoming: Map<string, ComposeEdge[]>,
+    memo: Map<string, number | null> = new Map<string, number | null>(),
 ): number | null {
-    const pred = (incoming.get(node_id) ?? [])[0]?.source ?? null
+    const pred = sole_pred(node_id, incoming)
     if (pred === null) {
         return null
     }
-    return node_output_duration(pred, by_id, incoming, new Set<string>())
+    return node_output_duration(pred, by_id, incoming, memo, new Set<string>())
 }
 
 export function trim_range_error(reason: "both-empty" | "no-duration" | "invalid-range"): never {

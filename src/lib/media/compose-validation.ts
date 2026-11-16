@@ -1,152 +1,13 @@
 import { is_chromium } from "../utils/browser-detect"
 import { is_font_available } from "./compose-font-library"
 import { topo_sort_compose } from "./compose-graph"
-import { resolve_trim_range } from "./compose-trim"
+import { node_output_duration, pred_by_handle, resolve_trim_range, trim_upstream_duration } from "./compose-trim"
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode } from "./timecode"
-import {
-    parse_crf_override,
-    TRANSITION_AUDIO_MODE_DEFAULT,
-    TRANSITION_AUDIO_MODES,
-    total_transition_duration,
-} from "./transition-utils"
+import { parse_crf_override, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
 
-function upstream_duration(
-    start_id: string,
-    by_id: Map<string, ComposeNode>,
-    incoming: Map<string, ComposeEdge[]>,
-    memo: Map<string, number | null>,
-): number | null {
-    const pred = sole_pred(start_id, incoming)
-    if (pred === null) {
-        return null
-    }
-    return node_duration(pred, by_id, incoming, memo, new Set<string>())
-}
-
-function sole_pred(id: string, incoming: Map<string, ComposeEdge[]>): string | null {
-    const edges = incoming.get(id) ?? []
-    if (edges.length !== 1) {
-        return null
-    }
-    return edges[0].source
-}
-
-function pred_by_handle(id: string, handle: string, incoming: Map<string, ComposeEdge[]>): string | null {
-    const matches = (incoming.get(id) ?? []).filter((edge) => edge.targetHandle === handle)
-    if (matches.length !== 1) {
-        return null
-    }
-    return matches[0].source
-}
-
-function gate_duration(value: number | null): number | null {
-    if (value === null || !Number.isFinite(value) || value <= 0) {
-        return null
-    }
-    return value
-}
-
-function node_duration(
-    id: string,
-    by_id: Map<string, ComposeNode>,
-    incoming: Map<string, ComposeEdge[]>,
-    memo: Map<string, number | null>,
-    seen: Set<string>,
-): number | null {
-    if (memo.has(id)) {
-        return memo.get(id) ?? null
-    }
-    if (seen.has(id)) {
-        return null
-    }
-    const node = by_id.get(id)
-    if (!node) {
-        return null
-    }
-    seen.add(id)
-    let result: number | null = null
-    if (node.type === "source") {
-        result = gate_duration(node.data.probe?.duration ?? null)
-    } else if (node.type === "color") {
-        result = gate_duration(node.data.duration)
-    } else if (node.type === "trim") {
-        const pred = sole_pred(node.id, incoming)
-        if (pred !== null) {
-            const up = node_duration(pred, by_id, incoming, memo, seen)
-            const resolved = resolve_trim_range(node.data, up)
-            if (resolved.ok) {
-                const own = resolved.end - resolved.start
-                result = gate_duration(up === null ? own : Math.min(up, own))
-            }
-        }
-    } else if (
-        node.type === "rescale" ||
-        node.type === "subtitles" ||
-        node.type === "overlay" ||
-        node.type === "output" ||
-        node.type === "text"
-    ) {
-        const pred = sole_pred(node.id, incoming)
-        if (pred !== null) {
-            result = node_duration(pred, by_id, incoming, memo, seen)
-        }
-    } else if (node.type === "transition") {
-        const pred_a = pred_by_handle(node.id, "a", incoming)
-        const pred_b = pred_by_handle(node.id, "b", incoming)
-        const start_a = node.data.start
-        if (pred_a !== null && pred_b !== null && Number.isFinite(start_a) && start_a >= 0) {
-            const len_b = node_duration(pred_b, by_id, incoming, memo, seen)
-            if (len_b !== null && Number.isFinite(len_b) && len_b > 0) {
-                result = gate_duration(total_transition_duration(start_a, len_b))
-            }
-        }
-    } else if (node.type === "merge") {
-        const edges = incoming.get(node.id) ?? []
-        const handles = edges.map((edge) => edge.targetHandle)
-        if (
-            edges.length >= 2 &&
-            handles.every((handle) => typeof handle === "string" && /^in\d+$/.test(handle)) &&
-            new Set(handles).size === handles.length
-        ) {
-            let sum = 0
-            let ok = true
-            for (const edge of edges) {
-                const part = node_duration(edge.source, by_id, incoming, memo, seen)
-                if (part === null) {
-                    ok = false
-                    break
-                }
-                sum += part
-            }
-            if (ok) {
-                result = gate_duration(sum)
-            }
-        }
-    }
-    memo.set(id, result)
-    seen.delete(id)
-    return result
-}
-
-export function compose_node_durations(nodes: ComposeNode[], edges: ComposeEdge[]): Map<string, number | null> {
-    const by_id = new Map(nodes.map((node) => [node.id, node]))
-    const incoming = new Map<string, ComposeEdge[]>()
-    for (const node of nodes) {
-        incoming.set(node.id, [])
-    }
-    for (const edge of edges) {
-        if (incoming.has(edge.target)) {
-            incoming.get(edge.target)?.push(edge)
-        }
-    }
-    const duration_memo = new Map<string, number | null>()
-    for (const node of nodes) {
-        node_duration(node.id, by_id, incoming, duration_memo, new Set<string>())
-    }
-    return duration_memo
-}
+export { compose_node_durations } from "./compose-trim"
 
 export function validate_compose(
     nodes: ComposeNode[],
@@ -344,7 +205,7 @@ export function validate_compose(
             issues.push({ node_id: node.id, field: "file", message: "Source file is required" })
         }
         if (node.type === "trim") {
-            const duration = upstream_duration(node.id, by_id, incoming, duration_memo)
+            const duration = trim_upstream_duration(node.id, by_id, incoming, duration_memo)
             const resolved = resolve_trim_range(node.data, duration)
             if (!resolved.ok) {
                 if (resolved.reason === "both-empty") {
@@ -354,6 +215,12 @@ export function validate_compose(
                         message: "Trim needs a start or an end — both empty trims nothing.",
                     })
                 } else if (resolved.reason === "no-duration") {
+                    const pred_edges = incoming.get(node.id) ?? []
+                    const pred = pred_edges.length === 1 ? by_id.get(pred_edges[0].source) : undefined
+                    // WHY skip pending/missing upstream: probe resolves async, missing file flagged on source
+                    if (pred?.type === "source" && (pred.data.file === null || pred.data.probe === null)) {
+                        continue
+                    }
                     issues.push({
                         node_id: node.id,
                         field: "end",
@@ -404,7 +271,7 @@ export function validate_compose(
             }
             const pred_a = pred_by_handle(node.id, "a", incoming)
             const duration_a =
-                pred_a === null ? null : node_duration(pred_a, by_id, incoming, duration_memo, new Set<string>())
+                pred_a === null ? null : node_output_duration(pred_a, by_id, incoming, duration_memo, new Set<string>())
             if (
                 duration_a !== null &&
                 Number.isFinite(start) &&
@@ -419,7 +286,7 @@ export function validate_compose(
             }
             const pred_b = pred_by_handle(node.id, "b", incoming)
             const len_b =
-                pred_b === null ? null : node_duration(pred_b, by_id, incoming, duration_memo, new Set<string>())
+                pred_b === null ? null : node_output_duration(pred_b, by_id, incoming, duration_memo, new Set<string>())
             if (len_b !== null && Number.isFinite(transition_duration) && transition_duration > len_b) {
                 issues.push({
                     node_id: node.id,
@@ -611,7 +478,7 @@ export function validate_compose(
                     message: "Overlay show_end must be greater than show_start",
                 })
             }
-            const duration = upstream_duration(node.id, by_id, incoming, duration_memo)
+            const duration = trim_upstream_duration(node.id, by_id, incoming, duration_memo)
             if (duration !== null) {
                 if (Number.isFinite(show_start) && show_start > duration) {
                     issues.push({
@@ -641,7 +508,7 @@ export function validate_compose(
                     message: `Text node must have at most ${MAX_TEXT_ITEMS} items`,
                 })
             }
-            const duration = upstream_duration(node.id, by_id, incoming, duration_memo)
+            const duration = trim_upstream_duration(node.id, by_id, incoming, duration_memo)
             for (const [index, item] of items.entries()) {
                 const prefix = `items[${index}]`
                 if (typeof item.text !== "string" || item.text.trim() === "") {
