@@ -1,8 +1,6 @@
 <script lang="ts">
-import { format_framecode, format_viewer_time } from "$lib/media/framecode"
 import type { ProbeResult } from "$lib/media/mediabunny-clip"
 import { format_timecode } from "$lib/media/timecode"
-import { time_to_frame } from "$lib/media/viewer-step"
 import { format_dual_size } from "$lib/utils/format_size"
 
 interface Props {
@@ -18,27 +16,12 @@ interface Props {
 let { current_time, fps, duration, probe, measured_fps, rvfc_supported, message }: Props = $props()
 
 const valid_fps = $derived(Number.isFinite(fps) && fps > 0)
-const frame_index = $derived(current_time === null || !valid_fps ? null : time_to_frame(current_time, fps))
-const viewer_time = $derived(current_time === null ? "—" : format_viewer_time(current_time))
-const framecode = $derived(current_time === null ? "—" : format_framecode(current_time, fps))
 const vfr_unknown = $derived(probe?.frame_rate == null)
 </script>
 
 <div class="section">
     <h2 class="section-title">Inspector</h2>
     <dl class="mt-1 space-y-1 text-sm text-gray-500">
-        <div class="flex gap-1">
-            <dt class="font-medium">Time:</dt>
-            <dd>{viewer_time}</dd>
-        </div>
-        <div class="flex gap-1">
-            <dt class="font-medium">Frame:</dt>
-            <dd>{frame_index === null ? "—" : frame_index}</dd>
-        </div>
-        <div class="flex gap-1">
-            <dt class="font-medium">Framecode:</dt>
-            <dd>{framecode}</dd>
-        </div>
         <div class="flex gap-1">
             <dt class="font-medium">Effective fps:</dt>
             <dd>
