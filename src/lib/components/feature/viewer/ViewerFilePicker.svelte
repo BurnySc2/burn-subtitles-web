@@ -30,7 +30,7 @@ function handle_pick(event: Event) {
         onchange={handle_pick}
         aria-describedby="viewer-file-status"
         {disabled}
-        class="w-full rounded border border-gray-300 bg-white p-2 text-transparent file:mr-4 file:rounded file:border-0 file:bg-gray-700 file:px-3 file:py-1 file:text-white hover:file:bg-gray-800"
+        class="hidden"
     >
     <div class="mt-2 flex justify-center">
         <button

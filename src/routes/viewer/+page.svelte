@@ -207,7 +207,9 @@ onDestroy(() => {
     <h1 class="text-2xl font-bold">Frame Viewer</h1>
     <p class="mt-1 text-sm text-gray-500">Local only, no uploads — your media stays on this device.</p>
     <div class="mt-4 flex flex-col gap-4">
-        <div class="section"><ViewerFilePicker on_file={handle_file} /></div>
+        {#if !viewer_state.source}
+            <div class="section"><ViewerFilePicker on_file={handle_file} /></div>
+        {/if}
         {#if viewer_state.source}
             <div class="section">
                 <ViewerStage
