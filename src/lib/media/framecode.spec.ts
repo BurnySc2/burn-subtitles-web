@@ -20,6 +20,15 @@ describe("format_viewer_summary", () => {
         expect(format_viewer_summary(5.4, 24, null)).not.toContain("/")
         expect(format_viewer_summary(5.4, 24, 10)).toContain(" / ")
     })
+    it("keeps byte-identical output when loudness is absent", () => {
+        expect(format_viewer_summary(5.4, 24, 10)).toBe(format_viewer_summary(5.4, 24, 10, null))
+        expect(format_viewer_summary(5.4, 24, null)).toBe(format_viewer_summary(5.4, 24, null, undefined))
+        expect(format_viewer_summary(5.4, 24, 10)).toBe(format_viewer_summary(5.4, 24, 10, Number.NaN))
+    })
+    it("appends peak dBFS suffix when loudness is provided", () => {
+        expect(format_viewer_summary(5.4, 24, 10, -3.24)).toContain("peak -3.2 dBFS")
+        expect(format_viewer_summary(5.4, 24, 10, Number.NEGATIVE_INFINITY)).toContain("peak -∞ dBFS")
+    })
 })
 
 describe("copy_text", () => {

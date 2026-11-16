@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { ProbeResult } from "$lib/media/mediabunny-clip"
 import { format_timecode } from "$lib/media/timecode"
+import { type LoudnessCache, loudness_at } from "$lib/media/viewer-loudness"
 import { format_dual_size } from "$lib/utils/format_size"
 
 interface Props {
@@ -9,12 +10,24 @@ interface Props {
     measured_fps: number | null
     rvfc_supported: boolean
     message: string | null
+    loudness?: LoudnessCache | null
+    current_time?: number | null
 }
 
-let { fps, probe, measured_fps, rvfc_supported, message }: Props = $props()
+let { fps, probe, measured_fps, rvfc_supported, message, loudness = null, current_time = null }: Props = $props()
 
 const valid_fps = $derived(Number.isFinite(fps) && fps > 0)
 const vfr_unknown = $derived(probe?.frame_rate == null)
+const loudness_window = $derived(valid_fps ? 2 / fps : 0.2)
+const loudness_point = $derived(current_time === null ? null : loudness_at(loudness, current_time, loudness_window))
+const loudness_label = $derived(valid_fps ? "Loudness (±1 frame):" : "Loudness (±100 ms):")
+const loudness_detail = $derived.by(() => {
+    if (!loudness_point) {
+        return null
+    }
+    const db = Number.isFinite(loudness_point.dbfs) ? `${loudness_point.dbfs.toFixed(1)} dBFS` : "-∞ dBFS"
+    return `peak ${loudness_point.peak.toFixed(3)} · rms ${loudness_point.rms.toFixed(3)} · ${db}`
+})
 </script>
 
 <div class="section">
@@ -56,6 +69,12 @@ const vfr_unknown = $derived(probe?.frame_rate == null)
         <details class="mt-2">
             <summary class="cursor-pointer text-sm font-medium text-gray-700">Media details</summary>
             <dl class="mt-1 grid grid-cols-2 gap-1 text-sm text-gray-500">
+                {#if loudness_detail}
+                    <div class="flex gap-1">
+                        <dt class="font-medium">{loudness_label}</dt>
+                        <dd>{loudness_detail}</dd>
+                    </div>
+                {/if}
                 <div class="flex gap-1">
                     <dt class="font-medium">File:</dt>
                     <dd>{probe.file_name}</dd>

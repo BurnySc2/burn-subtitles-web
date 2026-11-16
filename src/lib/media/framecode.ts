@@ -14,10 +14,20 @@ export function format_viewer_time(time_s: number): string {
     return format_timecode(time_s)
 }
 
-export function format_viewer_summary(time_s: number, fps: number, duration: number | null): string {
+export function format_viewer_summary(
+    time_s: number,
+    fps: number,
+    duration: number | null,
+    loudness_dbfs: number | null = null,
+): string {
     const rate = effective_fps(fps)
     const head = `${format_timecode(time_s)} (f${time_to_frame(time_s, rate)} @${rate}fps)`
-    return duration === null ? head : `${head} / ${format_timecode(duration)}`
+    const base = duration === null ? head : `${head} / ${format_timecode(duration)}`
+    if (loudness_dbfs === null || loudness_dbfs === undefined || Number.isNaN(loudness_dbfs)) {
+        return base
+    }
+    const db = Number.isFinite(loudness_dbfs) ? `${loudness_dbfs.toFixed(1)} dBFS` : "-∞ dBFS"
+    return `${base} peak ${db}`
 }
 
 export async function copy_text(text: string): Promise<boolean> {

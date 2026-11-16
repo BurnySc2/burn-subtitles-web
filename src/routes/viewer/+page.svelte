@@ -2,15 +2,19 @@
 import { onDestroy, onMount } from "svelte"
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
 import ViewerInspector from "$lib/components/feature/viewer/ViewerInspector.svelte"
+import ViewerLoudnessPanel from "$lib/components/feature/viewer/ViewerLoudnessPanel.svelte"
 import ViewerStage from "$lib/components/feature/viewer/ViewerStage.svelte"
 import ViewerTransport from "$lib/components/feature/viewer/ViewerTransport.svelte"
 import { is_accepted } from "$lib/media/compose-drop"
 import { copy_text, format_viewer_summary } from "$lib/media/framecode"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
+import { analyze_loudness, loudness_at } from "$lib/media/viewer-loudness"
 import { reset_playback, revoke_viewer, viewer_state } from "$lib/media/viewer-state.svelte"
 import { effective_fps, step_frame, time_to_frame } from "$lib/media/viewer-step"
 
 let file_token = 0
+let loudness_progress = $state(0)
+let loudness_controller: AbortController | null = null
 let video_el: HTMLVideoElement | HTMLAudioElement | null = $state(null)
 let video_duration: number | null = $state(null)
 let stage_wrapper: HTMLDivElement | null = $state(null)
@@ -33,15 +37,91 @@ let has_video = $derived.by(() => {
     return !source.file.type.startsWith("audio")
 })
 
+let loudness_text = $derived.by(() => {
+    const cache = viewer_state.source?.loudness
+    const time = viewer_state.playback.current_time
+    if (!cache || time === null) {
+        return null
+    }
+    const point = loudness_at(cache, time)
+    if (!point) {
+        return null
+    }
+    const db = Number.isFinite(point.dbfs) ? `${point.dbfs.toFixed(1)} dBFS` : "-∞ dBFS"
+    return `Loudness at playhead: ${db}`
+})
+
+function cancel_loudness(): void {
+    loudness_controller?.abort()
+    loudness_controller = null
+}
+
+async function handle_analyze_loudness(): Promise<void> {
+    const source = viewer_state.source
+    if (!source) {
+        return
+    }
+    const mine = file_token
+    cancel_loudness()
+    const controller = new AbortController()
+    loudness_controller = controller
+    loudness_progress = 0
+    source.loudness = null
+    source.loudness_status = "analyzing"
+    try {
+        const cache = await analyze_loudness({
+            file: source.file,
+            buckets_per_sec: 8,
+            signal: controller.signal,
+            on_progress: (value) => {
+                if (mine === file_token) {
+                    loudness_progress = value
+                }
+            },
+        })
+        if (mine !== file_token || viewer_state.source !== source || controller.signal.aborted) {
+            return
+        }
+        source.loudness = cache
+        source.loudness_status = cache ? "ready" : "failed"
+    } catch (error) {
+        if (mine !== file_token || viewer_state.source !== source) {
+            return
+        }
+        if (controller.signal.aborted) {
+            if (source.loudness_status === "analyzing") {
+                source.loudness_status = "idle"
+            }
+            return
+        }
+        source.loudness = null
+        source.loudness_status = "failed"
+    } finally {
+        if (loudness_controller === controller) {
+            loudness_controller = null
+        }
+    }
+}
+
+function handle_cancel_loudness(): void {
+    cancel_loudness()
+    loudness_progress = 0
+    if (viewer_state.source?.loudness_status === "analyzing") {
+        viewer_state.source.loudness_status = "idle"
+    }
+}
+
 async function handle_file(file: File): Promise<void> {
     const mine = ++file_token
+    cancel_loudness()
+    loudness_progress = 0
     if (viewer_state.source) {
         URL.revokeObjectURL(viewer_state.source.url)
     }
     reset_playback()
     video_duration = null
     video_el = null
-    viewer_state.source = { file, url: URL.createObjectURL(file), probe: null }
+    viewer_state.source = { file, url: URL.createObjectURL(file), probe: null, loudness: null, loudness_status: "idle" }
     try {
         const probe = await probe_media(file)
         if (mine !== file_token || viewer_state.source?.file !== file) {
@@ -62,6 +142,8 @@ async function handle_file(file: File): Promise<void> {
 
 function handle_remove(): void {
     file_token++
+    cancel_loudness()
+    loudness_progress = 0
     if (viewer_state.source) {
         URL.revokeObjectURL(viewer_state.source.url)
     }
@@ -163,7 +245,9 @@ async function copy_summary(): Promise<void> {
     if (time === null) {
         return
     }
-    const ok = await copy_text(format_viewer_summary(time, fps, duration))
+    const source = viewer_state.source
+    const point = source?.loudness_status === "ready" ? loudness_at(source.loudness, time) : null
+    const ok = await copy_text(format_viewer_summary(time, fps, duration, point?.dbfs ?? null))
     viewer_state.message = ok ? "Copied summary." : "Copy failed."
 }
 
@@ -238,6 +322,7 @@ onMount(() => {
 })
 
 onDestroy(() => {
+    cancel_loudness()
     revoke_viewer()
 })
 </script>
@@ -296,6 +381,7 @@ onDestroy(() => {
                     {video_el}
                     {fps}
                     {duration}
+                    {loudness_text}
                     current_time={viewer_state.playback.current_time}
                     disabled={viewer_state.source === null}
                     on_fullscreen={toggle_fullscreen}
@@ -307,8 +393,26 @@ onDestroy(() => {
                 measured_fps={viewer_state.playback.measured_fps}
                 rvfc_supported={viewer_state.playback.rvfc_supported}
                 message={viewer_state.message}
+                loudness={viewer_state.source.loudness}
+                current_time={viewer_state.playback.current_time}
             />
+            {#if loudness_text}
+                <p
+                    role="status"
+                    class="section text-sm text-gray-500"
+                >
+                    {loudness_text}
+                </p>
+            {/if}
         {/if}
+        <ViewerLoudnessPanel
+            has_file={viewer_state.source !== null}
+            status={viewer_state.source?.loudness_status ?? "idle"}
+            cache={viewer_state.source?.loudness ?? null}
+            progress={loudness_progress}
+            on_analyze={() => void handle_analyze_loudness()}
+            on_cancel={handle_cancel_loudness}
+        />
         {#if viewer_state.message}
             <div
                 class="section"

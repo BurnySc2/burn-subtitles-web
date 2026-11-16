@@ -9,6 +9,7 @@ let {
     current_time,
     disabled,
     on_fullscreen,
+    loudness_text = null,
 }: {
     video_el: HTMLVideoElement | HTMLAudioElement | null
     fps: number
@@ -16,6 +17,7 @@ let {
     current_time: number | null
     disabled: boolean
     on_fullscreen: () => void
+    loudness_text?: string | null
 } = $props()
 
 let paused = $state(true)
@@ -126,6 +128,14 @@ function toggle_mute() {
     >
         {readout}
     </p>
+    {#if loudness_text}
+        <p
+            role="status"
+            class="text-xs text-gray-500"
+        >
+            {loudness_text}
+        </p>
+    {/if}
     <div class="flex flex-wrap gap-1">
         <button
             type="button"
