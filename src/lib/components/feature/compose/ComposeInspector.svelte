@@ -1,4 +1,5 @@
 <script lang="ts">
+import { is_accepted } from "$lib/media/compose-drop"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import type {
@@ -153,6 +154,8 @@ function patch_subtitles(patch: Partial<SubtitlesNodeData>): void {
 function subtitle_field_message(field: string): string | null {
     return selected_issues.find((issue) => issue.field === field)?.message ?? null
 }
+
+let subtitle_file_error = $state<string | null>(null)
 
 function patch_output(patch: Partial<OutputNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
@@ -597,6 +600,8 @@ function probe_summary(node: ComposeNode): string {
                 SRT file (required)
                 <ComposeFileDrop
                     accept=".srt"
+                    input_id={`inspector-${selected.id}-srt-file`}
+                    describedby={`inspector-${selected.id}-srt-status`}
                     choose_label={selected.data.file ? "Replace SRT" : "Choose SRT"}
                     choose_aria={selected.data.file ? "Replace SRT file" : "Choose SRT file"}
                     file_name={selected.data.file?.name ?? null}
@@ -607,11 +612,26 @@ function probe_summary(node: ComposeNode): string {
                     disabled={false}
                     on_file={(file) => {
                         if (file) {
+                            if (!is_accepted(file, "subtitles")) {
+                                subtitle_file_error = "Please select an .srt file."
+                                return
+                            }
+                            subtitle_file_error = null
                             patch_subtitles({ file })
                         }
                     }}
-                    on_remove={() => patch_subtitles({ file: null })}
+                    on_remove={() => {
+                        subtitle_file_error = null
+                        patch_subtitles({ file: null })
+                    }}
                 />
+                <p
+                    id={`inspector-${selected.id}-srt-status`}
+                    aria-live="polite"
+                    class="text-xs font-normal text-red-700"
+                >
+                    {subtitle_file_error ?? ""}
+                </p>
                 {#if selected.data.file}
                     <p class="text-xs font-normal text-gray-500">File: {selected.data.file.name}</p>
                 {/if}

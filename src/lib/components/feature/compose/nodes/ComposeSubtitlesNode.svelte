@@ -110,12 +110,17 @@ function handle_remove(): void {
     >
         {badge}
     </p>
-    {#if error}
-        <p class="mt-1 text-xs text-red-700">{error}</p>
-    {/if}
+    <p
+        id={id ? `${id}-status` : undefined}
+        aria-live="polite"
+        class="mt-1 text-xs text-red-700"
+    >
+        {error ?? ""}
+    </p>
     <ComposeFileDrop
         accept=".srt"
         input_id={id ? `${id}-file` : undefined}
+        describedby={id ? `${id}-status` : undefined}
         {choose_label}
         {choose_aria}
         {file_name}

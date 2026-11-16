@@ -66,6 +66,14 @@ export function preview_url(node_id: string): string | null {
     return preview_urls.get(node_id) ?? null
 }
 
+export function clear_preview_url(node_id: string): void {
+    const url = preview_urls.get(node_id)
+    if (url !== undefined) {
+        URL.revokeObjectURL(url)
+        preview_urls.delete(node_id)
+    }
+}
+
 export function set_source_file(node_id: string, file: File, url: string): void {
     const previous = preview_urls.get(node_id)
     if (previous && previous !== url) {

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
-import { is_accepted } from "$lib/media/compose-drop"
+import { handle_accepted_file } from "$lib/media/compose-file-handler"
 import { compose_state } from "$lib/media/compose-state.svelte"
 import type { ImageProbe } from "$lib/media/mediabunny-overlay"
 
@@ -11,7 +11,7 @@ let thumb_url = $state<string | null>(null)
 let probe = $state<ImageProbe | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
-let token = 0
+let token = { n: 0 }
 
 let node = $derived(compose_state.nodes.find((candidate) => candidate.id === node_id) ?? null)
 let file_name = $derived(node && node.type === "overlay" ? (node.data.image?.name ?? null) : null)
@@ -35,46 +35,55 @@ async function handle_file(file: File | null): Promise<void> {
     if (!file) {
         return
     }
-    const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
-    if (!target || target.type !== "overlay") {
+    const target = file
+    const selected = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (!selected || selected.type !== "overlay") {
         return
     }
-    const mine = ++token
-    probing = true
-    error = null
-    probe = null
-    revoke_thumb()
-    if (!is_accepted(file, "overlay")) {
-        target.data.image = null
-        error = "Please select an image file."
-        probing = false
-        return
-    }
-    thumb_url = URL.createObjectURL(file)
-    target.data.image = file
-    try {
-        const { probe_image } = await import("$lib/media/mediabunny-overlay")
-        const result = await probe_image(file)
-        if (mine !== token) {
-            return
-        }
-        probe = result
-    } catch (caught) {
-        if (mine !== token) {
-            return
-        }
-        target.data.image = null
-        revoke_thumb()
-        error = caught instanceof Error ? caught.message : "Failed to read image."
-    } finally {
-        if (mine === token) {
+    await handle_accepted_file({
+        file: target,
+        kind: "overlay",
+        token,
+        on_accept: async (mine) => {
+            const current = compose_state.nodes.find((candidate) => candidate.id === node_id)
+            if (!current || current.type !== "overlay") {
+                return
+            }
+            probing = true
+            error = null
+            probe = null
+            revoke_thumb()
+            thumb_url = URL.createObjectURL(target)
+            current.data.image = target
+            try {
+                const { probe_image } = await import("$lib/media/mediabunny-overlay")
+                const result = await probe_image(target)
+                if (mine !== token.n) {
+                    return
+                }
+                probe = result
+            } finally {
+                if (mine === token.n) {
+                    probing = false
+                }
+            }
+        },
+        on_reject: (message) => {
+            token.n += 1
+            probe = null
+            revoke_thumb()
+            const current = compose_state.nodes.find((candidate) => candidate.id === node_id)
+            if (current && current.type === "overlay") {
+                current.data.image = null
+            }
+            error = message
             probing = false
-        }
-    }
+        },
+    })
 }
 
 function handle_remove(): void {
-    token += 1
+    token.n += 1
     probing = false
     error = null
     probe = null
@@ -86,7 +95,7 @@ function handle_remove(): void {
 }
 
 onDestroy(() => {
-    token += 1
+    token.n += 1
     revoke_thumb()
 })
 </script>

@@ -43,7 +43,7 @@ Deleted v1: `feature/clip/ClipExtractor.svelte`, `lib/utils/clip-processing.ts`,
 | `src/lib/components/feature/compose/ComposeCanvas.svelte`                                                                                             | Flow canvas: dynamic `load_flow()` (`SvelteFlow` + 10 node Hosts), `onconnect` → `add_compose_edge`, `snapGrid [15,15]`, `connectionRadius 28`, `isValidConnection` live preview (`is_valid_preview` mirrors `add_compose_edge` rules, green/red tint); handle styling under `.compose-canvas :global(...)` (12px + `::after` halo); transition `Start` shown on canvas                   |
 | `src/lib/components/feature/compose/nodes/`                                                                                                           | 10 `*Host.svelte` wrappers + 10 `*Node.svelte` views (`source/trim/transition/merge/subtitles/overlay/color/rescale/text/output`); ports are `<Handle>` + `Position` from `@xyflow/svelte`; source/overlay nodes own `Replace`/`Remove` buttons + `.drop-zone`                                                                                                                                  |
 | `src/lib/media/transition-utils.ts`                                                                                                                   | `TRANSITION_AUDIO_MODES` (9) + `TRANSITION_AUDIO_MODE_HINTS`; shared encode/draw/decode helpers (`add_canvas_frame`, `create_encode_canvas`, `draw_contain_fit`, `decode_full_audio`, encode config); inspector `Audio` select; solo-a/solo-b forward `VideoSample`s directly when output dims match (no canvas), blend stays canvas; overlay passthrough when no effective overlay work |
-| `src/lib/media/compose-drop.ts`                                                                                                                       | `first_dropped_file()` / `is_accepted()` only; consumers: source node (:141,158), overlay node (:160,177), source picker (:70,87), overlay picker (:94,111); `.drop-zone` style lives in `app.css`                                                                                                                                                                                       |
+| `src/lib/media/compose-drop.ts`                                                                                                                       | `first_dropped_file()` / `is_accepted()` only; direct: `ComposeFileDrop` + `ComposeJsonBar` (drop read), `compose-file-handler` (`is_accepted` gate), `ComposeSubtitlesNode` + `ComposeInspector` (subtitles `.srt` check); source/overlay nodes + pickers consume indirectly via `ComposeFileDrop`/`handle_accepted_file`; `.drop-zone` style lives in `app.css` |
 | `src/lib/components/feature/compose/{ComposeSourcePicker,ComposeOverlayPicker}.svelte` + `nodes/ComposeOutputNode.svelte` + `ComposeInspector.svelte` | Pickers own `.drop-zone` + `Remove`; output node + inspector own labels (`File name`, `Audio quality (AAC)`, `CRF override`)                                                                                                                                                                                                                                                             |
 | `src/lib/media/compose-state.svelte.ts`                                                                                                               | `compose_state` / `compose_view` singletons; `add_compose_edge()` (per-kind input rules, duplicate/self guards) / `remove_compose_nodes()` / `revoke_all()`                                                                                                                                                                                                                              |
 | `src/lib/media/compose-validation.ts` / `compose-executor.ts`                                                                                         | `validate_compose()` (render gate in `+page.svelte`) / `execute_compose_graph()` (MediaBunny-only trim/merge/transition/subtitles incl. `burn` mode)                                                                                                                                                                                                                                     |
@@ -68,6 +68,7 @@ Deleted v1: `feature/clip/ClipExtractor.svelte`, `lib/utils/clip-processing.ts`,
 - Object URLs: `URL.revokeObjectURL()` old URL before replacing; `onDestroy` revokes previews/sources (`ClipV2Extractor`, root page).
 - FFmpeg MEMFS: `writeFile` → `exec` → `readFile` → `deleteFile` input+output.
 - Biome: 4-space indent, 120 cols, `semicolons: asNeeded`, `useBlockStatements: error`.
+- Tests: `.spec.ts` = vitest browser unit in `src/` (`npm run test:unit`); `.test.ts` = Playwright e2e in `e2e/` (`npm run test:integration`).
 
 ## Commands
 
@@ -75,14 +76,14 @@ Deleted v1: `feature/clip/ClipExtractor.svelte`, `lib/utils/clip-processing.ts`,
 npm run dev                # vite dev on :8000 --host 0.0.0.0
 npm run check              # svelte-kit sync + svelte-check
 npm run lint               # biome check . --error-on-warnings
-npm run test:unit          # vitest run (browser/chromium, src/**/*.spec|test.ts)
+npm run test:unit          # vitest run (browser/chromium, src/**/*.spec.ts)
 npm run test:integration   # playwright test
 ```
 
 ## Verification
 
 - `npm run check` → 0 errors; `npm run lint` clean (note: preview `<video>` elements may trip Biome a11y `useMediaCaption` — verify before suppressing).
-- `npm run test:unit`: 45 files, 413 passed (vitest browser/chromium).
+- `npm run test:unit`: 45 files, 419 passed (vitest browser/chromium).
 - Keep `package.json` + lockfile in sync when touching deps (`generate-types` targets a local backend that is not part of this repo).
 
 ## Gotchas

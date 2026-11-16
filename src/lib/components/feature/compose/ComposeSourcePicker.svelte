@@ -1,14 +1,14 @@
 <script lang="ts">
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
-import { is_accepted } from "$lib/media/compose-drop"
-import { compose_state, set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
+import { handle_accepted_file } from "$lib/media/compose-file-handler"
+import { clear_preview_url, compose_state, set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
 let { node_id }: { node_id: string } = $props()
 
 let probing = $state(false)
 let error = $state<string | null>(null)
-let token = 0
+let token = { n: 0 }
 
 let node = $derived(compose_state.nodes.find((candidate) => candidate.id === node_id) ?? null)
 let file_name = $derived(node && node.type === "source" ? (node.data.file?.name ?? null) : null)
@@ -25,42 +25,66 @@ async function handle_file(file: File | null): Promise<void> {
     if (!file) {
         return
     }
-    if (!is_accepted(file, "source")) {
-        token += 1
-        error = "Please select a video or audio file."
-        probing = false
-        return
-    }
-    const mine = ++token
-    probing = true
-    error = null
-    const url = URL.createObjectURL(file)
-    set_source_file(node_id, file, url)
-    try {
-        const probe = await probe_media(file)
-        if (mine !== token) {
-            return
-        }
-        set_source_probe(node_id, file, probe)
-    } catch (caught) {
-        if (mine !== token) {
-            return
-        }
-        error = caught instanceof ClipError ? caught.message : `Failed to read media: ${(caught as Error).message}`
-    } finally {
-        if (mine === token) {
+    const accepted: File = file
+    await handle_accepted_file({
+        file: accepted,
+        kind: "source",
+        token,
+        on_accept: async (mine) => {
+            probing = true
+            error = null
+            const url = URL.createObjectURL(accepted)
+            set_source_file(node_id, accepted, url)
+            try {
+                const probe = await probe_media(accepted)
+                if (mine !== token.n) {
+                    return
+                }
+                set_source_probe(node_id, accepted, probe)
+            } catch (caught) {
+                if (mine !== token.n) {
+                    return
+                }
+                clear_preview_url(node_id)
+                const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
+                if (target && target.type === "source") {
+                    target.data.file = null
+                    target.data.probe = null
+                }
+                if (caught instanceof ClipError) {
+                    error = caught.message
+                } else if (caught instanceof Error) {
+                    error = `Failed to read media: ${caught.message}`
+                } else {
+                    error = "Failed to read media"
+                }
+            } finally {
+                if (mine === token.n) {
+                    probing = false
+                }
+            }
+        },
+        on_reject: (message) => {
+            token.n += 1
+            clear_preview_url(node_id)
+            const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
+            if (target && target.type === "source") {
+                target.data.file = null
+                target.data.probe = null
+            }
+            error = message
             probing = false
-        }
-    }
+        },
+    })
 }
 
 function handle_remove(): void {
-    token += 1
+    token.n += 1
     probing = false
     error = null
+    clear_preview_url(node_id)
     const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (target && target.type === "source") {
-        // WHY orphan URL: preview_urls is private, next set_source_file revokes it
         target.data.file = null
         target.data.probe = null
     }

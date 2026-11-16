@@ -36,6 +36,9 @@ let file_input = $state<HTMLInputElement | null>(null)
     class="drop-zone nodrag mt-2 w-full"
     class:drag-over={is_dragging}
     ondragover={(e) => {
+        if (disabled) {
+            return
+        }
         e.preventDefault()
         e.stopPropagation()
         is_dragging = true
@@ -48,9 +51,15 @@ let file_input = $state<HTMLInputElement | null>(null)
     }}
     ondrop={async (e) => {
         e.preventDefault()
+        if (disabled) {
+            return
+        }
         e.stopPropagation()
-        is_dragging = false
-        await on_file(first_dropped_file(e))
+        try {
+            await on_file(first_dropped_file(e))
+        } finally {
+            is_dragging = false
+        }
     }}
 >
     <input
@@ -62,9 +71,16 @@ let file_input = $state<HTMLInputElement | null>(null)
         class="nodrag hidden"
         {disabled}
         onchange={async (e) => {
+            if (disabled) {
+                return
+            }
             const file = e.currentTarget.files?.[0] ?? null
             e.currentTarget.value = ""
-            await on_file(file)
+            try {
+                await on_file(file)
+            } finally {
+                is_dragging = false
+            }
         }}
     >
     <div class="mt-2 flex gap-2 nodrag">
