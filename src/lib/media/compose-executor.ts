@@ -8,7 +8,13 @@ import {
 import { type ComposeOutputNode, find_output_node, topo_sort_compose } from "./compose-graph"
 import { peak_audio_probe, union_probe_lists } from "./compose-probe-union"
 import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
-import { resolve_trim_range, trim_range_error, trim_upstream_duration } from "./compose-trim"
+import {
+    node_output_duration,
+    pred_by_handle,
+    resolve_trim_range,
+    trim_range_error,
+    trim_upstream_duration,
+} from "./compose-trim"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import { ClipError, extract_clip, type ProbeResult, probe_media } from "./mediabunny-clip"
@@ -295,11 +301,24 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                 const { blob_a, blob_b } = transition_inputs(node.id, incoming, memo)
                 const { list_a, list_b } = transition_probe_lists(node.id, incoming, probe_memo)
                 probe_memo.set(node.id, union_probe_lists([list_a, list_b]))
+                const base_a = peak_probe_for_render(list_a)
+                const base_b = peak_probe_for_render(list_b)
+                const pred_a = pred_by_handle(node.id, "a", incoming)
+                const pred_b = pred_by_handle(node.id, "b", incoming)
+                const dur_a = pred_a
+                    ? node_output_duration(pred_a, by_id, incoming, new Map<string, number | null>(), new Set<string>())
+                    : null
+                const dur_b = pred_b
+                    ? node_output_duration(pred_b, by_id, incoming, new Map<string, number | null>(), new Set<string>())
+                    : null
+                // WHY duration-or-null: stale probe durations trip false INVALID_RANGE, null probes actual bytes.
+                const probe_a = base_a && dur_a !== null ? { ...base_a, duration: dur_a } : null
+                const probe_b = base_b && dur_b !== null ? { ...base_b, duration: dur_b } : null
                 const result = await render_transition({
                     file_a: blob_to_file(blob_a, "transition-a.mp4"),
                     file_b: blob_to_file(blob_b, "transition-b.mp4"),
-                    probe_a: peak_probe_for_render(list_a),
-                    probe_b: peak_probe_for_render(list_b),
+                    probe_a,
+                    probe_b,
                     duration: node.data.duration,
                     start_a: node.data.start,
                     width: output_node?.data.width ?? 1920,
