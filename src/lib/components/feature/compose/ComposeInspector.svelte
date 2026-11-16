@@ -19,7 +19,14 @@ import type {
 import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
 import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
-import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODE_HINTS } from "$lib/media/transition-utils"
+import {
+    format_size_estimate,
+    QUALITY_OPTIONS,
+    resolve_audio_bitrate,
+    resolve_effective_video_bitrate,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODE_HINTS,
+} from "$lib/media/transition-utils"
 import {
     build_datalist_id,
     font_registry_version,
@@ -270,6 +277,28 @@ function patch_label(label: string): void {
 function patch_output_name(file_name: string): void {
     patch_output({ file_name: file_name.trim() === "" ? null : file_name.trim() })
 }
+
+function on_custom_bitrate_input(raw: string): void {
+    if (raw.trim() === "") {
+        patch_output({ custom_bitrate: null })
+        return
+    }
+    on_number_input(raw, (value) => patch_output({ custom_bitrate: value }))
+}
+
+let output_effective_video_bps = $derived(
+    selected?.type === "output"
+        ? resolve_effective_video_bitrate(selected.data.quality, selected.data.custom_bitrate ?? null)
+        : null,
+)
+let output_audio_bps = $derived(
+    selected?.type === "output" ? resolve_audio_bitrate(null, null, selected.data.audio_quality ?? "source-max") : null,
+)
+let size_estimate = $derived(
+    !encode_hint.reencodes
+        ? "—"
+        : format_size_estimate(selected_duration, output_effective_video_bps, output_audio_bps),
+)
 
 function on_number_input(raw: string, apply: (value: number) => void): void {
     const parsed = Number(raw)
@@ -1332,13 +1361,27 @@ function probe_summary(node: ComposeNode): string {
                     onchange={(e) => patch_output({ quality: e.currentTarget.value as OutputNodeData["quality"] })}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                    <option value="very-high">very-high</option>
-                    <option value="ultra">ultra</option>
+                    {#each QUALITY_OPTIONS.filter((option) => option.value !== "custom") as option (option.value)}
+                        <option value={option.value}>{option.label}</option>
+                    {/each}
+                    <option value="custom">custom — set bitrate · size varies</option>
                 </select>
             </label>
+            {#if selected.data.quality === "custom"}
+                <label class="flex flex-col gap-1 text-sm font-medium">
+                    Custom bitrate (Mbps)
+                    <input
+                        type="number"
+                        min="0.5"
+                        max="100"
+                        step="0.5"
+                        value={selected.data.custom_bitrate ?? ""}
+                        oninput={(e) => on_custom_bitrate_input(e.currentTarget.value)}
+                        placeholder="e.g. 8"
+                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+                    >
+                </label>
+            {/if}
             <label
                 class="flex flex-col gap-1 text-sm font-medium"
                 title="AAC bitrate"
@@ -1358,6 +1401,12 @@ function probe_summary(node: ComposeNode): string {
                     <option value="320k">320k</option>
                 </select>
             </label>
+            <p
+                class="text-xs font-normal text-gray-500"
+                data-testid="size-estimate"
+            >
+                {size_estimate}
+            </p>
             {#if encode_hint.text}
                 <small
                     class="text-xs font-normal text-gray-500"

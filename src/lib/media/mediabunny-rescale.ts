@@ -8,6 +8,7 @@ export interface RenderRescaleOptions {
     fps: number | null
     fit: "contain"
     quality?: TransitionQuality
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     signal?: AbortSignal
     on_progress?: (done: number, total: number) => void
@@ -96,6 +97,7 @@ export async function render_rescale(input: Blob, options: RenderRescaleOptions)
             height,
             fps,
             quality,
+            video_bitrate: options.video_bitrate ?? null,
             audio_probe: probe,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: true,

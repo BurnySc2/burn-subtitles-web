@@ -76,6 +76,7 @@ export interface RenderOverlayOptions {
     height: number
     fps: number
     quality: TransitionQuality
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     on_progress?: (progress: number) => void
     signal?: AbortSignal
@@ -187,6 +188,7 @@ export async function render_overlay(options: RenderOverlayOptions): Promise<Ren
             height,
             fps,
             quality,
+            video_bitrate: options.video_bitrate ?? null,
             audio_probe: probe,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: true,

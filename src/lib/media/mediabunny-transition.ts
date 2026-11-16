@@ -43,6 +43,7 @@ export interface RenderTransitionOptions {
     height: number
     fps: number
     quality: TransitionQuality
+    video_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     audio_bitrate?: number
     easing: TransitionEasing
@@ -238,6 +239,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             height,
             fps,
             quality,
+            video_bitrate: options.video_bitrate ?? null,
             audio_probe: null,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: false,

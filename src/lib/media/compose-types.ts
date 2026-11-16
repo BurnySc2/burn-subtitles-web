@@ -1,9 +1,9 @@
 import type { ProbeResult } from "./mediabunny-clip"
 import type {
+    ComposeOutputQuality,
     TransitionAudioMode,
     TransitionAudioQuality,
     TransitionEasing,
-    TransitionQuality,
 } from "./transition-utils"
 
 export type ComposeNodeKind =
@@ -79,7 +79,8 @@ export interface OutputNodeData {
     width: number
     height: number
     fps: number
-    quality: TransitionQuality
+    quality: ComposeOutputQuality
+    custom_bitrate?: number | null
     audio_quality?: TransitionAudioQuality
     label?: string | null
 }

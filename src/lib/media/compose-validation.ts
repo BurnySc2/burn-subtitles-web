@@ -5,7 +5,7 @@ import { node_output_duration, pred_by_handle, resolve_trim_range, trim_upstream
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode } from "./timecode"
-import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
+import { clamp_custom_bitrate_mbps, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
 
 export { compose_node_durations } from "./compose-trim"
 
@@ -315,6 +315,27 @@ export function validate_compose(
             }
             if (!Number.isFinite(node.data.fps) || node.data.fps < 1 || node.data.fps > 120) {
                 issues.push({ node_id: node.id, field: "fps", message: "Output fps must be from 1 to 120" })
+            }
+            const quality = node.data.quality
+            if (
+                quality !== "low" &&
+                quality !== "medium" &&
+                quality !== "high" &&
+                quality !== "very-high" &&
+                quality !== "ultra" &&
+                quality !== "custom"
+            ) {
+                issues.push({
+                    node_id: node.id,
+                    field: "quality",
+                    message: "Unknown output quality.",
+                })
+            } else if (quality === "custom" && clamp_custom_bitrate_mbps(node.data.custom_bitrate) === null) {
+                issues.push({
+                    node_id: node.id,
+                    field: "custom_bitrate",
+                    message: "Custom bitrate must be between 0.5 and 100 Mbps",
+                })
             }
             const audio_quality = node.data.audio_quality ?? "source-max"
             if (

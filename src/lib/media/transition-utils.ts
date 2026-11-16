@@ -228,6 +228,107 @@ export function quality_to_video_config(
     }
 }
 
+export type ComposeOutputQuality = TransitionQuality | "custom"
+
+export const CUSTOM_BITRATE_MIN_MBPS = 0.5
+export const CUSTOM_BITRATE_MAX_MBPS = 100
+
+export interface ComposeQualityOption {
+    value: ComposeOutputQuality
+    bitrate: number | null
+    label: string
+}
+
+export const QUALITY_OPTIONS: readonly ComposeQualityOption[] = [
+    { value: "low", bitrate: QUALITY_BITRATE.low, label: "low — 2 Mbps · ~15 MB/min" },
+    { value: "medium", bitrate: QUALITY_BITRATE.medium, label: "medium — 5 Mbps · ~37.5 MB/min" },
+    { value: "high", bitrate: QUALITY_BITRATE.high, label: "high — 10 Mbps · ~75 MB/min" },
+    { value: "very-high", bitrate: QUALITY_BITRATE["very-high"], label: "very-high — 16 Mbps · ~120 MB/min" },
+    { value: "ultra", bitrate: QUALITY_BITRATE.ultra, label: "ultra — 50 Mbps · ~375 MB/min" },
+    { value: "custom", bitrate: null, label: "custom — set bitrate · size varies" },
+]
+
+export function clamp_custom_bitrate_mbps(raw: number | null | undefined): number | null {
+    if (typeof raw !== "number" || !Number.isFinite(raw)) {
+        return null
+    }
+    if (raw < CUSTOM_BITRATE_MIN_MBPS || raw > CUSTOM_BITRATE_MAX_MBPS) {
+        return null
+    }
+    return raw
+}
+
+export function resolve_effective_video_bitrate(
+    quality: ComposeOutputQuality,
+    custom_mbps?: number | null,
+): number | null {
+    if (quality !== "custom") {
+        return QUALITY_BITRATE[quality]
+    }
+    const clamped = clamp_custom_bitrate_mbps(custom_mbps)
+    if (clamped === null) {
+        return null
+    }
+    return Math.round(clamped * 1_000_000)
+}
+
+export interface ComposeOutputVideoConfigInput {
+    quality: ComposeOutputQuality
+    custom_bitrate?: number | null
+    width: number
+    height: number
+    fps: number
+}
+
+export function resolve_output_video_config(output: ComposeOutputVideoConfigInput): TransitionVideoConfig {
+    if (output.quality !== "custom") {
+        return quality_to_video_config(output.quality, output.width, output.height, output.fps)
+    }
+    const bitrate = resolve_effective_video_bitrate(output.quality, output.custom_bitrate)
+    if (bitrate === null) {
+        throw new ClipError(
+            "INVALID_RANGE",
+            `Invalid custom bitrate "${output.custom_bitrate}": expected ${CUSTOM_BITRATE_MIN_MBPS}-${CUSTOM_BITRATE_MAX_MBPS} Mbps`,
+        )
+    }
+    return {
+        bitrate,
+        description: `custom ${output.width}x${output.height}@${output.fps}fps ${bitrate / 1_000_000}Mbps`,
+    }
+}
+
+export function estimate_output_bytes(
+    duration_seconds: number | null,
+    video_bps: number | null,
+    audio_bps: number | null,
+): number | null {
+    if (duration_seconds === null || video_bps === null || audio_bps === null) {
+        return null
+    }
+    if (!Number.isFinite(duration_seconds) || !Number.isFinite(video_bps) || !Number.isFinite(audio_bps)) {
+        return null
+    }
+    if (duration_seconds <= 0 || video_bps <= 0 || audio_bps < 0) {
+        return null
+    }
+    return (duration_seconds * (video_bps + audio_bps)) / 8
+}
+
+export function format_size_estimate(
+    duration_seconds: number | null,
+    video_bps: number | null,
+    audio_bps: number | null,
+): string {
+    const bytes = estimate_output_bytes(duration_seconds, video_bps, audio_bps)
+    if (bytes === null || video_bps === null || audio_bps === null) {
+        return "—"
+    }
+    const mb = (bytes / 1_000_000).toFixed(1)
+    const video_mbps = video_bps / 1_000_000
+    const audio_kbps = Math.round(audio_bps / 1000)
+    return `Est ≈ ${mb} MB · video ${video_mbps} Mbps + audio ${audio_kbps} kbps · VBR varies`
+}
+
 export const FRAME_COUNT_WARNING_THRESHOLD = 1000
 
 export function estimate_frame_count(duration: number, fps: number): number {
@@ -368,9 +469,18 @@ export function create_encode_video_source(
     overrides?: {
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
         on_encode_report?: (r: EffectiveEncodeReport) => void
+        video_bitrate?: number | null
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
-    return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps), overrides)
+    const override = overrides?.video_bitrate ?? null
+    if (override !== null && (!Number.isFinite(override) || override <= 0)) {
+        throw new ClipError("INVALID_RANGE", "Video bitrate must be greater than 0.")
+    }
+    const config =
+        override !== null
+            ? { bitrate: Math.round(override), description: `custom ${width}x${height}@${fps}fps` }
+            : resolve_video_encode_config(quality, width, height, fps)
+    return create_video_sample_source(mb, config, overrides)
 }
 
 export function draw_contain_fit(
@@ -449,6 +559,7 @@ export interface CanvasEncodeOptions<T> {
     height: number
     fps: number
     quality: TransitionQuality
+    video_bitrate?: number | null
     audio_probe: TransitionAudioBitrateProbe | null
     audio_quality: TransitionAudioQuality
     needs_audio: boolean
@@ -478,7 +589,9 @@ export async function with_canvas_encode<T>(options: CanvasEncodeOptions<T>): Pr
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
         const { canvas, ctx: encode_ctx } = create_encode_canvas(width, height)
-        const video_source = create_encode_video_source(mb, quality, width, height, fps)
+        const video_source = create_encode_video_source(mb, quality, width, height, fps, {
+            video_bitrate: options.video_bitrate ?? null,
+        })
         output.addVideoTrack(video_source)
         let audio_source: AudioBufferSource | null = null
         let decoded: AudioBuffer | null = null

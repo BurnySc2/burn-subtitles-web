@@ -1,8 +1,15 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
+import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
 import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
 import { compose_node_durations } from "$lib/media/compose-validation"
+import {
+    format_size_estimate,
+    QUALITY_OPTIONS,
+    resolve_audio_bitrate,
+    resolve_effective_video_bitrate,
+} from "$lib/media/transition-utils"
 
 let {
     id = "",
@@ -21,11 +28,28 @@ let title = $derived(compose_node_title("output", data.label))
 
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
+let encode_hint = $derived(encode_hint_for_graph(compose_state.nodes, data))
+let effective_video_bps = $derived(resolve_effective_video_bitrate(data.quality, data.custom_bitrate ?? null))
+let audio_bps = $derived(resolve_audio_bitrate(null, null, data.audio_quality ?? "source-max"))
+let size_estimate = $derived(
+    !encode_hint.reencodes ? "—" : format_size_estimate(result_duration, effective_video_bps, audio_bps),
+)
 
 function on_number_input(field: "width" | "height" | "fps", raw: string): void {
     const parsed = Number(raw)
     if (raw.trim() !== "" && Number.isFinite(parsed)) {
         update_data({ [field]: parsed })
+    }
+}
+
+function on_custom_bitrate_input(raw: string): void {
+    if (raw.trim() === "") {
+        update_data({ custom_bitrate: null })
+        return
+    }
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) {
+        update_data({ custom_bitrate: parsed })
     }
 }
 </script>
@@ -133,13 +157,28 @@ function on_number_input(field: "width" | "height" | "fps", raw: string): void {
                 onchange={(e) => update_data({ quality: e.currentTarget.value as OutputNodeData["quality"] })}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="very-high">very-high</option>
-                <option value="ultra">ultra</option>
+                {#each QUALITY_OPTIONS.filter((option) => option.value !== "custom") as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
+                {/each}
+                <option value="custom">custom — set bitrate · size varies</option>
             </select>
         </label>
+        {#if data.quality === "custom"}
+            <label class="flex flex-col gap-1 text-xs text-gray-600">
+                Custom bitrate (Mbps)
+                <input
+                    id={id ? `${id}-custom-bitrate` : undefined}
+                    type="number"
+                    min="0.5"
+                    max="100"
+                    step="0.5"
+                    value={data.custom_bitrate ?? ""}
+                    oninput={(e) => on_custom_bitrate_input(e.currentTarget.value)}
+                    placeholder="e.g. 8"
+                    class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
+                >
+            </label>
+        {/if}
         <label
             class="flex flex-col gap-1 text-xs text-gray-600"
             title="AAC bitrate"
@@ -160,5 +199,11 @@ function on_number_input(field: "width" | "height" | "fps", raw: string): void {
                 <option value="320k">320k</option>
             </select>
         </label>
+        <p
+            class="col-span-2 text-xs text-gray-500"
+            data-testid="size-estimate"
+        >
+            {size_estimate}
+        </p>
     </div>
 </div>

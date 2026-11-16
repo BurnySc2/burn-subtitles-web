@@ -9,6 +9,7 @@ export interface RenderSolidOptions {
     height: number
     fps: number
     quality?: TransitionQuality
+    video_bitrate?: number | null
     signal?: AbortSignal
     on_progress?: (done: number, total: number) => void
 }
@@ -62,6 +63,7 @@ export async function render_solid_color(options: RenderSolidOptions): Promise<B
         height,
         fps,
         quality,
+        video_bitrate: options.video_bitrate ?? null,
         audio_probe: null,
         audio_quality: "source-max",
         needs_audio: false,

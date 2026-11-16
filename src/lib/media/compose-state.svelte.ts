@@ -344,6 +344,22 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                         label: node.data.label ?? null,
                     },
                 }
+            case "output":
+                return {
+                    id: node.id,
+                    type: node.type,
+                    position: node.position,
+                    data: {
+                        file_name: node.data.file_name,
+                        width: node.data.width,
+                        height: node.data.height,
+                        fps: node.data.fps,
+                        quality: node.data.quality,
+                        custom_bitrate: node.data.custom_bitrate ?? null,
+                        audio_quality: node.data.audio_quality,
+                        label: node.data.label ?? null,
+                    },
+                }
             default:
                 return {
                     id: node.id,
@@ -398,7 +414,7 @@ function parse_vertical_anchor(value: unknown): "top" | "center" | "bottom" {
 }
 
 const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-max"])
-const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra"])
+const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra", "custom"])
 const EASINGS = new Set(["linear", "exponential"])
 const OVERLAY_POSITIONS = new Set<string>(TEXT_ANCHORS)
 
@@ -625,6 +641,10 @@ function parse_node(raw: unknown): ComposeNode {
                 throw new Error(`Node "${raw.id}": unknown output audio quality`)
             }
             // Old JSON may carry a legacy override — ignored.
+            const custom_bitrate =
+                typeof raw.data.custom_bitrate === "number" && Number.isFinite(raw.data.custom_bitrate)
+                    ? raw.data.custom_bitrate
+                    : null
             return {
                 id: raw.id,
                 type: "output",
@@ -634,7 +654,8 @@ function parse_node(raw: unknown): ComposeNode {
                     width: raw.data.width,
                     height: raw.data.height,
                     fps: raw.data.fps,
-                    quality: raw.data.quality as "low" | "medium" | "high" | "very-high" | "ultra",
+                    quality: raw.data.quality as "low" | "medium" | "high" | "very-high" | "ultra" | "custom",
+                    custom_bitrate,
                     audio_quality: audio_quality as "96k" | "128k" | "192k" | "256k" | "320k" | "source-max",
                     label: parse_label(raw.data.label, raw.id),
                 },
