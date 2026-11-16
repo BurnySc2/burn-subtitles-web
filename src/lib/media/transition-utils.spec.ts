@@ -1,5 +1,5 @@
 import type { AudioBufferSink } from "mediabunny"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { TimecodeError } from "./timecode"
 import { transition_filename } from "./transition-filename"
 import {
@@ -530,7 +530,7 @@ describe("post-revert encoder defaults", () => {
         expect(sample_inits[0]).toEqual({ timestamp: 1.5, duration: 0.5 })
     })
 
-    it("passes no packet/config callbacks to VideoSampleSource", () => {
+    it("passes onEncoderConfig to VideoSampleSource and logs the encode report", () => {
         let captured: Record<string, unknown> | null = null
         const stub_mb = {
             Quality: class {
@@ -545,17 +545,32 @@ describe("post-revert encoder defaults", () => {
                 }
             },
         }
-        create_video_sample_source(stub_mb as unknown as typeof import("mediabunny"), {
-            bitrate: 5_000_000,
-            quantizer: 26,
-            description: "medium",
-        })
+        const reported: unknown[] = []
+        create_video_sample_source(
+            stub_mb as unknown as typeof import("mediabunny"),
+            {
+                bitrate: 5_000_000,
+                quantizer: 26,
+                description: "medium",
+            },
+            { on_encode_report: (r: unknown) => reported.push(r) },
+        )
         expect(captured).not.toBeNull()
         expect(Object.keys(captured ?? {}).sort()).toEqual(
-            ["bitrateMode", "codec", "hardwareAcceleration", "latencyMode", "quality"].sort(),
+            ["bitrateMode", "codec", "hardwareAcceleration", "latencyMode", "onEncoderConfig", "quality"].sort(),
         )
         expect(captured ?? {}).not.toHaveProperty("onEncodedPacket")
-        expect(captured ?? {}).not.toHaveProperty("onEncoderConfig")
+        expect(typeof (captured as unknown as Record<string, unknown>).onEncoderConfig).toBe("function")
+        const log_spy = vi.spyOn(console, "log").mockImplementation(() => {})
+        try {
+            const on_config = (captured as unknown as { onEncoderConfig: (enc: VideoEncoderConfig) => void })
+                .onEncoderConfig
+            on_config({ codec: "avc", width: 1920, height: 1080 } as VideoEncoderConfig)
+            expect(log_spy).toHaveBeenCalledWith("[encode]", expect.anything())
+            expect(reported).toHaveLength(1)
+        } finally {
+            log_spy.mockRestore()
+        }
     })
 
     it("exposes no OUTPUT_COLOR_SPACE export", async () => {

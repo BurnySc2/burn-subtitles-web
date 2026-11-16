@@ -18,6 +18,7 @@ import type {
 } from "$lib/media/compose-types"
 import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
+import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
 import {
     QUALITY_QUANTIZER,
     TRANSITION_AUDIO_MODE_DEFAULT,
@@ -67,6 +68,9 @@ let encode_hint = $derived.by(() => {
     }
     return encode_hint_for_graph(compose_state.nodes, selected.data)
 })
+// WHY no-report-yet: executor stays console.log-only, follow-up threads on_encode_report here
+let last_report: EffectiveEncodeReport | null = $state(null)
+let encode_badge = $derived(format_encode_badge(last_report))
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
 let font_options = $derived.by(() => {
     $font_registry_version
@@ -1393,6 +1397,14 @@ function probe_summary(node: ComposeNode): string {
                     >
                         {encode_hint.text}
                     </small>
+                {/if}
+                {#if encode_badge}
+                    <span
+                        class="text-xs font-normal text-gray-500"
+                        data-testid="encode-badge"
+                    >
+                        {encode_badge}
+                    </span>
                 {/if}
             </label>
             <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>

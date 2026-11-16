@@ -1,5 +1,5 @@
 import type { AudioBufferSink, AudioBufferSource, BufferTarget, Output, VideoSampleSource } from "mediabunny"
-import { capture_encode_report } from "./encode-report"
+import { capture_encode_report, type EffectiveEncodeReport } from "./encode-report"
 import { ClipError } from "./mediabunny-clip"
 import { TimecodeError } from "./timecode"
 
@@ -377,30 +377,25 @@ export function create_video_sample_source(
     config: TransitionVideoConfig,
     overrides?: {
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+        on_encode_report?: (r: EffectiveEncodeReport) => void
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
     const quality =
         config.quantizer !== null
             ? new mb.Quality({ quantizer: config.quantizer, bitrate: config.bitrate, bitrateMode: "variable" })
             : new mb.Quality({ bitrate: config.bitrate, bitrateMode: "variable" })
-    const source = new mb.VideoSampleSource({
+    return new mb.VideoSampleSource({
         codec: "avc",
         quality,
         latencyMode: "quality",
         hardwareAcceleration: overrides?.hardware_acceleration ?? "no-preference",
         bitrateMode: "variable",
+        onEncoderConfig: (enc: VideoEncoderConfig) => {
+            const r = capture_encode_report(enc, config)
+            console.log("[encode]", r)
+            overrides?.on_encode_report?.(r)
+        },
     })
-    try {
-        if (typeof (source as unknown as { onEncoderConfig?: unknown }).onEncoderConfig === "function") {
-            void capture_encode_report(source, config).then(
-                (report) => {
-                    console.info("[encode]", report)
-                },
-                () => {},
-            )
-        }
-    } catch {}
-    return source
 }
 
 export function create_encode_video_source(
@@ -412,6 +407,7 @@ export function create_encode_video_source(
     crf_raw: number | string | null | undefined,
     overrides?: {
         hardware_acceleration?: "no-preference" | "prefer-hardware" | "prefer-software"
+        on_encode_report?: (r: EffectiveEncodeReport) => void
     },
 ): InstanceType<typeof mb.VideoSampleSource> {
     return create_video_sample_source(mb, resolve_video_encode_config(quality, width, height, fps, crf_raw), overrides)

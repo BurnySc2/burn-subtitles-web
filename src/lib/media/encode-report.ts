@@ -3,46 +3,32 @@ import type { TransitionVideoConfig } from "./transition-utils"
 
 export interface EffectiveEncodeReport {
     requested: TransitionVideoConfig
-    effective: unknown | null
+    effective: VideoEncoderConfig | null
     fell_back: boolean
     hardware: string
     chromium: boolean
 }
 
-type EncoderConfigSource = {
-    onEncoderConfig?: unknown
-}
+type EffectiveWithQuantizer = VideoEncoderConfig & { quantizer?: number | null }
 
-function read_hook(source: unknown): unknown {
-    if (typeof source !== "object" || source === null) {
-        return undefined
-    }
-    return (source as EncoderConfigSource).onEncoderConfig
-}
-
-export async function capture_encode_report(
-    source: unknown,
+export function capture_encode_report(
+    effective: VideoEncoderConfig | null,
     requested: TransitionVideoConfig,
-): Promise<EffectiveEncodeReport> {
-    const chromium = is_chromium()
-    const fallback: EffectiveEncodeReport = {
-        requested,
-        effective: null,
-        fell_back: false,
-        hardware: "no-preference",
-        chromium,
+): EffectiveEncodeReport {
+    const quantizer = (effective as EffectiveWithQuantizer | null)?.quantizer ?? null
+    const fell_back = effective == null || (requested.quantizer != null && quantizer == null)
+    return { requested, effective, fell_back, hardware: "no-preference", chromium: is_chromium() }
+}
+
+export function format_encode_badge(report: EffectiveEncodeReport | null): string | null {
+    if (report == null) {
+        return null
     }
-    try {
-        const hook = read_hook(source)
-        if (typeof hook !== "function") {
-            return fallback
-        }
-        const effective = await (hook as (requested: TransitionVideoConfig) => unknown).call(source, requested)
-        if (effective === undefined || effective === null) {
-            return fallback
-        }
-        return { ...fallback, effective }
-    } catch {
-        return { ...fallback, fell_back: true }
+    if (report.fell_back) {
+        return `Fell back to ${Math.round(report.requested.bitrate / 1_000_000)}M bitrate`
     }
+    if (report.requested.quantizer != null) {
+        return `Quantizer active (Q${report.requested.quantizer})`
+    }
+    return null
 }
