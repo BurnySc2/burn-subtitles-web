@@ -7,7 +7,7 @@ import ViewerTransport from "$lib/components/feature/viewer/ViewerTransport.svel
 import { is_accepted } from "$lib/media/compose-drop"
 import { copy_text, format_viewer_summary } from "$lib/media/framecode"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
-import { analyze_loudness, loudness_at, peak_to_dbfs } from "$lib/media/viewer-loudness"
+import { analyze_loudness, LOUDNESS_BUCKETS_PER_SEC_DEFAULT, loudness_at } from "$lib/media/viewer-loudness"
 import { reset_playback, revoke_viewer, viewer_state } from "$lib/media/viewer-state.svelte"
 import { effective_fps, step_frame, time_to_frame } from "$lib/media/viewer-step"
 
@@ -36,23 +36,27 @@ let has_video = $derived.by(() => {
     return !source.file.type.startsWith("audio")
 })
 
-let loudness_text = $derived.by(() => {
+let volume_text = $derived.by(() => {
     const source = viewer_state.source
     if (!source) {
         return null
     }
     if (source.loudness_status === "analyzing") {
-        const progress =
-            typeof loudness_progress !== "number" || !Number.isFinite(loudness_progress)
-                ? 0
-                : Math.min(1, Math.max(0, loudness_progress))
-        return `Analyzing… ${Math.round(progress * 100)}%`
+        return "Volume at current playhead: analyzing…"
     }
-    if (source.loudness_status === "ready" && source.loudness) {
-        const db = peak_to_dbfs(source.loudness.peak_overall)
-        return `peak ${Number.isFinite(db) ? `${db.toFixed(1)}` : "-∞"} dBFS`
+    if (source.loudness_status !== "ready" || !source.loudness) {
+        return null
     }
-    return null
+    const time = viewer_state.playback.current_time
+    if (time === null) {
+        return null
+    }
+    const point = loudness_at(source.loudness, time)
+    if (!point) {
+        return null
+    }
+    const label = Number.isFinite(point.dbfs) ? `${Math.round(point.dbfs)}` : "-∞"
+    return `Volume at current playhead: ${label} db`
 })
 
 function cancel_loudness(): void {
@@ -75,7 +79,7 @@ async function handle_analyze_loudness(): Promise<void> {
     try {
         const cache = await analyze_loudness({
             file: source.file,
-            buckets_per_sec: 8,
+            buckets_per_sec: LOUDNESS_BUCKETS_PER_SEC_DEFAULT,
             signal: controller.signal,
             on_progress: (value) => {
                 if (mine === file_token) {
@@ -88,7 +92,7 @@ async function handle_analyze_loudness(): Promise<void> {
         }
         source.loudness = cache
         source.loudness_status = cache ? "ready" : "failed"
-    } catch (error) {
+    } catch {
         if (mine !== file_token || viewer_state.source !== source) {
             return
         }
@@ -378,7 +382,6 @@ onDestroy(() => {
                     {video_el}
                     {fps}
                     {duration}
-                    {loudness_text}
                     current_time={viewer_state.playback.current_time}
                     disabled={viewer_state.source === null}
                     on_fullscreen={toggle_fullscreen}
@@ -393,6 +396,14 @@ onDestroy(() => {
                 loudness={viewer_state.source.loudness}
                 current_time={viewer_state.playback.current_time}
             />
+            {#if volume_text}
+                <p
+                    role="status"
+                    class="section text-sm text-gray-500"
+                >
+                    {volume_text}
+                </p>
+            {/if}
         {/if}
         {#if viewer_state.message}
             <div
