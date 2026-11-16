@@ -54,7 +54,10 @@ let selected_edge_id: string | null = $derived(
         ? compose_state.selected_edge_id
         : null,
 )
-let issues = $derived(validate_compose(compose_state.nodes, compose_state.edges))
+let issues = $derived.by(() => {
+    $font_registry_version
+    return validate_compose(compose_state.nodes, compose_state.edges)
+})
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
