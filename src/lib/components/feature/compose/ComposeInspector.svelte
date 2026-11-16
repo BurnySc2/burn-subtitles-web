@@ -19,6 +19,7 @@ import type {
 import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
 import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
+import { format_audio_label, format_kbps } from "$lib/media/probe-audio-label"
 import {
     format_size_estimate,
     resolve_audio_bitrate,
@@ -372,6 +373,13 @@ function probe_summary(node: ComposeNode): string {
     if (probe.display_width !== null && probe.display_height !== null) {
         parts.push(`${probe.display_width}x${probe.display_height}`)
     }
+    if (probe.frame_rate !== null) {
+        parts.push(`${probe.frame_rate.toFixed(2)} fps`)
+    }
+    const audio_label = format_audio_label(probe)
+    if (audio_label) {
+        parts.push(audio_label)
+    }
     return parts.join(" · ")
 }
 </script>
@@ -426,6 +434,63 @@ function probe_summary(node: ComposeNode): string {
         </label>
         {#if selected.type === "source"}
             <p class="text-sm text-gray-700">{probe_summary(selected)}</p>
+            {#if selected.data.probe}
+                {@const probe = selected.data.probe}
+                <dl
+                    data-testid="source-probe-details"
+                    class="grid grid-cols-2 gap-1 text-sm text-gray-500"
+                >
+                    {#if probe.has_video}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Video codec:</dt>
+                            <dd>
+                                {probe.video_codec
+                                    ? `${probe.video_codec}${probe.video_codec_param ? ` (${probe.video_codec_param})` : ""}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Resolution:</dt>
+                            <dd>
+                                {probe.display_width !== null && probe.display_height !== null
+                                    ? `${probe.display_width}x${probe.display_height}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Frame rate:</dt>
+                            <dd>{probe.frame_rate !== null ? `${probe.frame_rate.toFixed(2)} fps` : "—"}</dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Video bitrate:</dt>
+                            <dd>{format_kbps(probe.video_bitrate) ?? "—"}</dd>
+                        </div>
+                    {/if}
+                    {#if probe.has_audio}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio codec:</dt>
+                            <dd>
+                                {probe.audio_codec
+                                    ? `${probe.audio_codec}${probe.audio_codec_param ? ` (${probe.audio_codec_param})` : ""}`
+                                    : "—"}
+                            </dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio bitrate:</dt>
+                            <dd>{format_kbps(probe.audio_bitrate) ?? "—"}</dd>
+                        </div>
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Channels:</dt>
+                            <dd>{probe.audio_channels ?? "—"}</dd>
+                        </div>
+                    {:else}
+                        <div class="flex gap-1">
+                            <dt class="font-medium">Audio:</dt>
+                            <dd>—</dd>
+                        </div>
+                    {/if}
+                </dl>
+            {/if}
             <ComposeSourcePicker node_id={selected.id} />
         {:else if selected.type === "trim"}
             <label class="flex flex-col gap-1 text-sm font-medium">

@@ -5,6 +5,7 @@ import { handle_accepted_file } from "$lib/media/compose-file-handler"
 import { clear_preview_url, set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type SourceNodeData } from "$lib/media/compose-types"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
+import { format_audio_label } from "$lib/media/probe-audio-label"
 
 let {
     id = "",
@@ -42,6 +43,10 @@ let meta_line = $derived.by(() => {
     }
     if (probe.frame_rate !== null) {
         parts.push(`${probe.frame_rate.toFixed(2)} fps`)
+    }
+    const audio_label = format_audio_label(probe)
+    if (audio_label) {
+        parts.push(audio_label)
     }
     return parts.join(" · ")
 })
