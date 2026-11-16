@@ -1,5 +1,5 @@
 <script lang="ts">
-import { step_frame, VIEWER_FALLBACK_FPS } from "$lib/media/viewer-step"
+import { step_frame, time_to_frame, VIEWER_FALLBACK_FPS } from "$lib/media/viewer-step"
 
 let {
     video_el,
@@ -57,6 +57,11 @@ $effect(() => {
 let slider_max = $derived(duration ?? 0)
 let slider_value = $derived(current_time ?? 0)
 let controls_disabled = $derived(disabled || !video_el)
+let readout = $derived(
+    current_time === null || duration === null
+        ? "—"
+        : `${current_time.toFixed(2)} s (frame ${time_to_frame(current_time, fps)}) of ${duration.toFixed(1)} s`,
+)
 
 function step(delta_frames: number) {
     if (!video_el) {
@@ -94,6 +99,12 @@ function toggle_mute() {
 </script>
 
 <div class="flex w-full flex-col gap-2">
+    <p
+        role="status"
+        class="text-xs text-gray-700"
+    >
+        {readout}
+    </p>
     <div class="flex items-center gap-3">
         <input
             type="range"

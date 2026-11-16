@@ -1,9 +1,10 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte"
-import ViewerFilePicker from "$lib/components/feature/viewer/ViewerFilePicker.svelte"
+import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
 import ViewerInspector from "$lib/components/feature/viewer/ViewerInspector.svelte"
 import ViewerStage from "$lib/components/feature/viewer/ViewerStage.svelte"
 import ViewerTransport from "$lib/components/feature/viewer/ViewerTransport.svelte"
+import { is_accepted } from "$lib/media/compose-drop"
 import { copy_text, format_viewer_summary } from "$lib/media/framecode"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 import { reset_playback, revoke_viewer, viewer_state } from "$lib/media/viewer-state.svelte"
@@ -15,6 +16,11 @@ let video_duration: number | null = $state(null)
 let stage_wrapper: HTMLDivElement | null = $state(null)
 
 let fps = $derived(effective_fps(viewer_state.source?.probe?.frame_rate))
+let file_name = $derived(viewer_state.source?.file.name ?? null)
+let choose_label = $derived(file_name ? "Replace file" : "Choose file")
+let choose_aria = $derived(file_name ? "Replace viewer media" : "Choose viewer media")
+let show_remove = $derived(viewer_state.source !== null)
+let remove_aria = $derived(file_name ? `Remove viewer file ${file_name}` : "Remove viewer file")
 let duration = $derived(viewer_state.source?.probe?.duration ?? video_duration ?? null)
 let has_video = $derived.by(() => {
     const source = viewer_state.source
@@ -65,6 +71,17 @@ function handle_remove(): void {
     reset_playback()
 }
 
+function handle_picked_file(file: File | null): void {
+    if (!file) {
+        return
+    }
+    if (!is_accepted(file, "source")) {
+        viewer_state.error = `Rejected: ${file.name} — select video or audio`
+        return
+    }
+    void handle_file(file)
+}
+
 function handle_tick(tick: { media_time: number; presented_frames?: number }): void {
     viewer_state.playback.current_time = tick.media_time
     viewer_state.playback.presented_frame = time_to_frame(tick.media_time, fps)
@@ -107,6 +124,13 @@ function toggle_play(): void {
     } else {
         video_el.pause()
     }
+}
+
+function toggle_mute(): void {
+    if (!video_el) {
+        return
+    }
+    video_el.muted = !video_el.muted
 }
 
 function step_frames(delta_frames: number): void {
@@ -192,6 +216,9 @@ function on_keydown(event: KeyboardEvent): void {
     } else if (key === "f" || key === "F") {
         event.preventDefault()
         toggle_fullscreen()
+    } else if (key === "m" || key === "M") {
+        event.preventDefault()
+        toggle_mute()
     } else if (key === "Home") {
         event.preventDefault()
         seek_absolute(0)
@@ -220,10 +247,29 @@ onDestroy(() => {
     <p class="mt-1 text-sm text-gray-500">Local only, no uploads — your media stays on this device.</p>
     <div class="mt-4 flex flex-col gap-4">
         <div class="section">
-            <ViewerFilePicker
-                on_file={handle_file}
+            <ComposeFileDrop
+                accept="video/*,audio/*"
+                {choose_label}
+                {choose_aria}
+                {file_name}
+                {show_remove}
+                {remove_aria}
+                describedby="viewer-file-status"
+                disabled={false}
+                on_file={handle_picked_file}
                 on_remove={handle_remove}
             />
+            <p
+                id="viewer-file-status"
+                aria-live="polite"
+                class={file_name ? "mt-2 text-sm font-medium text-green-700" : "mt-2 text-sm text-gray-500"}
+            >
+                {#if file_name}
+                    ✓ Accepted: {file_name}
+                {:else}
+                    No file chosen — select video or audio
+                {/if}
+            </p>
         </div>
         {#if viewer_state.source}
             <div class="section">
