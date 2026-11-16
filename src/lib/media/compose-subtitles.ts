@@ -247,7 +247,6 @@ export function vtt_to_srt(vtt_content: string): string {
     return `${body}\n`
 }
 
-export const HEX_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
 // WHY strict subtitle gate: 3-digit input falls back to defaults so validation flags it
 export const STRICT_HEX_6 = /^#[0-9a-fA-F]{6}$/
 

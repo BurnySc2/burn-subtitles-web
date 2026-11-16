@@ -82,7 +82,6 @@ export async function load_ffmpeg() {
     try {
         temp_state.ffmpeg.message = "Loading FFmpeg core"
         const base_url = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm"
-        // const base_url = page.url.origin
         await new_ffmpeg.load({
             coreURL: await toBlobURL(`${base_url}/ffmpeg-core.js`, "text/javascript"),
             wasmURL: await toBlobURL(`${base_url}/ffmpeg-core.wasm`, "application/wasm"),

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 import {
     active_cues_at,
     clamp_number,
-    HEX_RE,
     normalize_subtitle_style,
     parse_srt,
     resolve_burn_font_px,
@@ -106,27 +105,6 @@ describe("validate_srt", () => {
         const inverted = validate_srt("1\n00:00:02,000 --> 00:00:01,000\nHi\n")
         expect(inverted.valid).toBe(false)
         expect(inverted.errors.join(" ")).toContain("greater than start")
-    })
-})
-
-describe("HEX_RE", () => {
-    it.each(["#fff", "#FFF", "#abc", "#000000", "#ffff7f", "#ABCDEF"])("accepts %s", (hex) => {
-        expect(HEX_RE.test(hex)).toBe(true)
-    })
-
-    it.each([
-        "fff",
-        "#ff",
-        "#ffff",
-        "#fffffff",
-        "#ggg",
-        "#12345g",
-        "",
-        "red",
-        "#fff ",
-        "##fff",
-    ])("rejects %s", (hex) => {
-        expect(HEX_RE.test(hex)).toBe(false)
     })
 })
 

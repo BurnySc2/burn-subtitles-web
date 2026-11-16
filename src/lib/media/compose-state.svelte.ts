@@ -62,10 +62,6 @@ export function flow_center_position(): { x: number; y: number } {
 
 const preview_urls = new Map<string, string>()
 
-export function preview_url(node_id: string): string | null {
-    return preview_urls.get(node_id) ?? null
-}
-
 export function clear_preview_url(node_id: string): void {
     const url = preview_urls.get(node_id)
     if (url !== undefined) {
@@ -119,17 +115,6 @@ export function upsert_probe(node_id: string, file: File, probe: ProbeResult | n
             data: { file, probe },
         })
     }
-}
-
-export function reset_compose(): void {
-    if (compose_state.result) {
-        URL.revokeObjectURL(compose_state.result.url)
-    }
-    compose_state.result = null
-    compose_state.run_error = null
-    compose_state.run_status = "idle"
-    compose_state.run_progress = 0
-    compose_state.run_elapsed_ms = null
 }
 
 export function remove_compose_nodes(node_ids: string[]): void {
