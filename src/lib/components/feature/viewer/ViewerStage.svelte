@@ -55,6 +55,18 @@ function handle_seeked(event: Event) {
     }
 }
 
+function toggle_media() {
+    const el = has_video ? video_el : audio_el
+    if (!el) {
+        return
+    }
+    if (el.paused) {
+        void el.play()
+    } else {
+        el.pause()
+    }
+}
+
 $effect(() => {
     wrapper_ref(wrapper_el)
 })
@@ -96,9 +108,9 @@ $effect(() => {
         <video
             bind:this={video_el}
             src={url}
-            controls
             preload="auto"
             class="w-full rounded"
+            onclick={toggle_media}
             onloadedmetadata={handle_loaded}
             ontimeupdate={handle_time}
             onseeked={handle_seeked}
@@ -109,8 +121,8 @@ $effect(() => {
         <audio
             bind:this={audio_el}
             src={url}
-            controls
             class="w-full"
+            onclick={toggle_media}
             onloadedmetadata={handle_loaded}
             ontimeupdate={handle_time}
             onseeked={handle_seeked}

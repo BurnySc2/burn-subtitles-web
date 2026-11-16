@@ -7,16 +7,19 @@ let {
     duration,
     current_time,
     disabled,
+    on_fullscreen,
 }: {
     video_el: HTMLVideoElement | HTMLAudioElement | null
     fps: number
     duration: number | null
     current_time: number | null
     disabled: boolean
+    on_fullscreen: () => void
 } = $props()
 
 let paused = $state(true)
 let volume_level = $state(1)
+let is_muted = $state(false)
 
 $effect(() => {
     const el = video_el
@@ -42,6 +45,7 @@ $effect(() => {
     }
     const sync_volume = () => {
         volume_level = el.volume
+        is_muted = el.muted
     }
     sync_volume()
     el.addEventListener("volumechange", sync_volume)
@@ -79,6 +83,13 @@ function toggle_play() {
     } else {
         video_el.pause()
     }
+}
+
+function toggle_mute() {
+    if (!video_el) {
+        return
+    }
+    video_el.muted = !video_el.muted
 }
 </script>
 
@@ -174,6 +185,25 @@ function toggle_play() {
             class="btn btn-secondary btn-sm"
         >
             +1s
+        </button>
+        <button
+            type="button"
+            onclick={toggle_mute}
+            disabled={controls_disabled}
+            aria-label={is_muted ? "Unmute" : "Mute"}
+            class="btn btn-secondary btn-sm"
+        >
+            {is_muted ? "🔇" : "🔊"}
+        </button>
+        <button
+            type="button"
+            onclick={on_fullscreen}
+            disabled={controls_disabled}
+            aria-label="Fullscreen"
+            title="Shortcut: f"
+            class="btn btn-secondary btn-sm"
+        >
+            ⛶
         </button>
     </div>
     <div class="flex items-center gap-2">

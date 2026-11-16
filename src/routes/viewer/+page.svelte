@@ -144,6 +144,7 @@ function is_editable(target: EventTarget | null): boolean {
 }
 
 function on_keydown(event: KeyboardEvent): void {
+    // Media focus falls through to custom handling + preventDefault.
     if (is_editable(event.target)) {
         return
     }
@@ -230,6 +231,7 @@ onDestroy(() => {
                     {duration}
                     current_time={viewer_state.playback.current_time}
                     disabled={viewer_state.source === null}
+                    on_fullscreen={toggle_fullscreen}
                 />
             </div>
             <ViewerInspector
