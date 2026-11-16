@@ -27,6 +27,7 @@ import {
     is_font_available,
 } from "../../../media/compose-font-library"
 import { create_default_text_item, MAX_TEXT_ITEMS } from "../../../media/compose-types"
+import ComposeFileDrop from "./ComposeFileDrop.svelte"
 import ComposeNodePreview from "./ComposeNodePreview.svelte"
 import ComposeOverlayPicker from "./ComposeOverlayPicker.svelte"
 import ComposeSourcePicker from "./ComposeSourcePicker.svelte"
@@ -151,17 +152,6 @@ function patch_subtitles(patch: Partial<SubtitlesNodeData>): void {
 
 function subtitle_field_message(field: string): string | null {
     return selected_issues.find((issue) => issue.field === field)?.message ?? null
-}
-
-function on_subtitles_srt_file(event: Event): void {
-    const input = event.currentTarget as HTMLInputElement | null
-    const file = input?.files?.[0] ?? null
-    if (input) {
-        input.value = ""
-    }
-    if (file) {
-        patch_subtitles({ file })
-    }
 }
 
 function patch_output(patch: Partial<OutputNodeData>): void {
@@ -605,12 +595,23 @@ function probe_summary(node: ComposeNode): string {
         {:else if selected.type === "subtitles"}
             <div class="flex flex-col gap-1 text-sm font-medium">
                 SRT file (required)
-                <input
-                    type="file"
+                <ComposeFileDrop
                     accept=".srt"
-                    onchange={on_subtitles_srt_file}
-                    class="w-full rounded border border-gray-300 bg-white p-2 font-normal"
-                >
+                    choose_label={selected.data.file ? "Replace SRT" : "Choose SRT"}
+                    choose_aria={selected.data.file ? "Replace SRT file" : "Choose SRT file"}
+                    file_name={selected.data.file?.name ?? null}
+                    show_remove={selected.data.file !== null}
+                    remove_aria={selected.data.file
+                        ? `Remove SRT file ${selected.data.file.name}`
+                        : "Remove SRT file"}
+                    disabled={false}
+                    on_file={(file) => {
+                        if (file) {
+                            patch_subtitles({ file })
+                        }
+                    }}
+                    on_remove={() => patch_subtitles({ file: null })}
+                />
                 {#if selected.data.file}
                     <p class="text-xs font-normal text-gray-500">File: {selected.data.file.name}</p>
                 {/if}

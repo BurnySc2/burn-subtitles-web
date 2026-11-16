@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
-import { first_dropped_file, is_accepted } from "$lib/media/compose-drop"
+import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
+import { is_accepted } from "$lib/media/compose-drop"
 import { compose_node_title, type OverlayNodeData } from "$lib/media/compose-types"
 import type { ImageProbe } from "$lib/media/mediabunny-overlay"
 
@@ -14,10 +15,8 @@ let {
     update_data: (patch: Partial<OverlayNodeData>) => void
 } = $props()
 
-let file_input = $state<HTMLInputElement | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
-let is_dragging = $state(false)
 let image_probe = $state<ImageProbe | null>(null)
 let probed_file = $state<File | null>(null)
 let token = 0
@@ -32,6 +31,8 @@ let summary = $derived(`${data.position} · ${data.scale}% · ${data.opacity}`)
 
 let file_name = $derived(data.image ? data.image.name : "No image selected")
 let meta_line = $derived(image_probe && probed_file === data.image ? `${image_probe.width}x${image_probe.height}` : "")
+let show_remove = $derived(data.image !== null)
+let remove_aria = $derived(data.image ? `Remove overlay image ${data.image.name}` : "Remove overlay image")
 
 async function handle_file(file: File | null): Promise<void> {
     if (!file || !id) {
@@ -70,17 +71,14 @@ async function handle_file(file: File | null): Promise<void> {
     }
 }
 
-$effect(() => {
-    if (!data.image) {
-        token += 1
-        probing = false
-        image_probe = null
-        probed_file = null
-    } else if (data.image !== probed_file && image_probe) {
-        image_probe = null
-        probed_file = null
-    }
-})
+function handle_remove(): void {
+    token += 1
+    probing = false
+    error = null
+    image_probe = null
+    probed_file = null
+    update_data({ image: null })
+}
 </script>
 
 <div
@@ -160,66 +158,16 @@ $effect(() => {
     {:else if error}
         <p class="mt-1 text-xs text-red-700">{error}</p>
     {/if}
-    <!-- svelte-ignore a11y_no_static_element_interactions: inner button/input is the keyboard path; drop is enhancement only, so no role=button -->
-    <div
-        class="drop-zone nodrag mt-2 w-full"
-        class:drag-over={is_dragging}
-        ondragover={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = true
-        }}
-        ondragleave={(e) => {
-            if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                return
-            }
-            is_dragging = false
-        }}
-        ondrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = false
-            void handle_file(first_dropped_file(e))
-        }}
-    >
-        <input
-            id={id ? `${id}-file` : undefined}
-            bind:this={file_input}
-            type="file"
-            accept="image/*"
-            class="nodrag hidden"
-            onchange={(e) => {
-                const file = e.currentTarget.files?.[0] ?? null
-                e.currentTarget.value = ""
-                void handle_file(file)
-            }}
-        >
-        <div class="mt-2 flex gap-2 nodrag">
-            <button
-                type="button"
-                onclick={() => file_input?.click()}
-                aria-label={choose_aria}
-                class="btn btn-primary btn-sm nodrag"
-            >
-                {choose_label}
-            </button>
-            {#if data.image}
-                <button
-                    type="button"
-                    onclick={() => {
-                        token += 1
-                        probing = false
-                        error = null
-                        image_probe = null
-                        probed_file = null
-                        update_data({ image: null })
-                    }}
-                    aria-label={`Remove overlay image ${data.image.name}`}
-                    class="btn btn-sm nodrag bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
-                >
-                    Remove
-                </button>
-            {/if}
-        </div>
-    </div>
+    <ComposeFileDrop
+        accept="image/*"
+        input_id={id ? `${id}-file` : undefined}
+        {choose_label}
+        {choose_aria}
+        file_name={data.image ? data.image.name : null}
+        {show_remove}
+        {remove_aria}
+        disabled={false}
+        on_file={handle_file}
+        on_remove={handle_remove}
+    />
 </div>

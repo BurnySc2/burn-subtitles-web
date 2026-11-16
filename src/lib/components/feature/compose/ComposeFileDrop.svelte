@@ -9,6 +9,7 @@ let {
     show_remove,
     remove_aria,
     input_id,
+    describedby,
     disabled,
     on_file,
     on_remove,
@@ -20,6 +21,7 @@ let {
     show_remove: boolean
     remove_aria: string
     input_id?: string | undefined
+    describedby?: string | undefined
     disabled: boolean
     on_file: (file: File | null) => void | Promise<void>
     on_remove: () => void
@@ -53,6 +55,7 @@ let file_input = $state<HTMLInputElement | null>(null)
 >
     <input
         id={input_id}
+        aria-describedby={describedby}
         bind:this={file_input}
         type="file"
         {accept}
