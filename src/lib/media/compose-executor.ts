@@ -6,11 +6,12 @@ import {
     single_input,
 } from "./compose-fused"
 import { type ComposeOutputNode, find_output_node, topo_sort_compose } from "./compose-graph"
+import { peak_audio_probe, union_probe_lists } from "./compose-probe-union"
 import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import { resolve_trim_range, trim_range_error, trim_upstream_duration } from "./compose-trim"
 import type { ComposeEdge, ComposeNode, ComposeRunResult } from "./compose-types"
 import { validate_compose } from "./compose-validation"
-import { ClipError, extract_clip } from "./mediabunny-clip"
+import { ClipError, extract_clip, type ProbeResult, probe_media } from "./mediabunny-clip"
 import { collect_stack_segments } from "./mediabunny-compose-stack"
 import { render_merge } from "./mediabunny-merge"
 import { render_overlay } from "./mediabunny-overlay"
@@ -100,6 +101,65 @@ function merge_inputs(node_id: string, incoming: Map<string, ComposeEdge[]>, mem
     return blobs as Blob[]
 }
 
+function single_probe_list(
+    node_id: string,
+    incoming: Map<string, ComposeEdge[]>,
+    probe_memo: Map<string, ProbeResult[]>,
+): ProbeResult[] {
+    const edges = incoming.get(node_id) ?? []
+    if (edges.length !== 1) {
+        return []
+    }
+    return [...(probe_memo.get(edges[0].source) ?? [])]
+}
+
+function transition_probe_lists(
+    node_id: string,
+    incoming: Map<string, ComposeEdge[]>,
+    probe_memo: Map<string, ProbeResult[]>,
+): { list_a: ProbeResult[]; list_b: ProbeResult[] } {
+    const edges = incoming.get(node_id) ?? []
+    const by_handle = (handle: string): ProbeResult[] | null => {
+        const edge = edges.find((candidate) => candidate.targetHandle === handle) ?? null
+        if (!edge) {
+            return null
+        }
+        const list = probe_memo.get(edge.source)
+        return list ? [...list] : null
+    }
+    const fallbacks = edges.map((edge) => [...(probe_memo.get(edge.source) ?? [])])
+    return { list_a: by_handle("a") ?? fallbacks[0] ?? [], list_b: by_handle("b") ?? fallbacks[1] ?? [] }
+}
+
+function merge_probe_lists(
+    node_id: string,
+    incoming: Map<string, ComposeEdge[]>,
+    probe_memo: Map<string, ProbeResult[]>,
+): Array<readonly ProbeResult[] | null | undefined> {
+    const edges = (incoming.get(node_id) ?? []).slice().sort((a, b) => {
+        const index_a = merge_handle_index(a.targetHandle)
+        const index_b = merge_handle_index(b.targetHandle)
+        if (index_a !== index_b) {
+            return index_a - index_b
+        }
+        return a.source < b.source ? -1 : a.source > b.source ? 1 : 0
+    })
+    return edges.map((edge) => probe_memo.get(edge.source))
+}
+
+function peak_probe_for_render(list: readonly ProbeResult[]): ProbeResult | null {
+    const valid = list.filter((probe): probe is ProbeResult => probe !== null && probe !== undefined)
+    const base = valid[0] ?? null
+    if (!base) {
+        return null
+    }
+    const peak = peak_audio_probe(valid)
+    if (!peak || (base.audio_bitrate === peak.audio_bitrate && base.overall_bitrate === peak.overall_bitrate)) {
+        return base
+    }
+    return { ...base, audio_bitrate: peak.audio_bitrate, overall_bitrate: peak.overall_bitrate }
+}
+
 async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> {
     if (blob.type === "video/mp4") {
         return blob
@@ -161,6 +221,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     const incoming = incoming_by_target(edges)
     const output_node = find_output_node(nodes)
     const memo = new Map<string, Blob>()
+    const probe_memo = new Map<string, ProbeResult[]>()
     const video_config = output_node ? resolve_output_video_config(output_node.data) : null
     const total = Math.max(1, order.length)
     let done = 0
@@ -178,8 +239,15 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
         if (fused && node_id === fused.end_id) {
             const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
             const blob = await execute_fused_segment(fused, by_id, incoming, memo, output_node, span_slice, signal)
+            // WHY fused-output-probes: attribute the segment's external input probes to every fused id so downstream peaking still sees source probes.
+            const fused_union = union_probe_lists(
+                fused.segment.node_ids.flatMap((id) =>
+                    (incoming.get(id) ?? []).map((edge) => probe_memo.get(edge.source)),
+                ),
+            )
             for (const fused_id of fused.fused_ids) {
                 memo.set(fused_id, blob)
+                probe_memo.set(fused_id, [...fused_union])
             }
             done += fused.span
             on_progress?.(done / total)
@@ -192,6 +260,17 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     throw new ClipError("FAILED", "Source file is missing.")
                 }
                 memo.set(node.id, node.data.file)
+                if (node.data.probe) {
+                    probe_memo.set(node.id, [node.data.probe])
+                } else {
+                    let probed: ProbeResult | null = null
+                    try {
+                        probed = await probe_media(node.data.file)
+                    } catch {
+                        probed = null
+                    }
+                    probe_memo.set(node.id, probed ? [probed] : [])
+                }
                 break
             }
             case "trim": {
@@ -209,13 +288,18 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     signal,
                 })
                 memo.set(node.id, result.blob)
+                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
                 break
             }
             case "transition": {
                 const { blob_a, blob_b } = transition_inputs(node.id, incoming, memo)
+                const { list_a, list_b } = transition_probe_lists(node.id, incoming, probe_memo)
+                probe_memo.set(node.id, union_probe_lists([list_a, list_b]))
                 const result = await render_transition({
                     file_a: blob_to_file(blob_a, "transition-a.mp4"),
                     file_b: blob_to_file(blob_b, "transition-b.mp4"),
+                    probe_a: peak_probe_for_render(list_a),
+                    probe_b: peak_probe_for_render(list_b),
                     duration: node.data.duration,
                     start_a: node.data.start,
                     width: output_node?.data.width ?? 1920,
@@ -234,6 +318,8 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             }
             case "merge": {
                 const blobs = merge_inputs(node.id, incoming, memo)
+                const merged_union = union_probe_lists(merge_probe_lists(node.id, incoming, probe_memo))
+                probe_memo.set(node.id, merged_union)
                 const result = await render_merge({
                     files: blobs.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
                     width: output_node?.data.width ?? 1920,
@@ -242,6 +328,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
+                    audio_probe: peak_audio_probe(merged_union),
                     on_progress: slice,
                     signal,
                 })
@@ -273,6 +360,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     signal,
                 })
                 memo.set(node.id, result.blob)
+                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
                 break
             }
             case "text": {
@@ -290,6 +378,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     signal,
                 })
                 memo.set(node.id, result.blob)
+                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
                 break
             }
             case "color": {
@@ -305,6 +394,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     signal,
                 })
                 memo.set(node.id, result)
+                probe_memo.set(node.id, [])
                 break
             }
             case "rescale": {
@@ -321,6 +411,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     signal,
                 })
                 memo.set(node.id, result)
+                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
                 break
             }
             case "subtitles": {
@@ -359,11 +450,13 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                         signal,
                     ),
                 )
+                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
                 break
             }
             case "output": {
                 const input = single_input(node.id, incoming, memo)
                 memo.set(node.id, await ensure_mp4_blob(input, signal))
+                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
                 break
             }
         }
