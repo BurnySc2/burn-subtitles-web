@@ -9,6 +9,7 @@ import ComposeIssuesPanel from "$lib/components/feature/compose/ComposeIssuesPan
 import ComposeJsonBar from "$lib/components/feature/compose/ComposeJsonBar.svelte"
 import ComposePalette from "$lib/components/feature/compose/ComposePalette.svelte"
 import ComposeProjectToolbar from "$lib/components/feature/compose/ComposeProjectToolbar.svelte"
+import ComposeQuickAddList from "$lib/components/feature/compose/ComposeQuickAddList.svelte"
 import ComposeRenderBar from "$lib/components/feature/compose/ComposeRenderBar.svelte"
 import { execute_compose_graph } from "$lib/media/compose-executor"
 import { compose_filename } from "$lib/media/compose-filename"
@@ -274,7 +275,10 @@ onDestroy(() => {
         {/snippet}
     </ComposeProjectToolbar>
     <div class="flex h-[calc(100vh-240px)] w-full items-start gap-4">
-        <div class="w-[220px] shrink-0"><ComposePalette on_add={handle_add} /></div>
+        <div class="w-[220px] shrink-0">
+            <ComposePalette on_add={handle_add} />
+            <div class="mt-2 overflow-y-auto"><ComposeQuickAddList /></div>
+        </div>
         <div class="flex h-full min-w-0 flex-1 flex-col rounded-lg bg-gray-100 p-4"><ComposeCanvas /></div>
         <div class="flex h-full w-80 shrink-0 flex-col gap-2 overflow-y-auto">
             <ComposeInspector on_preview={handle_node_preview} />
