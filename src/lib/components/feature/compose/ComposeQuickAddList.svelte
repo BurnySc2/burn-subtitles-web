@@ -104,7 +104,7 @@ async function drop_on_row(event: DragEvent, node: MediaNode): Promise<void> {
     {#if media_nodes.length === 0}
         <p class="px-1 py-2 text-xs text-gray-500">Add source, then attach file in Inspector</p>
     {:else}
-        <ul class="flex flex-col gap-1">
+        <ul class="flex max-h-60 flex-col gap-1 overflow-y-auto overscroll-contain">
             {#each media_nodes as node (node.id)}
                 {@const file = attached_file(node)}
                 {@const name = display_name(node)}
