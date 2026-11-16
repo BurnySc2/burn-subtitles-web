@@ -9,15 +9,17 @@ export interface EffectiveEncodeReport {
     chromium: boolean
 }
 
-type EffectiveWithQuantizer = VideoEncoderConfig & { quantizer?: number | null }
+type EffectiveProbe = VideoEncoderConfig & { avc?: { quantizer?: number | null } }
 
 export function capture_encode_report(
     effective: VideoEncoderConfig | null,
     requested: TransitionVideoConfig,
 ): EffectiveEncodeReport {
-    const quantizer = (effective as EffectiveWithQuantizer | null)?.quantizer ?? null
-    const fell_back = effective == null || (requested.quantizer != null && quantizer == null)
-    return { requested, effective, fell_back, hardware: "no-preference", chromium: is_chromium() }
+    const probe = effective as EffectiveProbe | null
+    const quantizerActive = probe?.bitrateMode === "quantizer" || probe?.avc?.quantizer != null
+    const fell_back = effective == null || (requested.quantizer != null && !quantizerActive)
+    const hardware = effective?.hardwareAcceleration ?? "no-preference"
+    return { requested, effective, fell_back, hardware, chromium: is_chromium() }
 }
 
 export function format_encode_badge(report: EffectiveEncodeReport | null): string | null {

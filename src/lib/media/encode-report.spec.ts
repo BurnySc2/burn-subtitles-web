@@ -6,12 +6,14 @@ function requested(bitrate = 16_000_000, quantizer: number | null = 18): Transit
     return { bitrate, quantizer, description: "test" }
 }
 
-function effective_config(quantizer?: number): VideoEncoderConfig {
+function effective_config(mode: "quantizer" | "variable" = "variable"): VideoEncoderConfig {
     return {
         codec: "avc",
         width: 1280,
         height: 720,
-        ...(quantizer !== undefined ? { quantizer } : {}),
+        bitrate: 16_000_000,
+        bitrateMode: mode,
+        hardwareAcceleration: "no-preference",
     } as VideoEncoderConfig
 }
 
@@ -23,17 +25,17 @@ describe("capture_encode_report", () => {
     })
 
     it("keeps quantizer when effective preserves it", () => {
-        const report = capture_encode_report(effective_config(18), requested())
+        const report = capture_encode_report(effective_config("quantizer"), requested())
         expect(report.fell_back).toBe(false)
     })
 
     it("falls back when effective drops the requested quantizer", () => {
-        const report = capture_encode_report(effective_config(), requested())
+        const report = capture_encode_report(effective_config("variable"), requested())
         expect(report.fell_back).toBe(true)
     })
 
     it("does not fall back for bitrate-only when effective has no quantizer", () => {
-        const report = capture_encode_report(effective_config(), requested(16_000_000, null))
+        const report = capture_encode_report(effective_config("variable"), requested(16_000_000, null))
         expect(report.fell_back).toBe(false)
     })
 })
@@ -44,7 +46,7 @@ describe("format_encode_badge", () => {
     })
 
     it("reports an active quantizer", () => {
-        const report = capture_encode_report(effective_config(10), requested(16_000_000, 10))
+        const report = capture_encode_report(effective_config("quantizer"), requested(16_000_000, 10))
         expect(format_encode_badge(report)).toBe("Quantizer active (Q10)")
     })
 
@@ -54,7 +56,7 @@ describe("format_encode_badge", () => {
     })
 
     it("returns null for bitrate-only without fallback", () => {
-        const report = capture_encode_report(effective_config(), requested(16_000_000, null))
+        const report = capture_encode_report(effective_config("variable"), requested(16_000_000, null))
         expect(format_encode_badge(report)).toBeNull()
     })
 })
