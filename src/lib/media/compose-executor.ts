@@ -26,7 +26,7 @@ import { render_solid_color } from "./mediabunny-solid"
 import { render_subtitles_burn } from "./mediabunny-subtitles"
 import { render_text_overlay } from "./mediabunny-text-overlay"
 import { render_transition } from "./mediabunny-transition"
-import { resolve_output_video_config } from "./transition-utils"
+import { resolve_audio_bitrate, resolve_output_video_config } from "./transition-utils"
 
 export interface ExecuteComposeGraphOptions {
     nodes: ComposeNode[]
@@ -474,8 +474,9 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             }
             case "output": {
                 const input = single_input(node.id, incoming, memo)
+                const upstream = single_probe_list(node.id, incoming, probe_memo)
                 memo.set(node.id, await ensure_mp4_blob(input, signal))
-                probe_memo.set(node.id, single_probe_list(node.id, incoming, probe_memo))
+                probe_memo.set(node.id, upstream)
                 break
             }
         }
@@ -486,6 +487,14 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     if (!final_blob) {
         throw new ClipError("FAILED", "Composition produced no output.")
     }
+    const upstream = output_node ? (probe_memo.get(output_node.id) ?? []) : []
+    const audio_bitrate_bps = output_node
+        ? resolve_audio_bitrate(
+              peak_audio_probe(union_probe_lists([upstream])),
+              null,
+              output_node.data.audio_quality ?? "source-max",
+          )
+        : null
     return {
         ok: true,
         issues: [],
@@ -494,6 +503,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             mime: "video/mp4",
             ext: "mp4",
             size_bytes: final_blob.size,
+            audio_bitrate_bps,
         },
     }
 }

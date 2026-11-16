@@ -1,10 +1,11 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
 import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
+import { resolve_output_audio_bps } from "$lib/media/compose-probe-union"
 import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
 import { compose_node_durations } from "$lib/media/compose-validation"
-import { format_size_estimate, resolve_audio_bitrate, resolve_compose_video_bps } from "$lib/media/transition-utils"
+import { format_size_estimate, resolve_compose_video_bps } from "$lib/media/transition-utils"
 
 let {
     id = "",
@@ -25,7 +26,9 @@ let durations = $derived(compose_node_durations(compose_state.nodes, compose_sta
 let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
 let encode_hint = $derived(encode_hint_for_graph(compose_state.nodes, data))
 let effective_video_bps = $derived(resolve_compose_video_bps(data.video_bitrate_kbps))
-let audio_bps = $derived(resolve_audio_bitrate(null, null, data.audio_quality ?? "source-max"))
+let audio_bps = $derived(
+    resolve_output_audio_bps(compose_state.nodes, compose_state.edges, data.audio_quality ?? "source-max"),
+)
 let size_estimate = $derived(
     !encode_hint.reencodes ? "—" : format_size_estimate(result_duration, effective_video_bps, audio_bps),
 )

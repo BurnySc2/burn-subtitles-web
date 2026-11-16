@@ -232,6 +232,7 @@ export interface ComposeRunOutput {
     mime: string
     ext: string
     size_bytes: number
+    audio_bitrate_bps?: number | null
 }
 
 export interface ComposeRunResult {

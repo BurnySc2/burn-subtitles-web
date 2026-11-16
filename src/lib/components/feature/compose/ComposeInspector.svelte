@@ -1,6 +1,7 @@
 <script lang="ts">
 import { is_accepted } from "$lib/media/compose-drop"
 import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
+import { resolve_output_audio_bps } from "$lib/media/compose-probe-union"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import { parse_trim_field } from "$lib/media/compose-trim"
@@ -22,7 +23,6 @@ import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/enco
 import { format_audio_label, format_kbps } from "$lib/media/probe-audio-label"
 import {
     format_size_estimate,
-    resolve_audio_bitrate,
     resolve_compose_video_bps,
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
@@ -286,7 +286,13 @@ let output_effective_video_bps = $derived(
     selected?.type === "output" ? resolve_compose_video_bps(selected.data.video_bitrate_kbps) : null,
 )
 let output_audio_bps = $derived(
-    selected?.type === "output" ? resolve_audio_bitrate(null, null, selected.data.audio_quality ?? "source-max") : null,
+    selected?.type === "output"
+        ? resolve_output_audio_bps(
+              compose_state.nodes,
+              compose_state.edges,
+              selected.data.audio_quality ?? "source-max",
+          )
+        : null,
 )
 let size_estimate = $derived(
     !encode_hint.reencodes
