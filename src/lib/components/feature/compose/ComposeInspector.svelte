@@ -1,5 +1,6 @@
 <script lang="ts">
 import { is_accepted } from "$lib/media/compose-drop"
+import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
 import { compose_state, remove_compose_nodes } from "$lib/media/compose-state.svelte"
 import { STRICT_HEX_6 } from "$lib/media/compose-subtitles"
 import { parse_trim_field } from "$lib/media/compose-trim"
@@ -60,6 +61,12 @@ let issues = $derived.by(() => {
 })
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let selected_duration: number | null = $derived(selected ? (durations.get(selected.id) ?? null) : null)
+let encode_hint = $derived.by(() => {
+    if (selected?.type !== "output") {
+        return { reencodes: false, text: null as string | null }
+    }
+    return encode_hint_for_graph(compose_state.nodes, selected.data)
+})
 let selected_issues = $derived(selected ? issues.filter((issue) => issue.node_id === selected.id) : [])
 let font_options = $derived.by(() => {
     $font_registry_version
@@ -1377,6 +1384,14 @@ function probe_summary(node: ComposeNode): string {
                 {#if selected.data.quality === "ultra"}
                     <small class="text-xs font-normal text-gray-500">
                         Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.
+                    </small>
+                {/if}
+                {#if encode_hint.text}
+                    <small
+                        class="text-xs font-normal text-gray-500"
+                        data-testid="encode-hint"
+                    >
+                        {encode_hint.text}
                     </small>
                 {/if}
             </label>
