@@ -86,7 +86,7 @@ function output(id = "out"): ComposeNode {
         id,
         type: "output",
         position: { x: 0, y: 0 },
-        data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+        data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000 },
     }
 }
 
@@ -373,7 +373,7 @@ describe("validate_compose", () => {
                 width: 1280,
                 height: 720,
                 fps: 30,
-                quality: "medium",
+                video_bitrate_kbps: 8000,
                 audio_quality: "999k" as never,
             },
         }
@@ -384,6 +384,36 @@ describe("validate_compose", () => {
             field: "audio_quality",
             message: "Unknown output audio quality.",
         })
+    })
+
+    it("accepts a valid output video bitrate of 8000", () => {
+        const nodes = [source("src"), trim("trim"), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(nodes, edges).filter((issue) => issue.field === "video_bitrate_kbps")).toEqual([])
+    })
+
+    it.each([[499], [100001], [8.5]])("flags invalid output video bitrate %s", (video_bitrate_kbps) => {
+        const bad: ComposeNode = {
+            id: "out",
+            type: "output",
+            position: { x: 0, y: 0 },
+            data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps },
+        }
+        const nodes = [source("src"), trim("trim"), bad]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "out",
+            field: "video_bitrate_kbps",
+            message: "Output video_bitrate_kbps must be an integer from 500 to 100000",
+        })
+    })
+
+    it("ignores a legacy output quality field without crashing", () => {
+        const legacy = output() as ComposeNode & { data: Record<string, unknown> }
+        const nodes = [source("src"), trim("trim"), { ...legacy, data: { ...legacy.data, quality: "medium" } }]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(() => validate_compose(nodes as unknown as ComposeNode[], edges)).not.toThrow()
+        expect(validate_compose(nodes as unknown as ComposeNode[], edges)).toEqual([])
     })
 
     it("requires strict 6-digit hex colors and flags shorthand, names, and malformed hex", () => {

@@ -5,18 +5,21 @@ import { transition_filename } from "./transition-filename"
 import {
     add_canvas_frame,
     type CanvasEncodeSetup,
+    clamp_video_bitrate_kbps,
     create_video_sample_source,
     decode_full_audio,
     EASING_REGISTRY,
     estimate_frame_count,
+    estimate_output_bytes,
+    format_size_estimate,
     phase_at,
-    quality_to_video_config,
     resolve_audio_bitrate,
+    resolve_compose_video_bps,
     resolve_duration_seconds,
     resolve_output_dims,
     resolve_output_fps,
+    resolve_output_video_config,
     resolve_start_seconds,
-    resolve_video_encode_config,
     TRANSITION_AUDIO_MODE_HINTS,
     TRANSITION_AUDIO_MODES,
     total_transition_duration,
@@ -115,29 +118,63 @@ describe("validate_transition_range", () => {
     })
 })
 
-describe("quality_to_video_config", () => {
-    it("maps each quality to its bitrate ceiling", () => {
-        expect(quality_to_video_config("low", 1920, 1080, 30).bitrate).toBe(2_000_000)
-        expect(quality_to_video_config("medium", 1920, 1080, 30).bitrate).toBe(5_000_000)
-        expect(quality_to_video_config("high", 1920, 1080, 30).bitrate).toBe(10_000_000)
-        expect(quality_to_video_config("very-high", 1920, 1080, 30).bitrate).toBe(16_000_000)
-        expect(quality_to_video_config("ultra", 1920, 1080, 30).bitrate).toBe(50_000_000)
+describe("clamp_video_bitrate_kbps", () => {
+    it.each([
+        [499, null],
+        [500, 500],
+        [8000, 8000],
+        [100000, 100000],
+        [100001, null],
+    ] as const)("maps %i to %s", (raw, want) => {
+        expect(clamp_video_bitrate_kbps(raw)).toBe(want)
     })
 
-    it("is bitrate-only VBR with no quantizer", () => {
-        for (const quality of ["low", "medium", "high", "very-high", "ultra"] as const) {
-            const config = quality_to_video_config(quality, 1920, 1080, 30)
-            expect(config).not.toHaveProperty("quantizer")
-        }
+    it("rejects nullish and non-finite input", () => {
+        expect(clamp_video_bitrate_kbps(null)).toBeNull()
+        expect(clamp_video_bitrate_kbps(undefined)).toBeNull()
+        expect(clamp_video_bitrate_kbps(Number.NaN)).toBeNull()
+    })
+})
+
+describe("resolve_compose_video_bps", () => {
+    it("converts kbps to bps and nulls invalid input", () => {
+        expect(resolve_compose_video_bps(8000)).toBe(8_000_000)
+        expect(resolve_compose_video_bps(null)).toBeNull()
+        expect(resolve_compose_video_bps(499)).toBeNull()
+        expect(resolve_compose_video_bps(100001)).toBeNull()
+    })
+})
+
+describe("resolve_output_video_config", () => {
+    it("resolves 8000 kbps to an 8M config", () => {
+        const config = resolve_output_video_config({ video_bitrate_kbps: 8000, width: 1280, height: 720, fps: 30 })
+        expect(config.bitrate).toBe(8_000_000)
+        expect(config.description).toContain("8Mbps")
+    })
+})
+
+describe("estimate_output_bytes", () => {
+    it("computes bytes from duration and combined bitrates", () => {
+        expect(estimate_output_bytes(60, 2_000_000, 128_000)).toBe(15_960_000)
     })
 
-    it("reports very-high as 16M VBR and ultra as 50M VBR", () => {
-        const very_high = quality_to_video_config("very-high", 1920, 1080, 30)
-        expect(very_high.bitrate).toBe(16_000_000)
-        expect(very_high.description).toContain("16Mbps")
-        const ultra = quality_to_video_config("ultra", 1920, 1080, 30)
-        expect(ultra.bitrate).toBe(50_000_000)
-        expect(ultra.description).toContain("50Mbps")
+    it("returns null without full inputs", () => {
+        expect(estimate_output_bytes(null, 2_000_000, 128_000)).toBeNull()
+        expect(estimate_output_bytes(60, null, 128_000)).toBeNull()
+        expect(estimate_output_bytes(60, 2_000_000, null)).toBeNull()
+    })
+})
+
+describe("format_size_estimate", () => {
+    it("renders an em dash without full inputs", () => {
+        expect(format_size_estimate(null, 2_000_000, 128_000)).toBe("—")
+        expect(format_size_estimate(60, null, 128_000)).toBe("—")
+    })
+
+    it("formats the 60s 2M plus 128k example", () => {
+        expect(format_size_estimate(60, 2_000_000, 128_000)).toBe(
+            "Est ≈ 16.0 MB · video 2 Mbps + audio 128 kbps · VBR varies",
+        )
     })
 })
 
@@ -235,17 +272,6 @@ describe("TRANSITION_AUDIO_MODE_HINTS", () => {
 
     it.each(["a-only", "b-only"] as const)("ends %s hint with the silence suffix", (mode) => {
         expect(TRANSITION_AUDIO_MODE_HINTS[mode].endsWith("Renders silence if that side has no audio.")).toBe(true)
-    })
-})
-
-describe("resolve_video_encode_config", () => {
-    it("maps quality tiers to bitrate-only VBR configs", () => {
-        const very_high = resolve_video_encode_config("very-high", 1920, 1080, 30)
-        expect(very_high.bitrate).toBe(16_000_000)
-        expect(very_high).not.toHaveProperty("quantizer")
-        const ultra = resolve_video_encode_config("ultra", 1920, 1080, 30)
-        expect(ultra.bitrate).toBe(50_000_000)
-        expect(ultra).not.toHaveProperty("quantizer")
     })
 })
 

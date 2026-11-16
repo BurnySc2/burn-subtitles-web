@@ -129,7 +129,7 @@ function handle_add(kind: ComposeNodeKind): void {
                     width: 1920,
                     height: 1080,
                     fps: 30,
-                    quality: "medium",
+                    video_bitrate_kbps: 8000,
                     audio_quality: "source-max",
                 },
             }

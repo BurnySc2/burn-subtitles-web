@@ -2,7 +2,13 @@ import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./comp
 import { SUBTITLE_BURN_DEFAULTS, TEXT_ANCHORS } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
-import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES, type TransitionAudioMode } from "./transition-utils"
+import {
+    clamp_video_bitrate_kbps,
+    TRANSITION_AUDIO_MODE_DEFAULT,
+    TRANSITION_AUDIO_MODES,
+    type TransitionAudioMode,
+    VIDEO_BITRATE_KBPS_DEFAULT,
+} from "./transition-utils"
 
 export type ComposeRunStatus = "idle" | "running" | "done" | "error"
 
@@ -354,8 +360,7 @@ export function serialize_compose(nodes: ComposeNode[], edges: ComposeEdge[]): s
                         width: node.data.width,
                         height: node.data.height,
                         fps: node.data.fps,
-                        quality: node.data.quality,
-                        custom_bitrate: node.data.custom_bitrate ?? null,
+                        video_bitrate_kbps: node.data.video_bitrate_kbps,
                         audio_quality: node.data.audio_quality,
                         label: node.data.label ?? null,
                     },
@@ -414,9 +419,34 @@ function parse_vertical_anchor(value: unknown): "top" | "center" | "bottom" {
 }
 
 const AUDIO_QUALITIES = new Set(["96k", "128k", "192k", "256k", "320k", "source-max"])
-const OUTPUT_QUALITIES = new Set(["low", "medium", "high", "very-high", "ultra", "custom"])
 const EASINGS = new Set(["linear", "exponential"])
 const OVERLAY_POSITIONS = new Set<string>(TEXT_ANCHORS)
+
+const LEGACY_OUTPUT_BITRATE_KBPS: Record<string, number> = {
+    low: 2000,
+    medium: 5000,
+    high: 10000,
+    "very-high": 16000,
+    ultra: 50000,
+}
+
+function parse_output_bitrate_kbps(data: Record<string, unknown>): number {
+    const direct = data.video_bitrate_kbps
+    if (typeof direct === "number" && Number.isFinite(direct)) {
+        return clamp_video_bitrate_kbps(Math.round(direct)) ?? VIDEO_BITRATE_KBPS_DEFAULT
+    }
+    if (data.quality === "custom") {
+        const custom = data.custom_bitrate
+        if (typeof custom === "number" && Number.isFinite(custom)) {
+            return clamp_video_bitrate_kbps(Math.round(custom * 1000)) ?? VIDEO_BITRATE_KBPS_DEFAULT
+        }
+        return VIDEO_BITRATE_KBPS_DEFAULT
+    }
+    if (typeof data.quality === "string" && data.quality in LEGACY_OUTPUT_BITRATE_KBPS) {
+        return LEGACY_OUTPUT_BITRATE_KBPS[data.quality]
+    }
+    return VIDEO_BITRATE_KBPS_DEFAULT
+}
 
 function parse_node(raw: unknown): ComposeNode {
     if (!is_record(raw) || typeof raw.id !== "string" || typeof raw.type !== "string") {
@@ -633,18 +663,10 @@ function parse_node(raw: unknown): ComposeNode {
             ) {
                 throw new Error(`Node "${raw.id}": invalid output settings`)
             }
-            if (typeof raw.data.quality !== "string" || !OUTPUT_QUALITIES.has(raw.data.quality)) {
-                throw new Error(`Node "${raw.id}": unknown output quality`)
-            }
             const audio_quality = raw.data.audio_quality ?? "source-max"
             if (typeof audio_quality !== "string" || !AUDIO_QUALITIES.has(audio_quality)) {
                 throw new Error(`Node "${raw.id}": unknown output audio quality`)
             }
-            // Old JSON may carry a legacy override — ignored.
-            const custom_bitrate =
-                typeof raw.data.custom_bitrate === "number" && Number.isFinite(raw.data.custom_bitrate)
-                    ? raw.data.custom_bitrate
-                    : null
             return {
                 id: raw.id,
                 type: "output",
@@ -654,8 +676,7 @@ function parse_node(raw: unknown): ComposeNode {
                     width: raw.data.width,
                     height: raw.data.height,
                     fps: raw.data.fps,
-                    quality: raw.data.quality as "low" | "medium" | "high" | "very-high" | "ultra" | "custom",
-                    custom_bitrate,
+                    video_bitrate_kbps: parse_output_bitrate_kbps(raw.data),
                     audio_quality: audio_quality as "96k" | "128k" | "192k" | "256k" | "320k" | "source-max",
                     label: parse_label(raw.data.label, raw.id),
                 },

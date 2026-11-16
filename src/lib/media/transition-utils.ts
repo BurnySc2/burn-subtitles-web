@@ -228,67 +228,41 @@ export function quality_to_video_config(
     }
 }
 
-export type ComposeOutputQuality = TransitionQuality | "custom"
+export const VIDEO_BITRATE_KBPS_MIN = 500
+export const VIDEO_BITRATE_KBPS_MAX = 100000
+export const VIDEO_BITRATE_KBPS_DEFAULT = 8000
 
-export const CUSTOM_BITRATE_MIN_MBPS = 0.5
-export const CUSTOM_BITRATE_MAX_MBPS = 100
-
-export interface ComposeQualityOption {
-    value: ComposeOutputQuality
-    bitrate: number | null
-    label: string
-}
-
-export const QUALITY_OPTIONS: readonly ComposeQualityOption[] = [
-    { value: "low", bitrate: QUALITY_BITRATE.low, label: "low — 2 Mbps · ~15 MB/min" },
-    { value: "medium", bitrate: QUALITY_BITRATE.medium, label: "medium — 5 Mbps · ~37.5 MB/min" },
-    { value: "high", bitrate: QUALITY_BITRATE.high, label: "high — 10 Mbps · ~75 MB/min" },
-    { value: "very-high", bitrate: QUALITY_BITRATE["very-high"], label: "very-high — 16 Mbps · ~120 MB/min" },
-    { value: "ultra", bitrate: QUALITY_BITRATE.ultra, label: "ultra — 50 Mbps · ~375 MB/min" },
-    { value: "custom", bitrate: null, label: "custom — set bitrate · size varies" },
-]
-
-export function clamp_custom_bitrate_mbps(raw: number | null | undefined): number | null {
+export function clamp_video_bitrate_kbps(raw: number | null | undefined): number | null {
     if (typeof raw !== "number" || !Number.isFinite(raw)) {
         return null
     }
-    if (raw < CUSTOM_BITRATE_MIN_MBPS || raw > CUSTOM_BITRATE_MAX_MBPS) {
+    if (raw < VIDEO_BITRATE_KBPS_MIN || raw > VIDEO_BITRATE_KBPS_MAX) {
         return null
     }
     return raw
 }
 
-export function resolve_effective_video_bitrate(
-    quality: ComposeOutputQuality,
-    custom_mbps?: number | null,
-): number | null {
-    if (quality !== "custom") {
-        return QUALITY_BITRATE[quality]
-    }
-    const clamped = clamp_custom_bitrate_mbps(custom_mbps)
+export function resolve_compose_video_bps(kbps: number | null | undefined): number | null {
+    const clamped = clamp_video_bitrate_kbps(kbps)
     if (clamped === null) {
         return null
     }
-    return Math.round(clamped * 1_000_000)
+    return Math.round(clamped * 1000)
 }
 
 export interface ComposeOutputVideoConfigInput {
-    quality: ComposeOutputQuality
-    custom_bitrate?: number | null
+    video_bitrate_kbps: number
     width: number
     height: number
     fps: number
 }
 
 export function resolve_output_video_config(output: ComposeOutputVideoConfigInput): TransitionVideoConfig {
-    if (output.quality !== "custom") {
-        return quality_to_video_config(output.quality, output.width, output.height, output.fps)
-    }
-    const bitrate = resolve_effective_video_bitrate(output.quality, output.custom_bitrate)
+    const bitrate = resolve_compose_video_bps(output.video_bitrate_kbps)
     if (bitrate === null) {
         throw new ClipError(
             "INVALID_RANGE",
-            `Invalid custom bitrate "${output.custom_bitrate}": expected ${CUSTOM_BITRATE_MIN_MBPS}-${CUSTOM_BITRATE_MAX_MBPS} Mbps`,
+            `Invalid video bitrate "${output.video_bitrate_kbps}": expected ${VIDEO_BITRATE_KBPS_MIN}-${VIDEO_BITRATE_KBPS_MAX} kbps`,
         )
     }
     return {

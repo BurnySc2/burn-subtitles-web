@@ -20,7 +20,7 @@ function output_node(): ComposeNode {
         id: "out",
         type: "output",
         position: { x: 0, y: 0 },
-        data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+        data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000 },
     }
 }
 
@@ -59,15 +59,17 @@ describe("ComposeOutputNode file name", () => {
     })
 })
 
-describe("ComposeOutputNode quality controls", () => {
-    it("shows Quality and Audio quality selects with no CRF input", async () => {
+describe("ComposeOutputNode bitrate controls", () => {
+    it("shows bitrate input and size estimate with no Quality select or CRF input", async () => {
         const screen = await render(ComposeOutputNode, {
             id: "out",
-            data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+            data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000 },
             update_data: vi.fn(),
         })
-        expect(screen.container.querySelector("#out-quality")).not.toBeNull()
+        expect(screen.container.querySelector("#out-video-bitrate")).not.toBeNull()
+        expect(screen.container.querySelector("#out-quality")).toBeNull()
         expect(screen.container.querySelector("#out-audio-quality")).not.toBeNull()
+        expect(screen.container.querySelector('[data-testid="size-estimate"]')).not.toBeNull()
         expect(screen.container.querySelector("[id*='crf' i]")).toBeNull()
         expect(screen.container.textContent).not.toMatch(/crf/i)
     })

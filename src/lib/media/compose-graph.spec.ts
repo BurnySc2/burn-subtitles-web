@@ -75,7 +75,7 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
                 id,
                 type,
                 position,
-                data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000 },
             }
     }
 }

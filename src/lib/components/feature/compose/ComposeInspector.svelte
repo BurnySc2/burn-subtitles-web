@@ -21,9 +21,8 @@ import { compose_node_durations, validate_compose } from "$lib/media/compose-val
 import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
 import {
     format_size_estimate,
-    QUALITY_OPTIONS,
     resolve_audio_bitrate,
-    resolve_effective_video_bitrate,
+    resolve_compose_video_bps,
     TRANSITION_AUDIO_MODE_DEFAULT,
     TRANSITION_AUDIO_MODE_HINTS,
 } from "$lib/media/transition-utils"
@@ -278,18 +277,12 @@ function patch_output_name(file_name: string): void {
     patch_output({ file_name: file_name.trim() === "" ? null : file_name.trim() })
 }
 
-function on_custom_bitrate_input(raw: string): void {
-    if (raw.trim() === "") {
-        patch_output({ custom_bitrate: null })
-        return
-    }
-    on_number_input(raw, (value) => patch_output({ custom_bitrate: value }))
+function on_bitrate_input(raw: string): void {
+    on_number_input(raw, (value) => patch_output({ video_bitrate_kbps: Number(value) }))
 }
 
 let output_effective_video_bps = $derived(
-    selected?.type === "output"
-        ? resolve_effective_video_bitrate(selected.data.quality, selected.data.custom_bitrate ?? null)
-        : null,
+    selected?.type === "output" ? resolve_compose_video_bps(selected.data.video_bitrate_kbps) : null,
 )
 let output_audio_bps = $derived(
     selected?.type === "output" ? resolve_audio_bitrate(null, null, selected.data.audio_quality ?? "source-max") : null,
@@ -1355,33 +1348,18 @@ function probe_summary(node: ComposeNode): string {
                 </label>
             </div>
             <label class="flex flex-col gap-1 text-sm font-medium">
-                Quality
-                <select
-                    value={selected.data.quality}
-                    onchange={(e) => patch_output({ quality: e.currentTarget.value as OutputNodeData["quality"] })}
+                Video bitrate (kbit/s)
+                <input
+                    type="number"
+                    min="500"
+                    max="100000"
+                    step="100"
+                    value={selected.data.video_bitrate_kbps}
+                    oninput={(e) => on_bitrate_input(e.currentTarget.value)}
+                    placeholder="e.g. 8000"
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
-                    {#each QUALITY_OPTIONS.filter((option) => option.value !== "custom") as option (option.value)}
-                        <option value={option.value}>{option.label}</option>
-                    {/each}
-                    <option value="custom">custom — set bitrate · size varies</option>
-                </select>
             </label>
-            {#if selected.data.quality === "custom"}
-                <label class="flex flex-col gap-1 text-sm font-medium">
-                    Custom bitrate (Mbps)
-                    <input
-                        type="number"
-                        min="0.5"
-                        max="100"
-                        step="0.5"
-                        value={selected.data.custom_bitrate ?? ""}
-                        oninput={(e) => on_custom_bitrate_input(e.currentTarget.value)}
-                        placeholder="e.g. 8"
-                        class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
-                    >
-                </label>
-            {/if}
             <label
                 class="flex flex-col gap-1 text-sm font-medium"
                 title="AAC bitrate"

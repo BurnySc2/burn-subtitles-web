@@ -118,8 +118,7 @@ export function resolve_stack_target(
     const output_height = output_node?.data.height ?? 1080
     const output_fps = output_node?.data.fps ?? 30
     const video_config = output_node ? resolve_output_video_config(output_node.data) : null
-    const output_quality: StackTarget["quality"] =
-        output_node && output_node.data.quality !== "custom" ? output_node.data.quality : "medium"
+    const output_quality: StackTarget["quality"] = "medium"
     const output_audio: StackTarget["audio_quality"] = output_node?.data.audio_quality ?? "source-max"
     const terminal_node = segment.terminal_rescale_id ? (by_id.get(segment.terminal_rescale_id) ?? null) : null
     const terminal_rescale: RescaleNodeData | null = terminal_node?.type === "rescale" ? terminal_node.data : null

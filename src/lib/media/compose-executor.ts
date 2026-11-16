@@ -162,7 +162,6 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     const output_node = find_output_node(nodes)
     const memo = new Map<string, Blob>()
     const video_config = output_node ? resolve_output_video_config(output_node.data) : null
-    const quality_fallback = output_node && output_node.data.quality !== "custom" ? output_node.data.quality : "medium"
     const total = Math.max(1, order.length)
     let done = 0
     const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
@@ -222,7 +221,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: quality_fallback,
+                    quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     easing: node.data.easing,
@@ -240,7 +239,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: quality_fallback,
+                    quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
@@ -267,7 +266,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: quality_fallback,
+                    quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
@@ -284,7 +283,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: quality_fallback,
+                    quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
@@ -300,7 +299,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     width: output_node?.data.width ?? 1920,
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
-                    quality: quality_fallback,
+                    quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
                     signal,
@@ -315,7 +314,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                     height: node.data.height,
                     fps: node.data.fps,
                     fit: node.data.fit,
-                    quality: quality_fallback,
+                    quality: "medium",
                     video_bitrate: video_config?.bitrate ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
@@ -352,7 +351,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                             width: output_node?.data.width ?? 1920,
                             height: output_node?.data.height ?? 1080,
                             fps: output_node?.data.fps ?? 30,
-                            quality: quality_fallback,
+                            quality: "medium",
                             video_bitrate: video_config?.bitrate ?? null,
                             audio_quality: output_node?.data.audio_quality ?? "source-max",
                             on_progress: slice,

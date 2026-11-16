@@ -46,7 +46,7 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
                 id,
                 type,
                 position,
-                data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                data: { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000 },
             }
         default:
             return { id, type, position, data: { start: 0, end: 1 } }
@@ -54,7 +54,7 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
 }
 
 function output_data(overrides: Partial<OutputNodeData> = {}): OutputNodeData {
-    return { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium", ...overrides }
+    return { file_name: null, width: 1280, height: 720, fps: 30, video_bitrate_kbps: 8000, ...overrides }
 }
 
 describe("has_reencode_sink", () => {
@@ -75,21 +75,21 @@ describe("has_reencode_sink", () => {
 })
 
 describe("effective_encode_config", () => {
-    it("resolves the medium preset by default", () => {
-        const config = effective_encode_config(output_data())
-        expect(config.bitrate).toBe(5_000_000)
+    it("resolves 8000 kbps to 8 Mbps", () => {
+        const config = effective_encode_config(output_data({ video_bitrate_kbps: 8000 }))
+        expect(config.bitrate).toBe(8_000_000)
     })
 
-    it("leaves ultra at 50 Mbps", () => {
-        const config = effective_encode_config(output_data({ quality: "ultra" }))
-        expect(config.bitrate).toBe(50_000_000)
+    it("covers 5 Mbps and 50 Mbps bitrates", () => {
+        expect(effective_encode_config(output_data({ video_bitrate_kbps: 5000 })).bitrate).toBe(5_000_000)
+        expect(effective_encode_config(output_data({ video_bitrate_kbps: 50000 })).bitrate).toBe(50_000_000)
     })
 })
 
 describe("format_encode_hint", () => {
     it("formats bitrate configs as VBR", () => {
         expect(format_encode_hint({ bitrate: 5_000_000, description: "" })).toBe("Effective: 5 Mbps VBR")
-        expect(format_encode_hint({ bitrate: 50_000_000, description: "" })).toBe("Effective: 50 Mbps VBR")
+        expect(format_encode_hint({ bitrate: 8_000_000, description: "" })).toBe("Effective: 8 Mbps VBR")
     })
 })
 
@@ -106,10 +106,17 @@ describe("encode_hint_for_graph", () => {
         expect(encode_hint_for_graph([node("m", "merge")], null)).toEqual({ reencodes: true, text: null })
     })
 
-    it("formats the effective config when a sink and output exist", () => {
+    it("formats the 8 Mbps effective config when a sink and output exist", () => {
         expect(encode_hint_for_graph([node("s", "subtitles")], output_data())).toEqual({
             reencodes: true,
-            text: "Effective: 5 Mbps VBR",
+            text: "Effective: 8 Mbps VBR",
+        })
+    })
+
+    it("returns null text for an invalid bitrate", () => {
+        expect(encode_hint_for_graph([node("s", "subtitles")], output_data({ video_bitrate_kbps: 499 }))).toEqual({
+            reencodes: true,
+            text: null,
         })
     })
 })
