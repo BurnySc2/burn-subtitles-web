@@ -39,5 +39,11 @@ const is_active = (path: string) => {
             class:font-bold={is_active("/compose")}
             >Compose</a
         >
+        <a
+            href={resolve("/viewer")}
+            class="transition-colors hover:text-gray-800"
+            class:font-bold={is_active("/viewer")}
+            >Viewer</a
+        >
     </div>
 </nav>
