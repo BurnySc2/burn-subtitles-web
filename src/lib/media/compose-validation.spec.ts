@@ -631,13 +631,36 @@ describe("compose_node_durations", () => {
         expect(durations.get("out")).toBe(10)
     })
 
-    it("yields null for disconnected trims and unknown probe durations", () => {
+    it("yields null for disconnected trims and explicit ranges without probe durations", () => {
         const stray = [source("src"), trim("stray"), output()]
         expect(compose_node_durations(stray, []).get("stray")).toBeNull()
         const unknown = [source("src", null), trim("trim", 10, 40), output()]
         const wired = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
         const durations = compose_node_durations(unknown, wired)
         expect(durations.get("src")).toBeNull()
-        expect(durations.get("trim")).toBeNull()
+        expect(durations.get("trim")).toBe(30)
+    })
+
+    it("flags chained trims exceeding the upstream trim duration", () => {
+        const nodes = [source("src"), trim("t1", 10, 20), trim("t2", 5, 15), output()]
+        const edges = [edge("e1", "src", "t1"), edge("e2", "t1", "t2"), edge("e3", "t2", "out")]
+        expect(compose_node_durations(nodes, edges).get("t2")).toBe(10)
+        expect(validate_compose(nodes, edges).some((issue) => issue.node_id === "t2" && issue.field === "end")).toBe(
+            true,
+        )
+    })
+
+    it("resolves trim durations after a transition against start_a plus b length", () => {
+        const nodes = [source("a", 120), source("b", 20), transition("x", 5, 1), trim("trim", 10, 20), output()]
+        const edges = [
+            edge("e1", "a", "x", "a"),
+            edge("e2", "b", "x", "b"),
+            edge("e3", "x", "trim"),
+            edge("e4", "trim", "out"),
+        ]
+        const durations = compose_node_durations(nodes, edges)
+        expect(durations.get("x")).toBe(25)
+        expect(durations.get("trim")).toBe(10)
+        expect(validate_compose(nodes, edges)).toEqual([])
     })
 })

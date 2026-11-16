@@ -427,7 +427,7 @@ describe("execute_compose_graph fan-out memo", () => {
         })
         await expect(
             execute_compose_graph({
-                nodes: [source("s"), trim("t1"), trim("t2"), output()],
+                nodes: [source("s"), trim("t1"), trim("t2", 1, 2), output()],
                 edges: [edge("e1", "s", "t1"), edge("e2", "t1", "t2"), edge("e3", "t2", "out")],
                 signal: controller.signal,
             }),

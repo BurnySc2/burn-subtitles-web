@@ -71,20 +71,20 @@ test("drop zone is nodrag and canvas drop does not hijack file drop", async ({ p
     await expect(source.getByText("No file selected")).toBeVisible()
 })
 
-test("remove revokes the preview URL", async ({ page }) => {
+test("probe failure revokes the preview URL", async ({ page }) => {
     await install_url_spies(page)
     await open_compose(page)
     await add_node(page, "source")
     await drop_file(page, SOURCE_DROP, "clip.mp4", "video/mp4", "fake-video-bytes")
     const source = page.locator('[data-testid="compose-node"][data-kind="source"]')
-    await expect(source.getByRole("button", { name: /Remove source file/ })).toBeVisible()
-    const before = await url_calls(page)
-    expect(before.created.length).toBeGreaterThanOrEqual(1)
-    const created = before.created[0]
-    await source.getByRole("button", { name: /Remove source file/ }).click()
+    // WHY no click: fake bytes pass the accept filter so a preview URL is created, then probe rejects and clears the file.
+    await expect(source.getByText("This codec isn't supported for in-browser trimming.")).toBeVisible()
     await expect(source.getByText("No file selected")).toBeVisible()
-    const after = await url_calls(page)
-    expect(after.revoked).toContain(created)
+    await expect(source.getByRole("button", { name: /Remove source file/ })).toBeHidden()
+    await expect.poll(async () => (await url_calls(page)).created.length).toBeGreaterThanOrEqual(1)
+    const before = await url_calls(page)
+    const created = before.created[0]
+    await expect.poll(async () => (await url_calls(page)).revoked).toContain(created)
 })
 
 test("invalid drop surfaces error status and never probes", async ({ page }) => {

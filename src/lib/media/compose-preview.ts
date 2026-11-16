@@ -2,7 +2,7 @@ import { font_cache_key } from "./compose-font-library"
 import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
 import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
-import { resolve_trim_range } from "./compose-trim"
+import { resolve_trim_range, trim_range_error, trim_upstream_duration } from "./compose-trim"
 import type { ComposeEdge, ComposeNode } from "./compose-types"
 import { ClipError, extract_clip } from "./mediabunny-clip"
 import { collect_stack_segments } from "./mediabunny-compose-stack"
@@ -187,87 +187,6 @@ function merge_inputs(node_id: string, incoming: Map<string, ComposeEdge[]>, mem
     return blobs as Blob[]
 }
 
-function gate_positive(value: number | null): number | null {
-    if (value === null || !Number.isFinite(value) || value <= 0) {
-        return null
-    }
-    return value
-}
-
-function node_output_duration(
-    id: string,
-    by_id: Map<string, ComposeNode>,
-    incoming: Map<string, ComposeEdge[]>,
-    seen: Set<string>,
-): number | null {
-    if (seen.has(id)) {
-        return null
-    }
-    const node = by_id.get(id)
-    if (!node) {
-        return null
-    }
-    seen.add(id)
-    if (node.type === "source") {
-        return gate_positive(node.data.probe?.duration ?? null)
-    }
-    if (node.type === "color") {
-        return gate_positive(node.data.duration)
-    }
-    if (node.type === "trim") {
-        const edges = incoming.get(node.id) ?? []
-        if (edges.length !== 1) {
-            return null
-        }
-        const up = node_output_duration(edges[0].source, by_id, incoming, seen)
-        const resolved = resolve_trim_range(node.data, up)
-        if (!resolved.ok) {
-            return null
-        }
-        const own = resolved.end - resolved.start
-        if (!Number.isFinite(own) || own <= 0) {
-            return null
-        }
-        return up === null ? own : Math.min(up, own)
-    }
-    if (
-        node.type === "rescale" ||
-        node.type === "subtitles" ||
-        node.type === "overlay" ||
-        node.type === "text" ||
-        node.type === "output"
-    ) {
-        const edges = incoming.get(node.id) ?? []
-        if (edges.length !== 1) {
-            return null
-        }
-        return node_output_duration(edges[0].source, by_id, incoming, seen)
-    }
-    return null
-}
-
-function trim_upstream_duration(
-    node_id: string,
-    by_id: Map<string, ComposeNode>,
-    incoming: Map<string, ComposeEdge[]>,
-): number | null {
-    const pred = (incoming.get(node_id) ?? [])[0]?.source ?? null
-    if (pred === null) {
-        return null
-    }
-    return node_output_duration(pred, by_id, incoming, new Set<string>())
-}
-
-function trim_range_error(reason: "both-empty" | "no-duration" | "invalid-range"): never {
-    if (reason === "both-empty") {
-        throw new ClipError("FAILED", "Trim needs a start or an end — both empty trims nothing.")
-    }
-    if (reason === "no-duration") {
-        throw new ClipError("FAILED", "Trim end needs an upstream duration or an explicit value.")
-    }
-    throw new ClipError("FAILED", "Trim end must be larger than start.")
-}
-
 async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> {
     if (blob.type === "video/mp4") {
         return blob
@@ -392,10 +311,6 @@ export async function get_node_preview_blob(
             }
             case "trim": {
                 const input = single_input(node.id, incoming, blobs)
-                if (node.data.start === null && node.data.end === null) {
-                    store(node.id, input)
-                    break
-                }
                 const resolved = resolve_trim_range(node.data, trim_upstream_duration(node.id, by_id, incoming))
                 if (!resolved.ok) {
                     trim_range_error(resolved.reason)

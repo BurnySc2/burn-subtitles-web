@@ -16,41 +16,13 @@ function upstream_duration(
     start_id: string,
     by_id: Map<string, ComposeNode>,
     incoming: Map<string, ComposeEdge[]>,
+    memo: Map<string, number | null>,
 ): number | null {
-    const seen = new Set([start_id])
-    let current = start_id
-    while (true) {
-        const preds = (incoming.get(current) ?? []).map((edge) => edge.source)
-        if (preds.length !== 1) {
-            return null
-        }
-        const next = preds[0]
-        if (seen.has(next)) {
-            return null
-        }
-        seen.add(next)
-        const node = by_id.get(next)
-        if (!node) {
-            return null
-        }
-        if (node.type === "source") {
-            return node.data.probe?.duration ?? null
-        }
-        if (node.type === "color") {
-            return node.data.duration
-        }
-        if (
-            node.type === "trim" ||
-            node.type === "rescale" ||
-            node.type === "subtitles" ||
-            node.type === "overlay" ||
-            node.type === "text"
-        ) {
-            current = next
-            continue
-        }
+    const pred = sole_pred(start_id, incoming)
+    if (pred === null) {
         return null
     }
+    return node_duration(pred, by_id, incoming, memo, new Set<string>())
 }
 
 function sole_pred(id: string, incoming: Map<string, ComposeEdge[]>): string | null {
@@ -106,7 +78,7 @@ function node_duration(
             const resolved = resolve_trim_range(node.data, up)
             if (resolved.ok) {
                 const own = resolved.end - resolved.start
-                result = up === null ? null : gate_duration(Math.min(up, own))
+                result = gate_duration(up === null ? own : Math.min(up, own))
             }
         }
     } else if (
@@ -372,7 +344,7 @@ export function validate_compose(
             issues.push({ node_id: node.id, field: "file", message: "Source file is required" })
         }
         if (node.type === "trim") {
-            const duration = upstream_duration(node.id, by_id, incoming)
+            const duration = upstream_duration(node.id, by_id, incoming, duration_memo)
             const resolved = resolve_trim_range(node.data, duration)
             if (!resolved.ok) {
                 if (resolved.reason === "both-empty") {
@@ -639,7 +611,7 @@ export function validate_compose(
                     message: "Overlay show_end must be greater than show_start",
                 })
             }
-            const duration = upstream_duration(node.id, by_id, incoming)
+            const duration = upstream_duration(node.id, by_id, incoming, duration_memo)
             if (duration !== null) {
                 if (Number.isFinite(show_start) && show_start > duration) {
                     issues.push({
@@ -669,7 +641,7 @@ export function validate_compose(
                     message: `Text node must have at most ${MAX_TEXT_ITEMS} items`,
                 })
             }
-            const duration = upstream_duration(node.id, by_id, incoming)
+            const duration = upstream_duration(node.id, by_id, incoming, duration_memo)
             for (const [index, item] of items.entries()) {
                 const prefix = `items[${index}]`
                 if (typeof item.text !== "string" || item.text.trim() === "") {
