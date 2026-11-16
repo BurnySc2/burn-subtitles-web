@@ -7,7 +7,6 @@ let { on_add }: { on_add: (kind: ComposeNodeKind) => void } = $props()
 let running = $derived(compose_state.run_status === "running")
 let selected: string = $state("source")
 
-// WHY disabled-future: new kinds need ComposeNodeKind + canvas nodeTypes + handle_add branch — see compose-types.ts
 function is_addable(value: string): value is ComposeNodeKind {
     return (
         value === "source" ||
@@ -49,44 +48,12 @@ function handle_click(): void {
             <option value="merge">Merge</option>
             <option value="color">Color</option>
             <option value="rescale">Rescale</option>
-            <option
-                value="canvas"
-                disabled
-            >
-                Canvas (future)
-            </option>
             <option value="overlay">Overlay</option>
             <option value="text">Text</option>
-            <option
-                value="logo"
-                disabled
-            >
-                Logo (future)
-            </option>
-            <option
-                value="fade"
-                disabled
-            >
-                Fade (future)
-            </option>
             <option value="subtitles">Subtitles</option>
-        </optgroup>
-        <optgroup label="Audio">
-            <option
-                value="audio-note"
-                disabled
-            >
-                Audio settings in Output for now
-            </option>
         </optgroup>
         <optgroup label="IO">
             <option value="output">Output</option>
-            <option
-                value="encode"
-                disabled
-            >
-                Encode (future)
-            </option>
         </optgroup>
     </select>
     <button
