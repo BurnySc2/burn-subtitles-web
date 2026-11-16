@@ -4,16 +4,14 @@ import { format_timecode } from "$lib/media/timecode"
 import { format_dual_size } from "$lib/utils/format_size"
 
 interface Props {
-    current_time: number | null
     fps: number
-    duration: number | null
     probe: ProbeResult | null
     measured_fps: number | null
     rvfc_supported: boolean
     message: string | null
 }
 
-let { current_time, fps, duration, probe, measured_fps, rvfc_supported, message }: Props = $props()
+let { fps, probe, measured_fps, rvfc_supported, message }: Props = $props()
 
 const valid_fps = $derived(Number.isFinite(fps) && fps > 0)
 const vfr_unknown = $derived(probe?.frame_rate == null)
@@ -57,7 +55,7 @@ const vfr_unknown = $derived(probe?.frame_rate == null)
     {#if probe}
         <details class="mt-2">
             <summary class="cursor-pointer text-sm font-medium text-gray-700">Media details</summary>
-            <dl class="mt-1 space-y-1 text-sm text-gray-500">
+            <dl class="mt-1 grid grid-cols-2 gap-1 text-sm text-gray-500">
                 <div class="flex gap-1">
                     <dt class="font-medium">File:</dt>
                     <dd>{probe.file_name}</dd>

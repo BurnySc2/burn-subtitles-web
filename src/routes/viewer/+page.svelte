@@ -302,9 +302,7 @@ onDestroy(() => {
                 />
             </div>
             <ViewerInspector
-                current_time={viewer_state.playback.current_time}
                 {fps}
-                {duration}
                 probe={viewer_state.source.probe}
                 measured_fps={viewer_state.playback.measured_fps}
                 rvfc_supported={viewer_state.playback.rvfc_supported}
