@@ -246,30 +246,37 @@ onDestroy(() => {
     <h1 class="text-2xl font-bold">Frame Viewer</h1>
     <p class="mt-1 text-sm text-gray-500">Local only, no uploads — your media stays on this device.</p>
     <div class="mt-2 flex flex-col gap-3">
-        <div class="section">
-            <ComposeFileDrop
-                accept="video/*,audio/*"
-                {choose_label}
-                {choose_aria}
-                {file_name}
-                {show_remove}
-                {remove_aria}
-                describedby="viewer-file-status"
-                disabled={false}
-                on_file={handle_picked_file}
-                on_remove={handle_remove}
-            />
-            <p
-                id="viewer-file-status"
-                aria-live="polite"
-                class={file_name ? "mt-1 text-sm font-medium text-green-700" : "mt-1 text-sm text-gray-500"}
-            >
-                {#if file_name}
-                    ✓ Accepted: {file_name}
-                {:else}
-                    No file chosen — select video or audio
-                {/if}
-            </p>
+        <div class="section viewer-file-compact">
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <div class="min-w-0 flex-1">
+                    <ComposeFileDrop
+                        accept="video/*,audio/*"
+                        {choose_label}
+                        {choose_aria}
+                        {file_name}
+                        {show_remove}
+                        {remove_aria}
+                        describedby="viewer-file-status"
+                        disabled={false}
+                        on_file={handle_picked_file}
+                        on_remove={handle_remove}
+                    />
+                </div>
+                <p
+                    id="viewer-file-status"
+                    aria-live="polite"
+                    title={file_name ?? undefined}
+                    class={file_name
+                        ? "min-w-0 flex-1 truncate text-sm font-medium text-green-700"
+                        : "min-w-0 flex-1 truncate text-sm text-gray-500"}
+                >
+                    {#if file_name}
+                        ✓ Accepted: {file_name}
+                    {:else}
+                        No file chosen — select video or audio
+                    {/if}
+                </p>
+            </div>
         </div>
         {#if viewer_state.source}
             <div class="section">
@@ -322,3 +329,18 @@ onDestroy(() => {
         {/if}
     </div>
 </div>
+
+<style>
+.viewer-file-compact {
+    padding: 0.5rem;
+}
+.viewer-file-compact :global(.drop-zone) {
+    margin-top: 0;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+.viewer-file-compact :global(.drop-zone > div) {
+    margin-top: 0.25rem;
+    gap: 0.25rem;
+}
+</style>
