@@ -139,19 +139,19 @@ describe("resolve_text_anchor", () => {
         }
     })
 
-    it("applies signed offsets outward from each edge", () => {
+    it("applies signed offsets in uniform canvas space", () => {
         expect(resolve_text_anchor("top-left", width, height, 10, 20)).toEqual({ x: 10, y: 20 })
-        expect(resolve_text_anchor("top-left", width, height, -10, -20)).toEqual({ x: 0, y: 0 })
-        expect(resolve_text_anchor("bottom-right", width, height, 10, 20)).toEqual({ x: 1270, y: 700 })
+        expect(resolve_text_anchor("top-left", width, height, -10, -20)).toEqual({ x: -10, y: -20 })
+        expect(resolve_text_anchor("bottom-right", width, height, 10, 20)).toEqual({ x: 1290, y: 740 })
         expect(resolve_text_anchor("center", width, height, 15, -25)).toEqual({ x: 655, y: 335 })
         expect(resolve_text_anchor("top-center", width, height, -30, 40)).toEqual({ x: 610, y: 40 })
         expect(resolve_text_anchor("center-left", width, height, 12, -8)).toEqual({ x: 12, y: 352 })
     })
 
-    it("clamps results to [0, W] x [0, H]", () => {
-        expect(resolve_text_anchor("top-left", width, height, 5000, 5000)).toEqual({ x: 1280, y: 720 })
-        expect(resolve_text_anchor("bottom-right", width, height, 5000, 5000)).toEqual({ x: 0, y: 0 })
-        expect(resolve_text_anchor("center", width, height, -5000, 5000)).toEqual({ x: 0, y: 720 })
+    it("leaves results unclamped in canvas space", () => {
+        expect(resolve_text_anchor("top-left", width, height, 5000, 5000)).toEqual({ x: 5000, y: 5000 })
+        expect(resolve_text_anchor("bottom-right", width, height, 5000, 5000)).toEqual({ x: 6280, y: 5720 })
+        expect(resolve_text_anchor("center", width, height, -5000, 5000)).toEqual({ x: -4360, y: 5360 })
     })
 })
 

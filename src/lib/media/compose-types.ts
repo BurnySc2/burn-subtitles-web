@@ -101,6 +101,7 @@ export interface OverlayNodeData {
     position: OverlayPosition
     scale: number
     opacity: number
+    /** Canvas-space px: +X right, +Y down, any anchor; negatives allowed. */
     offset_x: number
     offset_y: number
     show_start: number
@@ -130,6 +131,7 @@ export interface TextItem {
     color: string
     opacity: number
     anchor: OverlayPosition
+    /** Canvas-space px: +X right, +Y down, any anchor; negatives allowed. */
     offset_x: number
     offset_y: number
     align: "left" | "center" | "right"

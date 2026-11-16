@@ -53,7 +53,7 @@ export function resolve_overlay_rect(opts: {
     if (horizontal === "left") {
         dx = offset_x
     } else if (horizontal === "right") {
-        dx = bg_width - dw - offset_x
+        dx = bg_width - dw + offset_x
     } else {
         dx = (bg_width - dw) / 2 + offset_x
     }
@@ -61,12 +61,10 @@ export function resolve_overlay_rect(opts: {
     if (vertical === "top") {
         dy = offset_y
     } else if (vertical === "bottom") {
-        dy = bg_height - dh - offset_y
+        dy = bg_height - dh + offset_y
     } else {
         dy = (bg_height - dh) / 2 + offset_y
     }
-    dx = Math.min(Math.max(dx, 0), Math.max(bg_width - dw, 0))
-    dy = Math.min(Math.max(dy, 0), Math.max(bg_height - dh, 0))
     return { dx, dy, dw, dh }
 }
 

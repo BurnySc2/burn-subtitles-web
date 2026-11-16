@@ -879,24 +879,24 @@ function probe_summary(node: ComposeNode): string {
                     >
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium">
-                    Offset X
+                    Offset X (px, right +)
                     <input
                         type="number"
-                        min="0"
                         step="1"
                         value={selected.data.offset_x}
+                        placeholder="0 = anchor (+ right / - left)"
                         oninput={(e) =>
                             on_number_input(e.currentTarget.value, (value) => patch_overlay({ offset_x: value }))}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                     >
                 </label>
                 <label class="flex flex-col gap-1 text-sm font-medium">
-                    Offset Y
+                    Offset Y (px, down +)
                     <input
                         type="number"
-                        min="0"
                         step="1"
                         value={selected.data.offset_y}
+                        placeholder="0 = anchor (+ down / - up)"
                         oninput={(e) =>
                             on_number_input(e.currentTarget.value, (value) => patch_overlay({ offset_y: value }))}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
@@ -927,6 +927,10 @@ function probe_summary(node: ComposeNode): string {
                     >
                 </label>
             </div>
+            <p class="text-xs text-gray-500">
+                Offsets are canvas-space for every anchor: +X right, +Y down. Negatives move left/up; canvas clips
+                offscreen.
+            </p>
         {:else if selected.type === "color"}
             <label class="flex flex-col gap-1 text-sm font-medium">
                 Color

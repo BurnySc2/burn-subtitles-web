@@ -174,7 +174,7 @@ export function resolve_text_anchor(
     if (horizontal === "left") {
         x = offset_x
     } else if (horizontal === "right") {
-        x = width - offset_x
+        x = width + offset_x
     } else {
         x = width / 2 + offset_x
     }
@@ -182,12 +182,10 @@ export function resolve_text_anchor(
     if (vertical === "top") {
         y = offset_y
     } else if (vertical === "bottom") {
-        y = height - offset_y
+        y = height + offset_y
     } else {
         y = height / 2 + offset_y
     }
-    x = Math.min(Math.max(x, 0), Math.max(width, 0))
-    y = Math.min(Math.max(y, 0), Math.max(height, 0))
     return { x, y }
 }
 

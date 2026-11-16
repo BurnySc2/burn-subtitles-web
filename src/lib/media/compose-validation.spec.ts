@@ -115,6 +115,27 @@ function text(id: string, items: TextItem[] = [text_item()]): ComposeNode {
     return { id, type: "text", position: { x: 0, y: 0 }, data: { items } }
 }
 
+function overlay(
+    id: string,
+    offsets: { offset_x: number; offset_y: number } = { offset_x: 0, offset_y: 0 },
+): ComposeNode {
+    return {
+        id,
+        type: "overlay",
+        position: { x: 0, y: 0 },
+        data: {
+            image: new File(["img-bytes"], "overlay.png", { type: "image/png" }),
+            position: "bottom-right",
+            scale: 50,
+            opacity: 1,
+            offset_x: offsets.offset_x,
+            offset_y: offsets.offset_y,
+            show_start: 0,
+            show_end: null,
+        },
+    }
+}
+
 function edge(id: string, from: string, to: string, targetHandle: string | null = null): ComposeEdge {
     return { id, source: from, sourceHandle: null, target: to, targetHandle }
 }
@@ -617,6 +638,32 @@ describe("validate_compose", () => {
         const nodes = [source("src"), text("txt", items), output()]
         const edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
         expect(validate_compose(nodes, edges)).toEqual([])
+    })
+
+    it("accepts negative overlay offsets", () => {
+        const nodes = [source("src"), overlay("ovl", { offset_x: -10, offset_y: -20 }), output()]
+        const edges = [edge("e1", "src", "ovl"), edge("e2", "ovl", "out")]
+        const issues = validate_compose(nodes, edges)
+        expect(issues.filter((issue) => issue.field === "offset_x" || issue.field === "offset_y")).toEqual([])
+    })
+
+    it("flags non-finite overlay offsets", () => {
+        for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+            const nodes_x = [source("src"), overlay("ovl", { offset_x: value, offset_y: 0 }), output()]
+            const edges_x = [edge("e1", "src", "ovl"), edge("e2", "ovl", "out")]
+            expect(validate_compose(nodes_x, edges_x)).toContainEqual({
+                node_id: "ovl",
+                field: "offset_x",
+                message: "Overlay offset_x must be a finite number",
+            })
+            const nodes_y = [source("src"), overlay("ovl", { offset_x: 0, offset_y: value }), output()]
+            const edges_y = [edge("e1", "src", "ovl"), edge("e2", "ovl", "out")]
+            expect(validate_compose(nodes_y, edges_y)).toContainEqual({
+                node_id: "ovl",
+                field: "offset_y",
+                message: "Overlay offset_y must be a finite number",
+            })
+        }
     })
 })
 

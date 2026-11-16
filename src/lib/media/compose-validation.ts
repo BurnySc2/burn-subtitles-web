@@ -450,18 +450,18 @@ export function validate_compose(
                     message: "Overlay opacity must be between 0 and 1",
                 })
             }
-            if (!Number.isFinite(offset_x) || offset_x < 0) {
+            if (!Number.isFinite(offset_x)) {
                 issues.push({
                     node_id: node.id,
                     field: "offset_x",
-                    message: "Overlay offset_x must not be negative",
+                    message: "Overlay offset_x must be a finite number",
                 })
             }
-            if (!Number.isFinite(offset_y) || offset_y < 0) {
+            if (!Number.isFinite(offset_y)) {
                 issues.push({
                     node_id: node.id,
                     field: "offset_y",
-                    message: "Overlay offset_y must not be negative",
+                    message: "Overlay offset_y must be a finite number",
                 })
             }
             if (!Number.isFinite(show_start) || show_start < 0) {
