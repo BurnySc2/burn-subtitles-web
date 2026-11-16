@@ -1,13 +1,7 @@
 import type { OverlayPosition } from "./compose-types"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
-import {
-    add_canvas_frame,
-    CRF_INVALID_MESSAGE,
-    draw_contain_fit,
-    parse_crf_override,
-    with_canvas_encode,
-} from "./transition-utils"
+import { add_canvas_frame, draw_contain_fit, with_canvas_encode } from "./transition-utils"
 
 export interface ImageProbe {
     width: number
@@ -82,7 +76,6 @@ export interface RenderOverlayOptions {
     height: number
     fps: number
     quality: TransitionQuality
-    crf?: number | string | null
     audio_quality?: TransitionAudioQuality
     on_progress?: (progress: number) => void
     signal?: AbortSignal
@@ -119,11 +112,6 @@ function validate_overlay_options(options: RenderOverlayOptions): void {
         quality !== "ultra"
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown overlay quality.")
-    }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
     if (options.audio_quality !== undefined) {
         if (
@@ -199,7 +187,6 @@ export async function render_overlay(options: RenderOverlayOptions): Promise<Ren
             height,
             fps,
             quality,
-            crf_raw: options.crf ?? null,
             audio_probe: probe,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: true,

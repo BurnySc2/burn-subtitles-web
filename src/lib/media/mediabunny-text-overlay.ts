@@ -1,13 +1,7 @@
 import { MAX_TEXT_ITEMS, type OverlayPosition, TEXT_ANCHORS, type TextItem } from "./compose-types"
 import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
-import {
-    add_canvas_frame,
-    CRF_INVALID_MESSAGE,
-    draw_contain_fit,
-    parse_crf_override,
-    with_canvas_encode,
-} from "./transition-utils"
+import { add_canvas_frame, draw_contain_fit, with_canvas_encode } from "./transition-utils"
 
 export interface TextAnchorPoint {
     x: number
@@ -21,7 +15,6 @@ export interface RenderTextOverlayOptions {
     height: number
     fps: number
     quality: TransitionQuality
-    crf?: number | string | null
     audio_quality?: TransitionAudioQuality
     on_progress?: (progress: number) => void
     signal?: AbortSignal
@@ -275,11 +268,6 @@ export function validate_text_options(options: RenderTextOverlayOptions): void {
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown text overlay quality.")
     }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
-    }
     if (options.audio_quality !== undefined) {
         if (
             options.audio_quality !== "96k" &&
@@ -326,7 +314,6 @@ export async function render_text_overlay(options: RenderTextOverlayOptions): Pr
             height,
             fps,
             quality,
-            crf_raw: options.crf ?? null,
             audio_probe: probe,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: true,

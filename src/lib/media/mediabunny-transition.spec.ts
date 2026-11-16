@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { ProbeResult, RenderTransitionOptions } from "./mediabunny-transition"
 import { ClipError, render_transition, resolve_transition_timeline } from "./mediabunny-transition"
+import { quality_to_video_config } from "./transition-utils"
 
 const test_file = (name: string) => new File([], name, { type: "video/mp4" })
 
@@ -84,14 +85,6 @@ describe("render_transition guards", () => {
         ).rejects.toMatchObject({ code: "INVALID_RANGE" })
     })
 
-    it("rejects out-of-range CRF overrides with INVALID_RANGE", async () => {
-        for (const crf of [-1, 52, "abc"]) {
-            await expect(
-                render_transition({ ...base_options(), crf: crf as RenderTransitionOptions["crf"] }),
-            ).rejects.toMatchObject({ code: "INVALID_RANGE" })
-        }
-    })
-
     it("rejects unknown audio quality values with INVALID_RANGE", async () => {
         await expect(
             render_transition({
@@ -165,6 +158,16 @@ describe("render_transition guards", () => {
         expect(error).toBeInstanceOf(ClipError)
         expect((error as ClipError).code).toBe("INVALID_RANGE")
         expect((error as ClipError).message).toBe("Transition duration must be greater than 0 seconds.")
+    })
+})
+
+describe("transition quality (VBR-only)", () => {
+    it("maps every quality tier to a VBR bitrate with no quantizer", () => {
+        for (const quality of ["low", "medium", "high", "very-high", "ultra"] as const) {
+            const config = quality_to_video_config(quality, 1280, 720, 30)
+            expect(config.bitrate).toBeGreaterThan(0)
+            expect("quantizer" in config).toBe(false)
+        }
     })
 })
 

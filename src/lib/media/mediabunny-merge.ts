@@ -4,10 +4,8 @@ import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
     add_canvas_frame,
-    CRF_INVALID_MESSAGE,
     decode_full_audio,
     draw_contain_fit,
-    parse_crf_override,
     resolve_audio_bitrate,
     TRANSITION_AUDIO_BITRATE_MAX,
     TRANSITION_AUDIO_BITRATE_MIN,
@@ -20,7 +18,6 @@ export interface RenderMergeOptions {
     height: number
     fps: number
     quality: TransitionQuality
-    crf?: number | string | null
     audio_quality?: TransitionAudioQuality
     on_progress?: (progress: number) => void
     signal?: AbortSignal
@@ -62,11 +59,6 @@ function validate_merge_options(options: RenderMergeOptions): void {
         quality !== "ultra"
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown merge quality.")
-    }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
     if (options.audio_quality !== undefined) {
         if (
@@ -136,7 +128,6 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
             height,
             fps,
             quality,
-            crf_raw: options.crf ?? null,
             audio_probe: null,
             audio_quality: options.audio_quality ?? "source-max",
             needs_audio: false,

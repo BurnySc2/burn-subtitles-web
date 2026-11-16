@@ -3,7 +3,6 @@ import { Handle, Position } from "@xyflow/svelte"
 import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
 import { compose_node_durations } from "$lib/media/compose-validation"
-import { QUALITY_QUANTIZER } from "$lib/media/transition-utils"
 
 let {
     id = "",
@@ -27,17 +26,6 @@ function on_number_input(field: "width" | "height" | "fps", raw: string): void {
     const parsed = Number(raw)
     if (raw.trim() !== "" && Number.isFinite(parsed)) {
         update_data({ [field]: parsed })
-    }
-}
-
-function on_crf_input(raw: string): void {
-    if (raw.trim() === "") {
-        update_data({ crf: null })
-        return
-    }
-    const parsed = Number(raw)
-    if (Number.isFinite(parsed)) {
-        update_data({ crf: parsed })
     }
 }
 </script>
@@ -171,20 +159,6 @@ function on_crf_input(raw: string): void {
                 <option value="256k">256k</option>
                 <option value="320k">320k</option>
             </select>
-        </label>
-        <label class="flex flex-col gap-1 text-xs text-gray-600">
-            CRF override
-            <input
-                id={id ? `${id}-crf` : undefined}
-                type="number"
-                min="0"
-                max="51"
-                step="1"
-                value={data.crf ?? ""}
-                oninput={(e) => on_crf_input(e.currentTarget.value)}
-                placeholder={`auto (${QUALITY_QUANTIZER[data.quality] ?? "bitrate"})`}
-                class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
-            >
         </label>
     </div>
 </div>

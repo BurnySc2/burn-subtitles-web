@@ -12,13 +12,7 @@ import {
     text_size_at,
 } from "./mediabunny-text-overlay"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
-import {
-    add_canvas_frame,
-    CRF_INVALID_MESSAGE,
-    draw_contain_fit,
-    parse_crf_override,
-    with_canvas_encode,
-} from "./transition-utils"
+import { add_canvas_frame, draw_contain_fit, with_canvas_encode } from "./transition-utils"
 
 export type StackHead = { kind: "blob"; file: File | null } | { kind: "solid"; color: string; duration: number }
 
@@ -42,7 +36,6 @@ export interface StackTarget {
     height: number
     fps: number
     quality: TransitionQuality
-    crf: number | string | null
     audio_quality: TransitionAudioQuality
 }
 
@@ -235,11 +228,6 @@ function validate_stack_options(options: RenderStackOptions): void {
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown stack quality.")
     }
-    try {
-        parse_crf_override(target.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
-    }
     if (
         target.audio_quality !== "96k" &&
         target.audio_quality !== "128k" &&
@@ -320,7 +308,6 @@ export async function render_compose_stack(options: RenderStackOptions): Promise
             height,
             fps,
             quality,
-            crf_raw: target.crf ?? null,
             audio_probe: probe,
             audio_quality: target.audio_quality,
             needs_audio: head_file !== null,

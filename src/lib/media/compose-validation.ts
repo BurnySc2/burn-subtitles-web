@@ -5,7 +5,7 @@ import { node_output_duration, pred_by_handle, resolve_trim_range, trim_upstream
 import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { format_timecode } from "./timecode"
-import { parse_crf_override, TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
+import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES } from "./transition-utils"
 
 export { compose_node_durations } from "./compose-trim"
 
@@ -329,15 +329,6 @@ export function validate_compose(
                     node_id: node.id,
                     field: "audio_quality",
                     message: "Unknown output audio quality.",
-                })
-            }
-            try {
-                parse_crf_override(node.data.crf ?? null)
-            } catch {
-                issues.push({
-                    node_id: node.id,
-                    field: "crf",
-                    message: "CRF must be a number from 0 to 51.",
                 })
             }
         } else if (node.type === "subtitles") {

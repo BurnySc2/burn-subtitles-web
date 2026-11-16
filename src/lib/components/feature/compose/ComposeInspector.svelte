@@ -19,11 +19,7 @@ import type {
 import { SUBTITLE_BURN_DEFAULTS } from "$lib/media/compose-types"
 import { compose_node_durations, validate_compose } from "$lib/media/compose-validation"
 import { type EffectiveEncodeReport, format_encode_badge } from "$lib/media/encode-report"
-import {
-    QUALITY_QUANTIZER,
-    TRANSITION_AUDIO_MODE_DEFAULT,
-    TRANSITION_AUDIO_MODE_HINTS,
-} from "$lib/media/transition-utils"
+import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODE_HINTS } from "$lib/media/transition-utils"
 import {
     build_datalist_id,
     font_registry_version,
@@ -279,17 +275,6 @@ function on_number_input(raw: string, apply: (value: number) => void): void {
     const parsed = Number(raw)
     if (raw.trim() !== "" && Number.isFinite(parsed)) {
         apply(parsed)
-    }
-}
-
-function on_crf_input(raw: string): void {
-    if (raw.trim() === "") {
-        patch_output({ crf: null })
-        return
-    }
-    const parsed = Number(raw)
-    if (Number.isFinite(parsed)) {
-        patch_output({ crf: parsed })
     }
 }
 
@@ -1373,40 +1358,22 @@ function probe_summary(node: ComposeNode): string {
                     <option value="320k">320k</option>
                 </select>
             </label>
-            <label class="flex flex-col gap-1 text-sm font-medium">
-                CRF override
-                <input
-                    type="number"
-                    min="0"
-                    max="51"
-                    step="1"
-                    value={selected.data.crf ?? ""}
-                    oninput={(e) => on_crf_input(e.currentTarget.value)}
-                    placeholder={`auto (${QUALITY_QUANTIZER[selected.data.quality] ?? "bitrate"})`}
-                    class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
+            {#if encode_hint.text}
+                <small
+                    class="text-xs font-normal text-gray-500"
+                    data-testid="encode-hint"
                 >
-                {#if selected.data.quality === "ultra"}
-                    <small class="text-xs font-normal text-gray-500">
-                        Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.
-                    </small>
-                {/if}
-                {#if encode_hint.text}
-                    <small
-                        class="text-xs font-normal text-gray-500"
-                        data-testid="encode-hint"
-                    >
-                        {encode_hint.text}
-                    </small>
-                {/if}
-                {#if encode_badge}
-                    <span
-                        class="text-xs font-normal text-gray-500"
-                        data-testid="encode-badge"
-                    >
-                        {encode_badge}
-                    </span>
-                {/if}
-            </label>
+                    {encode_hint.text}
+                </small>
+            {/if}
+            {#if encode_badge}
+                <span
+                    class="text-xs font-normal text-gray-500"
+                    data-testid="encode-badge"
+                >
+                    {encode_badge}
+                </span>
+            {/if}
             <p class="text-sm text-gray-600">Result duration: {selected_duration?.toFixed(2) ?? "—"}s</p>
         {/if}
         {#key selected.id}

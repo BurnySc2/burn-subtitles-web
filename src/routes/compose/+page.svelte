@@ -131,7 +131,6 @@ function handle_add(kind: ComposeNodeKind): void {
                     fps: 30,
                     quality: "medium",
                     audio_quality: "source-max",
-                    crf: null,
                 },
             }
             break

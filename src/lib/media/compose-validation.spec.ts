@@ -363,21 +363,7 @@ describe("validate_compose", () => {
         ).toBe(true)
     })
 
-    it("flags invalid output CRF and unknown audio quality", () => {
-        const bad_crf: ComposeNode = {
-            id: "out",
-            type: "output",
-            position: { x: 0, y: 0 },
-            data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium", crf: 99 },
-        }
-        const crf_nodes = [source("src"), trim("trim"), bad_crf]
-        const crf_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
-        expect(validate_compose(crf_nodes, crf_edges)).toContainEqual({
-            node_id: "out",
-            field: "crf",
-            message: "CRF must be a number from 0 to 51.",
-        })
-
+    it("flags unknown output audio quality", () => {
         const bad_quality: ComposeNode = {
             id: "out",
             type: "output",
@@ -392,7 +378,8 @@ describe("validate_compose", () => {
             },
         }
         const quality_nodes = [source("src"), trim("trim"), bad_quality]
-        expect(validate_compose(quality_nodes, crf_edges)).toContainEqual({
+        const quality_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(quality_nodes, quality_edges)).toContainEqual({
             node_id: "out",
             field: "audio_quality",
             message: "Unknown output audio quality.",

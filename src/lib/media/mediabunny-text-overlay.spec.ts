@@ -201,7 +201,7 @@ describe("validate_text_options", () => {
         expect(() => validate_text_options(base_options())).not.toThrow()
     })
 
-    it("rejects bad width, fps, quality, and crf with INVALID_RANGE", () => {
+    it("rejects bad width, fps, and quality with INVALID_RANGE", () => {
         const bad: Array<Partial<RenderTextOverlayOptions>> = [
             { width: 0 },
             { width: 1280.5 },
@@ -209,9 +209,6 @@ describe("validate_text_options", () => {
             { fps: 0 },
             { fps: Number.NaN },
             { quality: "extreme" as RenderTextOverlayOptions["quality"] },
-            { crf: -1 },
-            { crf: 52 },
-            { crf: "abc" },
         ]
         for (const override of bad) {
             try {

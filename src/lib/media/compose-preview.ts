@@ -107,14 +107,9 @@ function subgraph_fingerprint(target_id: string, nodes: ComposeNode[], edges: Co
         .sort()
     const output = find_output_node(nodes)
     const output_settings = output
-        ? [
-              output.data.width,
-              output.data.height,
-              output.data.fps,
-              output.data.quality,
-              output.data.crf ?? "null",
-              output.data.audio_quality,
-          ].join(":")
+        ? [output.data.width, output.data.height, output.data.fps, output.data.quality, output.data.audio_quality].join(
+              ":",
+          )
         : "no-output"
     return JSON.stringify([
         serial_nodes,
@@ -337,7 +332,6 @@ export async function get_node_preview_blob(
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
                     quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     easing: node.data.easing,
                     audio_mode: node.data.audio_mode,
@@ -376,7 +370,6 @@ export async function get_node_preview_blob(
                             height: output_node?.data.height ?? 1080,
                             fps: output_node?.data.fps ?? 30,
                             quality: output_node?.data.quality ?? "medium",
-                            crf: output_node?.data.crf ?? null,
                             audio_quality: output_node?.data.audio_quality ?? "source-max",
                             on_progress: slice,
                         },
@@ -393,7 +386,6 @@ export async function get_node_preview_blob(
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
                     quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
                     signal,
@@ -420,7 +412,6 @@ export async function get_node_preview_blob(
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
                     quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
                     signal,
@@ -437,7 +428,6 @@ export async function get_node_preview_blob(
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
                     quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: slice,
                     signal,
@@ -453,7 +443,6 @@ export async function get_node_preview_blob(
                     height: output_node?.data.height ?? 1080,
                     fps: output_node?.data.fps ?? 30,
                     quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
                     on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
                     signal,
                 })
@@ -468,7 +457,6 @@ export async function get_node_preview_blob(
                     fps: node.data.fps,
                     fit: node.data.fit,
                     quality: output_node?.data.quality ?? "medium",
-                    crf: output_node?.data.crf ?? null,
                     audio_quality: output_node?.data.audio_quality ?? "source-max",
                     on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
                     signal,

@@ -81,7 +81,6 @@ export interface OutputNodeData {
     fps: number
     quality: TransitionQuality
     audio_quality?: TransitionAudioQuality
-    crf?: number | null
     label?: string | null
 }
 

@@ -17,14 +17,11 @@ export function has_reencode_sink(nodes: ComposeNode[]): boolean {
 }
 
 export function effective_encode_config(output: OutputNodeData): TransitionVideoConfig {
-    return resolve_video_encode_config(output.quality, output.width, output.height, output.fps, output.crf ?? null)
+    return resolve_video_encode_config(output.quality, output.width, output.height, output.fps)
 }
 
 export function format_encode_hint(config: TransitionVideoConfig): string {
-    if (config.quantizer !== null) {
-        return `Effective: ${config.bitrate / 1_000_000} Mbps + quantizer ${config.quantizer}`
-    }
-    return `Effective: ${config.bitrate / 1_000_000} Mbps (bitrate-only)`
+    return `Effective: ${config.bitrate / 1_000_000} Mbps VBR`
 }
 
 export function encode_hint_for_graph(
@@ -33,7 +30,7 @@ export function encode_hint_for_graph(
 ): { reencodes: boolean; text: string | null } {
     const reencodes = has_reencode_sink(nodes)
     if (!reencodes) {
-        return { reencodes, text: "CRF inert on this graph (passthrough: source/trim→output only)" }
+        return { reencodes, text: "Passthrough graph (source/trim→output only): no re-encode" }
     }
     if (!output) {
         return { reencodes, text: null }

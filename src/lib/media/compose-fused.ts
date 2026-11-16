@@ -117,7 +117,6 @@ export function resolve_stack_target(
     const output_height = output_node?.data.height ?? 1080
     const output_fps = output_node?.data.fps ?? 30
     const output_quality: StackTarget["quality"] = output_node?.data.quality ?? "medium"
-    const output_crf: StackTarget["crf"] = output_node?.data.crf ?? null
     const output_audio: StackTarget["audio_quality"] = output_node?.data.audio_quality ?? "source-max"
     const terminal_node = segment.terminal_rescale_id ? (by_id.get(segment.terminal_rescale_id) ?? null) : null
     const terminal_rescale: RescaleNodeData | null = terminal_node?.type === "rescale" ? terminal_node.data : null
@@ -128,7 +127,6 @@ export function resolve_stack_target(
                 height: terminal_rescale.height,
                 fps: terminal_rescale.fps ?? output_fps,
                 quality: output_quality,
-                crf: output_crf,
                 audio_quality: output_audio,
             },
             terminal_rescale,
@@ -140,7 +138,6 @@ export function resolve_stack_target(
             height: output_height,
             fps: output_fps,
             quality: output_quality,
-            crf: output_crf,
             audio_quality: output_audio,
         },
         terminal_rescale: null,

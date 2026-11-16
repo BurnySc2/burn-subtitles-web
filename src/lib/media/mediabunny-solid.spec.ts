@@ -12,7 +12,7 @@ const base_options = (): RenderSolidOptions => ({
 })
 
 describe("render_solid_color guards", () => {
-    it("rejects invalid color, duration, dims, fps, quality, and crf with INVALID_RANGE", async () => {
+    it("rejects invalid color, duration, dims, fps, and quality with INVALID_RANGE", async () => {
         const bad_options: Partial<RenderSolidOptions>[] = [
             { color: "red" },
             { color: "#fff" },
@@ -23,15 +23,16 @@ describe("render_solid_color guards", () => {
             { height: -36 },
             { fps: 0 },
             { quality: "extreme" as RenderSolidOptions["quality"] },
-            { crf: -1 },
-            { crf: 52 },
-            { crf: "abc" },
         ]
         for (const override of bad_options) {
             await expect(render_solid_color({ ...base_options(), ...override })).rejects.toMatchObject({
                 code: "INVALID_RANGE",
             })
         }
+    })
+
+    it("is quality-only with no crf field", () => {
+        expect(base_options()).not.toHaveProperty("crf")
     })
 
     it("rejects a pre-aborted signal with CANCELLED before loading mediabunny", async () => {

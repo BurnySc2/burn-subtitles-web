@@ -33,7 +33,6 @@ test("renders color through rescale at 64x36 and half a second", async ({ page }
                     fps: 10,
                     quality: "medium",
                     audio_quality: "source-max",
-                    crf: null,
                     label: null,
                 },
             },

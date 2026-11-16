@@ -1,6 +1,13 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { render } from "vitest-browser-svelte"
 import { compose_state, revoke_all } from "$lib/media/compose-state.svelte"
 import type { ComposeNode } from "$lib/media/compose-types"
+import ComposeOutputNode from "./ComposeOutputNode.svelte"
+
+vi.mock("@xyflow/svelte", () => ({
+    Handle: () => null,
+    Position: { Left: "left", Right: "right", Top: "top", Bottom: "bottom" },
+}))
 
 // Mirrors the trim contract in ComposeOutputNode.svelte (oninput) and
 // ComposeInspector.svelte (patch_output_name): blank trims to null.
@@ -49,5 +56,19 @@ describe("ComposeOutputNode file name", () => {
         expect(selected_file_name()).toBeNull()
         patch_output_name("  a.mp4  ")
         expect(selected_file_name()).toBe("a.mp4")
+    })
+})
+
+describe("ComposeOutputNode quality controls", () => {
+    it("shows Quality and Audio quality selects with no CRF input", async () => {
+        const screen = await render(ComposeOutputNode, {
+            id: "out",
+            data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+            update_data: vi.fn(),
+        })
+        expect(screen.container.querySelector("#out-quality")).not.toBeNull()
+        expect(screen.container.querySelector("#out-audio-quality")).not.toBeNull()
+        expect(screen.container.querySelector("[id*='crf' i]")).toBeNull()
+        expect(screen.container.textContent).not.toMatch(/crf/i)
     })
 })

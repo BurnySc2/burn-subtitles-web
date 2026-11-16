@@ -23,7 +23,6 @@ export interface TransitionState {
     fps_mode: TransitionFpsMode
     quality: TransitionQuality
     audio_quality: TransitionAudioQuality
-    crf_override?: number | string | null
     easing: TransitionEasing
     is_processing: boolean
     progress: number
@@ -42,7 +41,6 @@ function initial_state(): TransitionState {
         fps_mode: "a",
         quality: "high",
         audio_quality: "source-max",
-        crf_override: undefined,
         easing: "linear",
         is_processing: false,
         progress: 0,
@@ -83,7 +81,6 @@ export function revoke_all_transition(): void {
     transition_state.fps_mode = fresh.fps_mode
     transition_state.quality = fresh.quality
     transition_state.audio_quality = fresh.audio_quality
-    transition_state.crf_override = fresh.crf_override
     transition_state.easing = fresh.easing
     transition_state.is_processing = fresh.is_processing
     transition_state.progress = fresh.progress

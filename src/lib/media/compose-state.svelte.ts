@@ -2,12 +2,7 @@ import type { ComposeEdge, ComposeNode, TextItem, ValidationIssue } from "./comp
 import { SUBTITLE_BURN_DEFAULTS, TEXT_ANCHORS } from "./compose-types"
 import { validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
-import {
-    parse_crf_override,
-    TRANSITION_AUDIO_MODE_DEFAULT,
-    TRANSITION_AUDIO_MODES,
-    type TransitionAudioMode,
-} from "./transition-utils"
+import { TRANSITION_AUDIO_MODE_DEFAULT, TRANSITION_AUDIO_MODES, type TransitionAudioMode } from "./transition-utils"
 
 export type ComposeRunStatus = "idle" | "running" | "done" | "error"
 
@@ -629,12 +624,7 @@ function parse_node(raw: unknown): ComposeNode {
             if (typeof audio_quality !== "string" || !AUDIO_QUALITIES.has(audio_quality)) {
                 throw new Error(`Node "${raw.id}": unknown output audio quality`)
             }
-            let crf: number | null
-            try {
-                crf = parse_crf_override(raw.data.crf as number | string | null | undefined)
-            } catch {
-                throw new Error(`Node "${raw.id}": CRF must be a number from 0 to 51`)
-            }
+            // Old JSON may carry a legacy override — ignored.
             return {
                 id: raw.id,
                 type: "output",
@@ -646,7 +636,6 @@ function parse_node(raw: unknown): ComposeNode {
                     fps: raw.data.fps,
                     quality: raw.data.quality as "low" | "medium" | "high" | "very-high" | "ultra",
                     audio_quality: audio_quality as "96k" | "128k" | "192k" | "256k" | "320k" | "source-max",
-                    crf,
                     label: parse_label(raw.data.label, raw.id),
                 },
             }

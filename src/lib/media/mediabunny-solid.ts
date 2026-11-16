@@ -1,6 +1,6 @@
 import { ClipError } from "./mediabunny-clip"
 import type { TransitionQuality } from "./transition-utils"
-import { add_canvas_frame, CRF_INVALID_MESSAGE, parse_crf_override, with_canvas_encode } from "./transition-utils"
+import { add_canvas_frame, with_canvas_encode } from "./transition-utils"
 
 export interface RenderSolidOptions {
     color: string
@@ -9,7 +9,6 @@ export interface RenderSolidOptions {
     height: number
     fps: number
     quality?: TransitionQuality
-    crf?: number | string | null
     signal?: AbortSignal
     on_progress?: (done: number, total: number) => void
 }
@@ -41,11 +40,6 @@ function validate_solid_options(options: RenderSolidOptions): void {
             throw new ClipError("INVALID_RANGE", "Unknown solid quality.")
         }
     }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
-    }
 }
 
 export async function render_solid_color(options: RenderSolidOptions): Promise<Blob> {
@@ -68,7 +62,6 @@ export async function render_solid_color(options: RenderSolidOptions): Promise<B
         height,
         fps,
         quality,
-        crf_raw: options.crf ?? null,
         audio_probe: null,
         audio_quality: "source-max",
         needs_audio: false,

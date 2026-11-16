@@ -9,7 +9,6 @@ import {
     decode_full_audio,
     EASING_REGISTRY,
     estimate_frame_count,
-    parse_crf_override,
     phase_at,
     quality_to_video_config,
     resolve_audio_bitrate,
@@ -125,22 +124,20 @@ describe("quality_to_video_config", () => {
         expect(quality_to_video_config("ultra", 1920, 1080, 30).bitrate).toBe(50_000_000)
     })
 
-    it("labels ultra as high-bitrate rather than bit-exact", () => {
-        expect(quality_to_video_config("ultra", 1920, 1080, 30).description).toContain("not bit-exact")
+    it("is bitrate-only VBR with no quantizer", () => {
+        for (const quality of ["low", "medium", "high", "very-high", "ultra"] as const) {
+            const config = quality_to_video_config(quality, 1920, 1080, 30)
+            expect(config).not.toHaveProperty("quantizer")
+        }
     })
 
-    it("maps tiers to CRF quantizers with ultra bitrate-only", () => {
-        expect(quality_to_video_config("low", 1920, 1080, 30).quantizer).toBe(30)
-        expect(quality_to_video_config("medium", 1920, 1080, 30).quantizer).toBe(26)
-        expect(quality_to_video_config("high", 1920, 1080, 30).quantizer).toBe(22)
-        expect(quality_to_video_config("very-high", 1920, 1080, 30).quantizer).toBe(18)
-        expect(quality_to_video_config("ultra", 1920, 1080, 30).quantizer).toBeNull()
-    })
-
-    it("prefers an explicit CRF override with tier bitrate as fallback", () => {
-        const config = quality_to_video_config("ultra", 1920, 1080, 30, 22)
-        expect(config.quantizer).toBe(22)
-        expect(config.bitrate).toBe(50_000_000)
+    it("reports very-high as 16M VBR and ultra as 50M VBR", () => {
+        const very_high = quality_to_video_config("very-high", 1920, 1080, 30)
+        expect(very_high.bitrate).toBe(16_000_000)
+        expect(very_high.description).toContain("16Mbps")
+        const ultra = quality_to_video_config("ultra", 1920, 1080, 30)
+        expect(ultra.bitrate).toBe(50_000_000)
+        expect(ultra.description).toContain("50Mbps")
     })
 })
 
@@ -173,28 +170,6 @@ describe("resolve_audio_bitrate", () => {
             ),
         ).toBe(200_000)
         expect(resolve_audio_bitrate(null, null, "source-max")).toBe(128_000)
-    })
-})
-
-describe("parse_crf_override", () => {
-    it("returns null for empty input", () => {
-        expect(parse_crf_override(null)).toBeNull()
-        expect(parse_crf_override(undefined)).toBeNull()
-        expect(parse_crf_override("")).toBeNull()
-    })
-
-    it("accepts numbers from 0 to 51", () => {
-        expect(parse_crf_override("22")).toBe(22)
-        expect(parse_crf_override(0)).toBe(0)
-        expect(parse_crf_override(51)).toBe(51)
-    })
-
-    it("rejects out-of-range or malformed CRF values", () => {
-        for (const raw of ["-1", "52", "abc"]) {
-            expect(() => parse_crf_override(raw)).toThrow(TimecodeError)
-        }
-        expect(() => parse_crf_override(-1)).toThrow(TimecodeError)
-        expect(() => parse_crf_override(99)).toThrow(TimecodeError)
     })
 })
 
@@ -264,13 +239,13 @@ describe("TRANSITION_AUDIO_MODE_HINTS", () => {
 })
 
 describe("resolve_video_encode_config", () => {
-    it("maps quality tier to quantizer and honors a CRF override", () => {
-        const tier_default = resolve_video_encode_config("very-high", 1920, 1080, 30, null)
-        expect(tier_default.quantizer).toBe(18)
-        expect(tier_default.bitrate).toBe(16_000_000)
-        const overridden = resolve_video_encode_config("high", 1920, 1080, 30, 18)
-        expect(overridden.quantizer).toBe(18)
-        expect(overridden.bitrate).toBe(10_000_000)
+    it("maps quality tiers to bitrate-only VBR configs", () => {
+        const very_high = resolve_video_encode_config("very-high", 1920, 1080, 30)
+        expect(very_high.bitrate).toBe(16_000_000)
+        expect(very_high).not.toHaveProperty("quantizer")
+        const ultra = resolve_video_encode_config("ultra", 1920, 1080, 30)
+        expect(ultra.bitrate).toBe(50_000_000)
+        expect(ultra).not.toHaveProperty("quantizer")
     })
 })
 
@@ -296,7 +271,6 @@ describe("with_canvas_encode", () => {
                 height: 64,
                 fps: 30,
                 quality: "low",
-                crf_raw: null,
                 audio_probe: null,
                 audio_quality: "source-max",
                 needs_audio: false,
@@ -319,7 +293,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: null,
             audio_quality: "source-max",
             needs_audio: false,
@@ -348,7 +321,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: { audio_bitrate: 128_000, overall_bitrate: null },
             audio_quality: "source-max",
             needs_audio: true,
@@ -373,7 +345,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: { audio_bitrate: 128_000, overall_bitrate: null },
             audio_quality: "192k",
             needs_audio: true,
@@ -399,7 +370,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: null,
             audio_quality: "128k",
             needs_audio: false,
@@ -433,7 +403,6 @@ describe("with_canvas_encode", () => {
             height: 64,
             fps: 30,
             quality: "low",
-            crf_raw: null,
             audio_probe: null,
             audio_quality: "source-max",
             needs_audio: false,
@@ -466,7 +435,6 @@ describe("with_canvas_encode", () => {
                 height: 64,
                 fps: 30,
                 quality: "low",
-                crf_raw: null,
                 audio_probe: null,
                 audio_quality: "source-max",
                 needs_audio: false,
@@ -550,7 +518,6 @@ describe("post-revert encoder defaults", () => {
             stub_mb as unknown as typeof import("mediabunny"),
             {
                 bitrate: 5_000_000,
-                quantizer: 26,
                 description: "medium",
             },
             { on_encode_report: (r: unknown) => reported.push(r) },

@@ -5,13 +5,11 @@ import { ClipError, probe_media } from "./mediabunny-clip"
 import type { TransitionAudioQuality, TransitionQuality } from "./transition-utils"
 import {
     add_canvas_frame,
-    CRF_INVALID_MESSAGE,
     create_encode_canvas,
     create_encode_video_source,
     decode_full_audio,
     draw_contain_fit,
     ensure_aac_encoder,
-    parse_crf_override,
     resolve_audio_bitrate,
 } from "./transition-utils"
 
@@ -31,7 +29,6 @@ export interface BurnSubtitlesOptions {
     height: number
     fps: number
     quality: TransitionQuality
-    crf?: number | string | null
     audio_quality?: TransitionAudioQuality
     on_progress?: (progress: number) => void
 }
@@ -54,11 +51,6 @@ function validate_burn_options(options: BurnSubtitlesOptions): void {
         quality !== "ultra"
     ) {
         throw new ClipError("INVALID_RANGE", "Unknown burn quality.")
-    }
-    try {
-        parse_crf_override(options.crf ?? null)
-    } catch {
-        throw new ClipError("INVALID_RANGE", CRF_INVALID_MESSAGE)
     }
     if (options.audio_quality !== undefined) {
         if (
@@ -197,14 +189,7 @@ export async function render_subtitles_burn(
         const target = new mb.BufferTarget()
         output = new mb.Output({ format: new mb.Mp4OutputFormat(), target })
         const { canvas, ctx: encode_ctx } = create_encode_canvas(opts.width, opts.height)
-        const video_source = create_encode_video_source(
-            mb,
-            opts.quality,
-            opts.width,
-            opts.height,
-            opts.fps,
-            opts.crf ?? null,
-        )
+        const video_source = create_encode_video_source(mb, opts.quality, opts.width, opts.height, opts.fps)
         output.addVideoTrack(video_source)
         const audio_tracks = await input.getAudioTracks()
         const sink = audio_tracks[0] ? new mb.AudioBufferSink(audio_tracks[0]) : null

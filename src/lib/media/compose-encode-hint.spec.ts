@@ -78,37 +78,26 @@ describe("effective_encode_config", () => {
     it("resolves the medium preset by default", () => {
         const config = effective_encode_config(output_data())
         expect(config.bitrate).toBe(5_000_000)
-        expect(config.quantizer).toBe(26)
     })
 
-    it("leaves ultra bitrate-only", () => {
+    it("leaves ultra at 50 Mbps", () => {
         const config = effective_encode_config(output_data({ quality: "ultra" }))
         expect(config.bitrate).toBe(50_000_000)
-        expect(config.quantizer).toBeNull()
-    })
-
-    it("applies a CRF override", () => {
-        const config = effective_encode_config(output_data({ crf: 20 }))
-        expect(config.quantizer).toBe(20)
     })
 })
 
 describe("format_encode_hint", () => {
-    it("formats quantizer and bitrate-only configs", () => {
-        expect(format_encode_hint({ bitrate: 5_000_000, quantizer: 26, description: "" })).toBe(
-            "Effective: 5 Mbps + quantizer 26",
-        )
-        expect(format_encode_hint({ bitrate: 50_000_000, quantizer: null, description: "" })).toBe(
-            "Effective: 50 Mbps (bitrate-only)",
-        )
+    it("formats bitrate configs as VBR", () => {
+        expect(format_encode_hint({ bitrate: 5_000_000, description: "" })).toBe("Effective: 5 Mbps VBR")
+        expect(format_encode_hint({ bitrate: 50_000_000, description: "" })).toBe("Effective: 50 Mbps VBR")
     })
 })
 
 describe("encode_hint_for_graph", () => {
-    it("marks passthrough graphs CRF-inert", () => {
+    it("marks passthrough graphs as no re-encode", () => {
         expect(encode_hint_for_graph([], output_data())).toEqual({
             reencodes: false,
-            text: "CRF inert on this graph (passthrough: source/trim→output only)",
+            text: "Passthrough graph (source/trim→output only): no re-encode",
         })
     })
 
@@ -120,7 +109,7 @@ describe("encode_hint_for_graph", () => {
     it("formats the effective config when a sink and output exist", () => {
         expect(encode_hint_for_graph([node("s", "subtitles")], output_data())).toEqual({
             reencodes: true,
-            text: "Effective: 5 Mbps + quantizer 26",
+            text: "Effective: 5 Mbps VBR",
         })
     })
 })
