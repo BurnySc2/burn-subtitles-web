@@ -1,5 +1,4 @@
 import type { ComposeOutputNode } from "./compose-graph"
-import { srt_to_vtt } from "./compose-subtitles"
 import type { ComposeEdge, ComposeNode, RescaleNodeData } from "./compose-types"
 import { ClipError } from "./mediabunny-clip"
 import {
@@ -148,10 +147,6 @@ export function resolve_stack_target(
     }
 }
 
-export interface ExecuteFusedSegmentOptions {
-    include_sidecar?: boolean
-}
-
 export async function execute_fused_segment(
     dispatch: FusedDispatch,
     by_id: Map<string, ComposeNode>,
@@ -160,27 +155,11 @@ export async function execute_fused_segment(
     output_node: ComposeOutputNode | null,
     on_slice: (progress: number) => void,
     signal?: AbortSignal,
-    options: ExecuteFusedSegmentOptions = {},
-): Promise<{ blob: Blob; sidecar_vtt: string | null }> {
+): Promise<Blob> {
     const { segment } = dispatch
     const layers = resolve_stack_layers(segment, by_id)
     const head = resolve_stack_head(segment, by_id, incoming, memo)
     const { target, terminal_rescale } = resolve_stack_target(segment, by_id, output_node)
-    let sidecar_vtt: string | null = null
-    if (options.include_sidecar) {
-        for (const id of segment.node_ids) {
-            const node = by_id.get(id)
-            if (node?.type === "subtitles" && (node.data.mode === "mux" || node.data.mode === "sidecar")) {
-                const content = node.data.content ?? (node.data.file ? await node.data.file.text() : null)
-                if (content === null || content.trim() === "") {
-                    throw new ClipError("FAILED", "Subtitle content is empty.")
-                }
-                if (node.data.mode === "sidecar") {
-                    sidecar_vtt ??= srt_to_vtt(content)
-                }
-            }
-        }
-    }
     const result = await render_compose_stack({
         head,
         layers,
@@ -189,5 +168,5 @@ export async function execute_fused_segment(
         signal,
         on_progress: on_slice,
     })
-    return { blob: result.blob, sidecar_vtt }
+    return result.blob
 }

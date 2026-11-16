@@ -1,7 +1,8 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
-import { first_dropped_file, is_accepted } from "$lib/media/compose-drop"
-import { set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
+import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
+import { handle_accepted_file } from "$lib/media/compose-file-handler"
+import { clear_preview_url, set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type SourceNodeData } from "$lib/media/compose-types"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
@@ -15,11 +16,9 @@ let {
     update_data: (patch: Partial<SourceNodeData>) => void
 } = $props()
 
-let file_input = $state<HTMLInputElement | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
-let is_dragging = $state(false)
-let token = 0
+let token = { n: 0 }
 let editing_label = $state(false)
 let label_draft = $state("")
 
@@ -51,35 +50,60 @@ async function handle_file(file: File | null): Promise<void> {
     if (!file || !id) {
         return
     }
-    if (!is_accepted(file, "source")) {
-        token += 1
-        update_data({ file: null, probe: null })
-        error = "Please select a video or audio file."
-        probing = false
-        return
-    }
-    const mine = ++token
-    probing = true
-    error = null
-    update_data({ file, probe: null })
-    const url = URL.createObjectURL(file)
-    set_source_file(id, file, url)
-    try {
-        const probe = await probe_media(file)
-        if (mine !== token) {
-            return
-        }
-        set_source_probe(id, file, probe)
-    } catch (caught) {
-        if (mine !== token) {
-            return
-        }
-        error = caught instanceof ClipError ? caught.message : `Failed to read media: ${(caught as Error).message}`
-    } finally {
-        if (mine === token) {
+    const accepted: File = file
+    const node_id: string = id
+    await handle_accepted_file({
+        file: accepted,
+        kind: "source",
+        token,
+        on_accept: async (mine) => {
+            probing = true
+            error = null
+            update_data({ file: accepted, probe: null })
+            const url = URL.createObjectURL(accepted)
+            set_source_file(node_id, accepted, url)
+            try {
+                const probe = await probe_media(accepted)
+                if (mine !== token.n) {
+                    return
+                }
+                set_source_probe(node_id, accepted, probe)
+            } catch (caught) {
+                if (mine !== token.n) {
+                    return
+                }
+                clear_preview_url(node_id)
+                update_data({ file: null, probe: null })
+                if (caught instanceof ClipError) {
+                    error = caught.message
+                } else if (caught instanceof Error) {
+                    error = `Failed to read media: ${caught.message}`
+                } else {
+                    error = "Failed to read media"
+                }
+            } finally {
+                if (mine === token.n) {
+                    probing = false
+                }
+            }
+        },
+        on_reject: (message) => {
+            token.n += 1
+            update_data({ file: null, probe: null })
+            error = message
             probing = false
-        }
+        },
+    })
+}
+
+function handle_remove(): void {
+    token.n += 1
+    probing = false
+    error = null
+    if (id) {
+        clear_preview_url(id)
     }
+    update_data({ file: null, probe: null })
 }
 </script>
 
@@ -145,70 +169,24 @@ async function handle_file(file: File | null): Promise<void> {
             </p>
         {/if}
     </div>
-    {#if probing}
-        <p class="mt-1 text-xs text-gray-500">Reading media…</p>
-    {:else if error}
-        <p class="mt-1 text-xs text-red-700">{error}</p>
-    {/if}
-    <!-- svelte-ignore a11y_no_static_element_interactions: inner button/input is the keyboard path; drop is enhancement only, so no role=button -->
-    <div
-        class="drop-zone nodrag mt-2 w-full"
-        class:drag-over={is_dragging}
-        ondragover={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = true
-        }}
-        ondragleave={(e) => {
-            if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                return
-            }
-            is_dragging = false
-        }}
-        ondrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = false
-            void handle_file(first_dropped_file(e))
-        }}
+    <p
+        id={id ? `${id}-status` : undefined}
+        aria-live="polite"
+        class={error && !probing ? "mt-1 text-xs text-red-700" : "mt-1 text-xs text-gray-500"}
     >
-        <input
-            id={id ? `${id}-file` : undefined}
-            bind:this={file_input}
-            type="file"
-            accept="video/*,audio/*"
-            class="nodrag hidden"
-            onchange={(e) => {
-                const file = e.currentTarget.files?.[0] ?? null
-                e.currentTarget.value = ""
-                void handle_file(file)
-            }}
-        >
-        <div class="mt-2 flex gap-2 nodrag">
-            <button
-                type="button"
-                onclick={() => file_input?.click()}
-                aria-label={choose_aria}
-                class="btn btn-primary btn-sm nodrag"
-            >
-                {choose_label}
-            </button>
-            {#if data.file}
-                <button
-                    type="button"
-                    onclick={() => {
-                        token += 1
-                        probing = false
-                        error = null
-                        // WHY orphan URL: preview_urls is private, next set_source_file revokes it
-                        update_data({ file: null, probe: null })
-                    }}
-                    aria-label={`Remove source file ${data.file.name}`}
-                    class="btn btn-sm nodrag bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
-                >
-                    Remove
-                </button>
-            {/if}
-        </div>
-    </div>
+        {probing ? "Reading media…" : (error ?? "")}
+    </p>
+    <ComposeFileDrop
+        accept="video/*,audio/*"
+        input_id={id ? `${id}-file` : undefined}
+        describedby={id ? `${id}-status` : undefined}
+        {choose_label}
+        {choose_aria}
+        file_name={data.file ? data.file.name : null}
+        show_remove={data.file !== null}
+        remove_aria={data.file ? `Remove source file ${data.file.name}` : "Remove source file"}
+        disabled={probing}
+        on_file={handle_file}
+        on_remove={handle_remove}
+    />
 </div>

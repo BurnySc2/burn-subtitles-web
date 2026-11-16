@@ -6,6 +6,7 @@ import {
     animated_text_key,
     is_animated_text,
     item_alpha,
+    measure_text_width,
     rasterize_animated_text,
     resolve_text_anchor,
     text_size_at,
@@ -139,12 +140,7 @@ export function collect_stack_segments(nodes: ComposeNode[], edges: ComposeEdge[
             continue
         }
         if (next.type === "subtitles") {
-            if (next.data.mode === "burn") {
-                break
-            }
-            chain.unshift(next)
-            current = next
-            continue
+            break
         }
         if (next.type === "rescale") {
             if (terminal_rescale_id !== null) {
@@ -185,6 +181,34 @@ export function collect_stack_segments(nodes: ComposeNode[], edges: ComposeEdge[
 }
 
 const UNSUPPORTED_MESSAGE = "This codec isn't supported for in-browser stack rendering."
+
+function wrap_stack_lines(text: string, font: string, max_width: number): string[] {
+    const paragraphs = text.split("\n")
+    const lines: string[] = []
+    for (const paragraph of paragraphs) {
+        const words = paragraph.split(/\s+/).filter((word) => word !== "")
+        if (words.length === 0) {
+            lines.push("")
+            continue
+        }
+        let current = words[0]
+        for (let i = 1; i < words.length; i += 1) {
+            const candidate = `${current} ${words[i]}`
+            const measured = measure_text_width(candidate, font)
+            if (measured === null) {
+                return [text]
+            }
+            if (measured <= max_width) {
+                current = candidate
+            } else {
+                lines.push(current)
+                current = words[i]
+            }
+        }
+        lines.push(current)
+    }
+    return lines.length > 0 ? lines : [text]
+}
 
 function validate_stack_options(options: RenderStackOptions): void {
     const { target, head } = options
@@ -466,14 +490,18 @@ export async function render_compose_stack(options: RenderStackOptions): Promise
                                         }
                                     }
                                     ctx.globalAlpha = alpha
-                                    ctx.font = `${size}px ${item.font}`
+                                    const font_str = `${size}px ${item.font}`
+                                    ctx.font = font_str
                                     ctx.textAlign = item.align
                                     ctx.textBaseline = "middle"
                                     ctx.fillStyle = item.color
-                                    if (item.max_width !== null) {
-                                        ctx.fillText(item.text, point.x, point.y, item.max_width * text_scale)
-                                    } else {
-                                        ctx.fillText(item.text, point.x, point.y)
+                                    const max_w = item.max_width !== null ? item.max_width * text_scale : null
+                                    const lines =
+                                        max_w !== null ? wrap_stack_lines(item.text, font_str, max_w) : [item.text]
+                                    const line_h = 1.2 * size
+                                    const start_y = point.y - ((lines.length - 1) * line_h) / 2
+                                    for (let line_index = 0; line_index < lines.length; line_index += 1) {
+                                        ctx.fillText(lines[line_index], point.x, start_y + line_index * line_h)
                                     }
                                 }
                             }

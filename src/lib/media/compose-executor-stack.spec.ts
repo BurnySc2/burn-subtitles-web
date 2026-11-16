@@ -5,6 +5,7 @@ import { extract_clip } from "./mediabunny-clip"
 import { render_compose_stack } from "./mediabunny-compose-stack"
 import { render_overlay } from "./mediabunny-overlay"
 import { render_rescale } from "./mediabunny-rescale"
+import { render_subtitles_burn } from "./mediabunny-subtitles"
 
 vi.mock("./mediabunny-clip", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./mediabunny-clip")>()
@@ -25,6 +26,8 @@ vi.mock("./mediabunny-rescale", async (importOriginal) => {
     const actual = await importOriginal<typeof import("./mediabunny-rescale")>()
     return { ...actual, render_rescale: vi.fn() }
 })
+
+vi.mock("./mediabunny-subtitles", () => ({ render_subtitles_burn: vi.fn() }))
 
 const mp4_blob = (text: string): Blob => new Blob([text], { type: "video/mp4" })
 
@@ -67,12 +70,14 @@ function rescale(id: string): ComposeNode {
     }
 }
 
-function subtitles(id: string, mode: "mux" | "sidecar"): ComposeNode {
+const VALID_SRT = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"
+
+function subtitles(id: string): ComposeNode {
     return {
         id,
         type: "subtitles",
         position: { x: 0, y: 0 },
-        data: { file: null, content: "1\n00:00:01,000 --> 00:00:02,000\nHi\n", mode },
+        data: { file: new File([VALID_SRT], "test.srt"), mode: "burn" },
     }
 }
 
@@ -98,6 +103,7 @@ function revoke(result_url: string | undefined): void {
 beforeEach(() => {
     vi.mocked(extract_clip).mockReset()
     vi.mocked(render_compose_stack).mockReset()
+    vi.mocked(render_subtitles_burn).mockReset()
     vi.mocked(render_overlay).mockReset()
     vi.mocked(render_rescale).mockReset()
     vi.mocked(extract_clip).mockImplementation(async (options) => ({
@@ -119,6 +125,7 @@ beforeEach(() => {
         cancel: () => Promise.resolve(),
     }))
     vi.mocked(render_rescale).mockImplementation(async () => mp4_blob("rescaled"))
+    vi.mocked(render_subtitles_burn).mockImplementation(async () => mp4_blob("burned"))
 })
 
 describe("execute_compose_graph fused stack", () => {
@@ -184,31 +191,16 @@ describe("execute_compose_graph fused stack", () => {
         revoke(result.output?.url)
     })
 
-    it("passes mux subtitles through the fused stack without a sidecar", async () => {
+    it("burns subtitles before the fused overlay stack", async () => {
         const result = await execute_compose_graph({
-            nodes: [source("s"), subtitles("sub", "mux"), overlay("o"), output()],
+            nodes: [source("s"), subtitles("sub"), overlay("o"), output()],
             edges: [edge("e1", "s", "sub"), edge("e2", "sub", "o"), edge("e3", "o", "out")],
         })
         expect(result.ok).toBe(true)
+        expect(vi.mocked(render_subtitles_burn)).toHaveBeenCalledTimes(1)
         expect(vi.mocked(render_compose_stack)).toHaveBeenCalledTimes(1)
         expect(vi.mocked(render_overlay)).not.toHaveBeenCalled()
-        expect(result.output?.sidecar_url).toBeNull()
         revoke(result.output?.url)
-    })
-
-    it("emits a VTT sidecar for sidecar subtitles in the fused stack", async () => {
-        const result = await execute_compose_graph({
-            nodes: [source("s"), subtitles("sub", "sidecar"), overlay("o"), output()],
-            edges: [edge("e1", "s", "sub"), edge("e2", "sub", "o"), edge("e3", "o", "out")],
-        })
-        expect(result.ok).toBe(true)
-        expect(vi.mocked(render_compose_stack)).toHaveBeenCalledTimes(1)
-        expect(vi.mocked(render_overlay)).not.toHaveBeenCalled()
-        expect(result.output?.sidecar_url?.startsWith("blob:")).toBe(true)
-        const vtt = result.output?.sidecar_url ? await (await fetch(result.output.sidecar_url)).text() : ""
-        expect(vtt).toContain("WEBVTT")
-        revoke(result.output?.url)
-        revoke(result.output?.sidecar_url ?? undefined)
     })
 
     it("maps fused span progress monotonically to completion", async () => {

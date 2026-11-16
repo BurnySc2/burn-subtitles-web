@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { ComposeEdge, ComposeNode, TextItem } from "./compose-types"
+import { parse_compose_json, serialize_compose } from "./compose-state.svelte"
+import type { ComposeEdge, ComposeNode, SubtitlesNodeData, TextItem } from "./compose-types"
 import { MAX_TEXT_ITEMS, TEXT_ANCHORS } from "./compose-types"
 import { compose_node_durations, validate_compose } from "./compose-validation"
 import type { ProbeResult } from "./mediabunny-clip"
@@ -34,6 +35,12 @@ function probe_with(duration: number | null): ProbeResult {
     }
 }
 
+const VALID_SRT = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"
+
+function srt_file(text: string = VALID_SRT): File {
+    return new File([text], "test.srt", { type: "text/plain" })
+}
+
 function source(id: string, duration: number | null = 120): ComposeNode {
     return {
         id,
@@ -43,12 +50,27 @@ function source(id: string, duration: number | null = 120): ComposeNode {
     }
 }
 
-function trim(id: string, start = 10, end = 20): ComposeNode {
+function trim(id: string, start: number | null = 10, end: number | null = 20): ComposeNode {
     return { id, type: "trim", position: { x: 0, y: 0 }, data: { start, end } }
 }
 
-function subtitles(id: string, content: string | null = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"): ComposeNode {
-    return { id, type: "subtitles", position: { x: 0, y: 0 }, data: { file: null, content, mode: "mux" } }
+function subtitles(id: string, file: File | null = srt_file()): ComposeNode {
+    return { id, type: "subtitles", position: { x: 0, y: 0 }, data: { file, mode: "burn" } }
+}
+
+function styled_subtitles(overrides: Partial<SubtitlesNodeData>): ComposeNode {
+    return {
+        id: "sub",
+        type: "subtitles",
+        position: { x: 0, y: 0 },
+        data: { file: srt_file(), mode: "burn", ...overrides },
+    }
+}
+
+function wired_subtitle_issues(overrides: Partial<SubtitlesNodeData>, is_chromium_browser = true) {
+    const nodes = [source("src"), styled_subtitles(overrides), output()]
+    const edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
+    return validate_compose(nodes, edges, is_chromium_browser)
 }
 
 function transition(id: string, start = 0, duration = 1): ComposeNode {
@@ -91,6 +113,27 @@ function text_item(overrides: Partial<TextItem> = {}): TextItem {
 
 function text(id: string, items: TextItem[] = [text_item()]): ComposeNode {
     return { id, type: "text", position: { x: 0, y: 0 }, data: { items } }
+}
+
+function overlay(
+    id: string,
+    offsets: { offset_x: number; offset_y: number } = { offset_x: 0, offset_y: 0 },
+): ComposeNode {
+    return {
+        id,
+        type: "overlay",
+        position: { x: 0, y: 0 },
+        data: {
+            image: new File(["img-bytes"], "overlay.png", { type: "image/png" }),
+            position: "bottom-right",
+            scale: 50,
+            opacity: 1,
+            offset_x: offsets.offset_x,
+            offset_y: offsets.offset_y,
+            show_start: 0,
+            show_end: null,
+        },
+    }
 }
 
 function edge(id: string, from: string, to: string, targetHandle: string | null = null): ComposeEdge {
@@ -184,7 +227,43 @@ describe("validate_compose", () => {
     it("flags trim ranges where end is not after start", () => {
         const nodes = [source("src"), trim("trim", 20, 10), output()]
         const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
-        expect(validate_compose(nodes, edges).some((issue) => issue.field === "range")).toBe(true)
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "end",
+            message: "Trim end must be larger than start.",
+        })
+    })
+
+    it("flags trims with neither start nor end", () => {
+        const nodes = [source("src"), trim("trim", null, null), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "range",
+            message: "Trim needs a start or an end — both empty trims nothing.",
+        })
+    })
+
+    it("flags open-ended trims without an upstream duration", () => {
+        const nodes = [source("src", null), trim("trim", 5, null), output()]
+        const edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(nodes, edges)).toContainEqual({
+            node_id: "trim",
+            field: "end",
+            message: "Trim end needs an upstream duration or an explicit value.",
+        })
+    })
+
+    it("clamps a null trim start and resolves a null end from upstream", () => {
+        const null_start = [source("src"), trim("trim", null, 20), output()]
+        const null_start_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(null_start, null_start_edges)).toEqual([])
+        expect(compose_node_durations(null_start, null_start_edges).get("trim")).toBe(20)
+
+        const null_end = [source("src"), trim("trim", 10, null), output()]
+        const null_end_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
+        expect(validate_compose(null_end, null_end_edges)).toEqual([])
+        expect(compose_node_durations(null_end, null_end_edges).get("trim")).toBe(110)
     })
 
     it("flags non-positive transition durations", () => {
@@ -197,20 +276,57 @@ describe("validate_compose", () => {
         })
     })
 
-    it("flags empty subtitles only when wired", () => {
-        const wired = [source("src"), subtitles("sub", "  "), output()]
+    it("flags a missing subtitle file only when wired", () => {
+        const wired = [source("src"), subtitles("sub", null), output()]
         const wired_edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
         expect(validate_compose(wired, wired_edges)).toContainEqual({
             node_id: "sub",
-            field: "content",
-            message: "Subtitle content must not be empty",
+            field: "file",
+            message: "SRT file is required — attach an .srt file.",
         })
 
         const idle = [source("src"), subtitles("sub", null), trim("trim"), output()]
         const idle_edges = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
         const idle_issues = validate_compose(idle, idle_edges)
-        expect(idle_issues.some((issue) => issue.field === "content")).toBe(false)
+        expect(idle_issues.some((issue) => issue.field === "file")).toBe(false)
         expect(idle_issues.length).toBeGreaterThan(0)
+    })
+
+    it("drops legacy content field on parse and still requires a file", () => {
+        const legacy_json = JSON.stringify({
+            version: 1,
+            nodes: [
+                { id: "src", type: "source", position: { x: 0, y: 0 }, data: { file: null } },
+                {
+                    id: "sub",
+                    type: "subtitles",
+                    position: { x: 0, y: 0 },
+                    data: { file: null, mode: "burn", content: VALID_SRT },
+                },
+                {
+                    id: "out",
+                    type: "output",
+                    position: { x: 0, y: 0 },
+                    data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                },
+            ],
+            edges: [
+                { id: "e1", source: "src", sourceHandle: null, target: "sub", targetHandle: null },
+                { id: "e2", source: "sub", sourceHandle: null, target: "out", targetHandle: null },
+            ],
+        })
+        const parsed = parse_compose_json(legacy_json)
+        const sub = parsed.nodes.find((node) => node.id === "sub")
+        expect(sub?.type).toBe("subtitles")
+        if (sub?.type === "subtitles") {
+            expect("content" in sub.data).toBe(false)
+        }
+        expect(serialize_compose(parsed.nodes, parsed.edges)).not.toContain("content")
+        expect(parsed.issues).toContainEqual({
+            node_id: "sub",
+            field: "file",
+            message: "SRT file is required — attach an .srt file.",
+        })
     })
 
     it("flags duplicate connections on the same handles", () => {
@@ -281,6 +397,128 @@ describe("validate_compose", () => {
             field: "audio_quality",
             message: "Unknown output audio quality.",
         })
+    })
+
+    it("requires strict 6-digit hex colors and flags shorthand, names, and malformed hex", () => {
+        for (const color of ["#ffff7f", "#ABCDEF", "#000000"]) {
+            const issues = wired_subtitle_issues({ text_color: color })
+            expect(issues.filter((issue) => issue.field === "text_color")).toEqual([])
+        }
+        for (const color of ["#fff", "#FFF", "#abc", "red", "#gggggg", "#ffff"]) {
+            expect(wired_subtitle_issues({ text_color: color })).toContainEqual({
+                node_id: "sub",
+                field: "text_color",
+                message: "Subtitle text_color must be a hex color like #ffffff",
+            })
+        }
+    })
+
+    it("enforces subtitle numeric boundaries and tolerates unset or NaN values", () => {
+        const cases = [
+            { field: "font_size", min: 8, max: 160 },
+            { field: "outline_size", min: 0, max: 10 },
+            { field: "shadow_size", min: 0, max: 10 },
+            { field: "horizontal_margin", min: 0, max: 2000 },
+            { field: "vertical_offset", min: 0, max: 2000 },
+        ] as const
+        for (const { field, min, max } of cases) {
+            for (const value of [min, max]) {
+                const issues = wired_subtitle_issues({ [field]: value } as unknown as Partial<SubtitlesNodeData>)
+                expect(issues.filter((issue) => issue.field === field)).toEqual([])
+            }
+            for (const value of [min - 1, max + 1]) {
+                const issues = wired_subtitle_issues({ [field]: value } as unknown as Partial<SubtitlesNodeData>)
+                expect(issues).toContainEqual({
+                    node_id: "sub",
+                    field,
+                    message: `Subtitle ${field} must be between ${min} and ${max}`,
+                })
+            }
+        }
+        expect(wired_subtitle_issues({}).filter((issue) => issue.field === "font_size")).toEqual([])
+        expect(wired_subtitle_issues({ font_size: Number.NaN }).filter((issue) => issue.field === "font_size")).toEqual(
+            [],
+        )
+        expect(
+            wired_subtitle_issues({ font_size: null } as unknown as Partial<SubtitlesNodeData>).filter(
+                (issue) => issue.field === "font_size",
+            ),
+        ).toEqual([])
+    })
+
+    it("flags unavailable subtitle font families and accepts empty or bundled families", () => {
+        expect(wired_subtitle_issues({ font_family: "NoSuchFontXYZ" })).toContainEqual({
+            node_id: "sub",
+            field: "font_family",
+            message: "Subtitle font is not available — load it in the font library",
+        })
+        expect(
+            wired_subtitle_issues({ font_family: "Roboto" }).filter((issue) => issue.field === "font_family"),
+        ).toEqual([])
+        expect(wired_subtitle_issues({}).filter((issue) => issue.field === "font_family")).toEqual([])
+        expect(wired_subtitle_issues({ font_family: "   " }).filter((issue) => issue.field === "font_family")).toEqual(
+            [],
+        )
+        expect(wired_subtitle_issues({ font_family: "a".repeat(201) })).toContainEqual({
+            node_id: "sub",
+            field: "font_family",
+            message: "Subtitle font_family must be at most 200 characters",
+        })
+    })
+
+    it("tolerates a legacy font_file stub on parse without emitting font issues", () => {
+        const legacy_json = JSON.stringify({
+            version: 1,
+            nodes: [
+                { id: "src", type: "source", position: { x: 0, y: 0 }, data: { file: null } },
+                {
+                    id: "sub",
+                    type: "subtitles",
+                    position: { x: 0, y: 0 },
+                    data: {
+                        file: null,
+                        mode: "burn",
+                        font_family: "Roboto",
+                        font_file: { name: "font.ttf", size: 1024, type: "font/ttf" },
+                    },
+                },
+                {
+                    id: "out",
+                    type: "output",
+                    position: { x: 0, y: 0 },
+                    data: { file_name: null, width: 1280, height: 720, fps: 30, quality: "medium" },
+                },
+            ],
+            edges: [
+                { id: "e1", source: "src", sourceHandle: null, target: "sub", targetHandle: null },
+                { id: "e2", source: "sub", sourceHandle: null, target: "out", targetHandle: null },
+            ],
+        })
+        const parsed = parse_compose_json(legacy_json)
+        const sub = parsed.nodes.find((node) => node.id === "sub")
+        expect(sub?.type).toBe("subtitles")
+        if (sub?.type === "subtitles") {
+            expect("font_file" in sub.data).toBe(false)
+            expect(sub.data.font_family).toBe("Roboto")
+        }
+        expect(serialize_compose(parsed.nodes, parsed.edges)).not.toContain("font_file")
+        expect(parsed.issues.some((issue) => issue.field === "font_file")).toBe(false)
+        expect(parsed.issues.some((issue) => issue.field === "font_family")).toBe(false)
+    })
+
+    it("warns about burn-in outside Chromium browsers", () => {
+        expect(wired_subtitle_issues({}, false)).toContainEqual({
+            node_id: "sub",
+            field: "mode",
+            message: "Burn mode subtitles render best in a Chromium browser such as Chrome or Edge",
+        })
+        expect(wired_subtitle_issues({}, true).filter((issue) => issue.field === "mode")).toEqual([])
+    })
+
+    it("accepts subtitle nodes with an attached file", () => {
+        const nodes = [source("src"), subtitles("sub"), output()]
+        const edges = [edge("e1", "src", "sub"), edge("e2", "sub", "out")]
+        expect(validate_compose(nodes, edges, true)).toEqual([])
     })
 
     it("accepts a valid single-item text node", () => {
@@ -401,6 +639,32 @@ describe("validate_compose", () => {
         const edges = [edge("e1", "src", "txt"), edge("e2", "txt", "out")]
         expect(validate_compose(nodes, edges)).toEqual([])
     })
+
+    it("accepts negative overlay offsets", () => {
+        const nodes = [source("src"), overlay("ovl", { offset_x: -10, offset_y: -20 }), output()]
+        const edges = [edge("e1", "src", "ovl"), edge("e2", "ovl", "out")]
+        const issues = validate_compose(nodes, edges)
+        expect(issues.filter((issue) => issue.field === "offset_x" || issue.field === "offset_y")).toEqual([])
+    })
+
+    it("flags non-finite overlay offsets", () => {
+        for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+            const nodes_x = [source("src"), overlay("ovl", { offset_x: value, offset_y: 0 }), output()]
+            const edges_x = [edge("e1", "src", "ovl"), edge("e2", "ovl", "out")]
+            expect(validate_compose(nodes_x, edges_x)).toContainEqual({
+                node_id: "ovl",
+                field: "offset_x",
+                message: "Overlay offset_x must be a finite number",
+            })
+            const nodes_y = [source("src"), overlay("ovl", { offset_x: 0, offset_y: value }), output()]
+            const edges_y = [edge("e1", "src", "ovl"), edge("e2", "ovl", "out")]
+            expect(validate_compose(nodes_y, edges_y)).toContainEqual({
+                node_id: "ovl",
+                field: "offset_y",
+                message: "Overlay offset_y must be a finite number",
+            })
+        }
+    })
 })
 
 describe("compose_node_durations", () => {
@@ -414,13 +678,36 @@ describe("compose_node_durations", () => {
         expect(durations.get("out")).toBe(10)
     })
 
-    it("yields null for disconnected trims and unknown probe durations", () => {
+    it("yields null for disconnected trims and explicit ranges without probe durations", () => {
         const stray = [source("src"), trim("stray"), output()]
         expect(compose_node_durations(stray, []).get("stray")).toBeNull()
         const unknown = [source("src", null), trim("trim", 10, 40), output()]
         const wired = [edge("e1", "src", "trim"), edge("e2", "trim", "out")]
         const durations = compose_node_durations(unknown, wired)
         expect(durations.get("src")).toBeNull()
-        expect(durations.get("trim")).toBeNull()
+        expect(durations.get("trim")).toBe(30)
+    })
+
+    it("flags chained trims exceeding the upstream trim duration", () => {
+        const nodes = [source("src"), trim("t1", 10, 20), trim("t2", 5, 15), output()]
+        const edges = [edge("e1", "src", "t1"), edge("e2", "t1", "t2"), edge("e3", "t2", "out")]
+        expect(compose_node_durations(nodes, edges).get("t2")).toBe(10)
+        expect(validate_compose(nodes, edges).some((issue) => issue.node_id === "t2" && issue.field === "end")).toBe(
+            true,
+        )
+    })
+
+    it("resolves trim durations after a transition against start_a plus b length", () => {
+        const nodes = [source("a", 120), source("b", 20), transition("x", 5, 1), trim("trim", 10, 20), output()]
+        const edges = [
+            edge("e1", "a", "x", "a"),
+            edge("e2", "b", "x", "b"),
+            edge("e3", "x", "trim"),
+            edge("e4", "trim", "out"),
+        ]
+        const durations = compose_node_durations(nodes, edges)
+        expect(durations.get("x")).toBe(25)
+        expect(durations.get("trim")).toBe(10)
+        expect(validate_compose(nodes, edges)).toEqual([])
     })
 })

@@ -4,7 +4,6 @@ import type { CustomFontState } from "$lib/temporary-storage.svelte"
 import { available_fonts } from "./fonts"
 
 export const CUSTOM_FONT_FAMILY = "CustomUploadedFont" as const
-export const FALLBACK_FONT_FAMILY = CUSTOM_FONT_FAMILY
 export const CUSTOM_TMP_PREFIX = "__custom." as const
 
 export type FontLoadErrorCode = "TIMEOUT" | "CORS_OR_NETWORK" | "INVALID_FONT" | "ABORTED"
@@ -45,7 +44,7 @@ export function parse_font_family(array_buffer: ArrayBuffer, fallback: string = 
     }
 }
 
-export function get_ext(filename: string): string {
+function get_ext(filename: string): string {
     const parts = filename.split(".")
     return parts.length > 1 ? (parts.pop()?.toLowerCase() ?? "") : ""
 }

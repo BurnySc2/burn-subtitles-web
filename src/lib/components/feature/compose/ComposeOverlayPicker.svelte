@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onDestroy } from "svelte"
-import { first_dropped_file, is_accepted } from "$lib/media/compose-drop"
+import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
+import { handle_accepted_file } from "$lib/media/compose-file-handler"
 import { compose_state } from "$lib/media/compose-state.svelte"
 import type { ImageProbe } from "$lib/media/mediabunny-overlay"
 
@@ -10,11 +11,14 @@ let thumb_url = $state<string | null>(null)
 let probe = $state<ImageProbe | null>(null)
 let probing = $state(false)
 let error = $state<string | null>(null)
-let is_dragging = $state(false)
-let token = 0
+let token = { n: 0 }
 
 let node = $derived(compose_state.nodes.find((candidate) => candidate.id === node_id) ?? null)
 let file_name = $derived(node && node.type === "overlay" ? (node.data.image?.name ?? null) : null)
+let choose_label = $derived(file_name ? "Replace file" : "Choose file")
+let choose_aria = $derived(file_name ? "Replace overlay image" : "Choose overlay image")
+let show_remove = $derived(file_name !== null)
+let remove_aria = $derived(file_name ? `Remove overlay image ${file_name}` : "Remove overlay image")
 
 let status_class = $derived(
     error ? "text-sm text-red-700" : file_name ? "text-sm font-medium text-green-700" : "text-sm text-gray-500",
@@ -31,46 +35,55 @@ async function handle_file(file: File | null): Promise<void> {
     if (!file) {
         return
     }
-    const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
-    if (!target || target.type !== "overlay") {
+    const target = file
+    const selected = compose_state.nodes.find((candidate) => candidate.id === node_id)
+    if (!selected || selected.type !== "overlay") {
         return
     }
-    const mine = ++token
-    probing = true
-    error = null
-    probe = null
-    revoke_thumb()
-    if (!is_accepted(file, "overlay")) {
-        target.data.image = null
-        error = "Please select an image file."
-        probing = false
-        return
-    }
-    thumb_url = URL.createObjectURL(file)
-    target.data.image = file
-    try {
-        const { probe_image } = await import("$lib/media/mediabunny-overlay")
-        const result = await probe_image(file)
-        if (mine !== token) {
-            return
-        }
-        probe = result
-    } catch (caught) {
-        if (mine !== token) {
-            return
-        }
-        target.data.image = null
-        revoke_thumb()
-        error = caught instanceof Error ? caught.message : "Failed to read image."
-    } finally {
-        if (mine === token) {
+    await handle_accepted_file({
+        file: target,
+        kind: "overlay",
+        token,
+        on_accept: async (mine) => {
+            const current = compose_state.nodes.find((candidate) => candidate.id === node_id)
+            if (!current || current.type !== "overlay") {
+                return
+            }
+            probing = true
+            error = null
+            probe = null
+            revoke_thumb()
+            thumb_url = URL.createObjectURL(target)
+            current.data.image = target
+            try {
+                const { probe_image } = await import("$lib/media/mediabunny-overlay")
+                const result = await probe_image(target)
+                if (mine !== token.n) {
+                    return
+                }
+                probe = result
+            } finally {
+                if (mine === token.n) {
+                    probing = false
+                }
+            }
+        },
+        on_reject: (message) => {
+            token.n += 1
+            probe = null
+            revoke_thumb()
+            const current = compose_state.nodes.find((candidate) => candidate.id === node_id)
+            if (current && current.type === "overlay") {
+                current.data.image = null
+            }
+            error = message
             probing = false
-        }
-    }
+        },
+    })
 }
 
 function handle_remove(): void {
-    token += 1
+    token.n += 1
     probing = false
     error = null
     probe = null
@@ -82,48 +95,25 @@ function handle_remove(): void {
 }
 
 onDestroy(() => {
-    token += 1
+    token.n += 1
     revoke_thumb()
 })
 </script>
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
     <h2 class="text-lg font-semibold">Overlay image</h2>
-    <!-- svelte-ignore a11y_no_static_element_interactions: inner input is the keyboard path; drop is enhancement only, so no role=button -->
-    <div
-        class="drop-zone nodrag"
-        class:drag-over={is_dragging}
-        ondragover={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = true
-        }}
-        ondragleave={(e) => {
-            if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                return
-            }
-            is_dragging = false
-        }}
-        ondrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = false
-            void handle_file(first_dropped_file(e))
-        }}
-    >
-        <input
-            type="file"
-            accept="image/*"
-            onchange={(e) => {
-                const file = e.currentTarget.files?.[0] ?? null
-                e.currentTarget.value = ""
-                void handle_file(file)
-            }}
-            aria-describedby="compose-overlay-status"
-            disabled={probing}
-            class="w-full rounded border border-gray-300 bg-white p-2 text-transparent file:mr-4 file:rounded file:border-0 file:bg-gray-700 file:px-3 file:py-1 file:text-white hover:file:bg-gray-800"
-        >
-    </div>
+    <ComposeFileDrop
+        accept="image/*"
+        {choose_label}
+        {choose_aria}
+        {file_name}
+        {show_remove}
+        {remove_aria}
+        describedby="compose-overlay-status"
+        disabled={probing}
+        on_file={handle_file}
+        on_remove={handle_remove}
+    />
     {#if thumb_url}
         <img
             src={thumb_url}
@@ -146,14 +136,4 @@ onDestroy(() => {
             No file chosen — select an image
         {/if}
     </p>
-    {#if file_name}
-        <button
-            type="button"
-            onclick={handle_remove}
-            aria-label={`Remove overlay image ${file_name}`}
-            class="self-start text-sm text-red-700 underline"
-        >
-            Remove
-        </button>
-    {/if}
 </div>

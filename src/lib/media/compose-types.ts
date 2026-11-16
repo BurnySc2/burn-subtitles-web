@@ -25,8 +25,8 @@ export interface SourceNodeData {
 }
 
 export interface TrimNodeData {
-    start: number
-    end: number
+    start: number | null
+    end: number | null
     label?: string | null
 }
 
@@ -43,12 +43,34 @@ export interface MergeNodeData {
     label?: string | null
 }
 
-export type SubtitleRenderMode = "mux" | "burn" | "sidecar"
+export type SubtitleVerticalAnchor = "top" | "center" | "bottom"
+
+export const SUBTITLE_BURN_DEFAULTS = {
+    font_family: "sans-serif",
+    font_size: 24,
+    text_color: "#ffff7f",
+    stroke_color: "#000000",
+    outline_size: 1,
+    shadow_size: 0,
+    horizontal_margin: 30,
+    vertical_anchor: "bottom",
+    vertical_offset: 0,
+    right_to_left: false,
+} as const
 
 export interface SubtitlesNodeData {
     file: File | null
-    content: string | null
-    mode: SubtitleRenderMode
+    mode: "burn"
+    font_family?: string
+    font_size?: number
+    text_color?: string
+    stroke_color?: string
+    outline_size?: number
+    shadow_size?: number
+    horizontal_margin?: number
+    vertical_anchor?: SubtitleVerticalAnchor
+    vertical_offset?: number
+    right_to_left?: boolean
     label?: string | null
 }
 
@@ -79,6 +101,7 @@ export interface OverlayNodeData {
     position: OverlayPosition
     scale: number
     opacity: number
+    /** Canvas-space px: +X right, +Y down, any anchor; negatives allowed. */
     offset_x: number
     offset_y: number
     show_start: number
@@ -108,6 +131,7 @@ export interface TextItem {
     color: string
     opacity: number
     anchor: OverlayPosition
+    /** Canvas-space px: +X right, +Y down, any anchor; negatives allowed. */
     offset_x: number
     offset_y: number
     align: "left" | "center" | "right"
@@ -214,7 +238,6 @@ export interface ComposeRunOutput {
     mime: string
     ext: string
     size_bytes: number
-    sidecar_url: string | null
 }
 
 export interface ComposeRunResult {

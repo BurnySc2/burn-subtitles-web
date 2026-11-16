@@ -16,8 +16,6 @@ export function format_time_remaining(processing_start_time: number | null, prog
     const elapsed_ms = Date.now() - processing_start_time
     const remaining_s = (estimated_total_duration_ms - elapsed_ms) / 1000
 
-    // console.log([estimated_total_duration_ms, elapsed_ms, remaining_s])
-
     if (remaining_s < 0) {
         return "Finishing up..."
     }

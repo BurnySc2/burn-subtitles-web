@@ -21,8 +21,6 @@ const mp4_blob = (text: string): Blob => new Blob([text], { type: "video/mp4" })
 
 const mp4_file = (name: string): File => new File([`${name}-bytes`], name, { type: "video/mp4" })
 
-const srt_content = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"
-
 function source(id: string): ComposeNode {
     return { id, type: "source", position: { x: 0, y: 0 }, data: { file: mp4_file(`${id}.mp4`), probe: null } }
 }
@@ -33,15 +31,6 @@ function trim(id: string, start = 10, end = 20): ComposeNode {
 
 function merge(id: string, input_count = 2): ComposeNode {
     return { id, type: "merge", position: { x: 0, y: 0 }, data: { input_count } }
-}
-
-function subtitles(id: string, mode: "mux" | "sidecar" = "sidecar"): ComposeNode {
-    return {
-        id,
-        type: "subtitles",
-        position: { x: 0, y: 0 },
-        data: { file: null, content: srt_content, mode },
-    }
 }
 
 function output(id = "out"): ComposeNode {
@@ -118,46 +107,6 @@ describe("execute_compose_graph merge order", () => {
         expect(call?.files).toHaveLength(2)
         const texts = [await call?.files[0].text(), await call?.files[1].text()]
         expect(texts).toEqual(["branch-a", "branch-b"])
-        if (result.output) {
-            URL.revokeObjectURL(result.output.url)
-        }
-    })
-})
-
-describe("execute_compose_graph vtt sidecar", () => {
-    it.each([
-        { mode: "sidecar" as const, expect_sidecar: true },
-        { mode: "mux" as const, expect_sidecar: false },
-    ])("emits sidecar_url only for sidecar subtitles (mode=$mode)", async ({ mode, expect_sidecar }) => {
-        const result = await execute_compose_graph({
-            nodes: [source("s"), subtitles("sub", mode), output()],
-            edges: [edge("e1", "s", "sub"), edge("e2", "sub", "out")],
-        })
-        expect(result.ok).toBe(true)
-        if (expect_sidecar) {
-            expect(result.output?.sidecar_url?.startsWith("blob:")).toBe(true)
-            const sidecar_text = await (await fetch(result.output?.sidecar_url as string)).text()
-            expect(sidecar_text).toContain("WEBVTT")
-            if (result.output?.sidecar_url) {
-                URL.revokeObjectURL(result.output.sidecar_url)
-            }
-        } else {
-            expect(result.output?.sidecar_url).toBeNull()
-        }
-        expect(vi.mocked(extract_clip)).not.toHaveBeenCalled()
-        expect(vi.mocked(render_merge)).not.toHaveBeenCalled()
-        if (result.output) {
-            URL.revokeObjectURL(result.output.url)
-        }
-    })
-
-    it("omits sidecar_url without a subtitles node", async () => {
-        const result = await execute_compose_graph({
-            nodes: [source("s"), trim("t"), output()],
-            edges: [edge("e1", "s", "t"), edge("e2", "t", "out")],
-        })
-        expect(result.ok).toBe(true)
-        expect(result.output?.sidecar_url).toBeNull()
         if (result.output) {
             URL.revokeObjectURL(result.output.url)
         }

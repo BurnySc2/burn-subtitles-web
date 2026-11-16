@@ -19,13 +19,10 @@ export async function parse_odt(file: File) {
     const data = doc.getElementsByTagName("table:table")
     // @ts-expect-error
     const sheet_row_column = [...data].map((sheet: HTMLElement) => {
-        // console.log(data)
         // @ts-expect-error
         return [...sheet.getElementsByTagName("table:table-row")].map((row: HTMLElement) => {
-            // console.log(row)
             // @ts-expect-error
             return [...row.getElementsByTagName("table:table-cell")].map((cell: HTMLElement) => {
-                // console.log(cell)
                 return cell.textContent
             })
         })
@@ -55,7 +52,6 @@ const srt_data = $derived.by(async () => {
             return start <= index && index <= end
         })
         .map((row) => {
-            // console.log(row)
             return row[column - 1] ?? ""
         })
 })

@@ -22,7 +22,7 @@ function node(id: string, type: ComposeNode["type"] = "trim"): ComposeNode {
         case "merge":
             return { id, type, position, data: { input_count: 2 } }
         case "subtitles":
-            return { id, type, position, data: { file: null, content: null, mode: "mux" } }
+            return { id, type, position, data: { file: null, mode: "burn" } }
         case "overlay":
             return {
                 id,

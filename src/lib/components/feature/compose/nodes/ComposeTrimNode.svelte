@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
 import { compose_state } from "$lib/media/compose-state.svelte"
+import { parse_trim_field } from "$lib/media/compose-trim"
 import { compose_node_title, type TrimNodeData } from "$lib/media/compose-types"
 import { compose_node_durations } from "$lib/media/compose-validation"
 
@@ -22,9 +23,9 @@ let title = $derived(compose_node_title("trim", data.label))
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
 
-function on_number_input(field: "start" | "end", raw: string): void {
-    const parsed = Number(raw)
-    if (raw.trim() !== "" && Number.isFinite(parsed)) {
+function on_trim_input(field: "start" | "end", raw: string): void {
+    const parsed = parse_trim_field(raw)
+    if (parsed !== undefined) {
         update_data({ [field]: parsed })
     }
 }
@@ -85,8 +86,9 @@ function on_number_input(field: "start" | "end", raw: string): void {
                 type="number"
                 min="0"
                 step="0.001"
-                value={data.start}
-                oninput={(e) => on_number_input("start", e.currentTarget.value)}
+                value={data.start ?? ""}
+                placeholder="0 = from start"
+                oninput={(e) => on_trim_input("start", e.currentTarget.value)}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>
@@ -97,8 +99,9 @@ function on_number_input(field: "start" | "end", raw: string): void {
                 type="number"
                 min="0"
                 step="0.001"
-                value={data.end}
-                oninput={(e) => on_number_input("end", e.currentTarget.value)}
+                value={data.end ?? ""}
+                placeholder="empty = to end"
+                oninput={(e) => on_trim_input("end", e.currentTarget.value)}
                 class="nodrag w-full rounded border border-gray-300 px-2 py-1 text-sm text-gray-900"
             >
         </label>

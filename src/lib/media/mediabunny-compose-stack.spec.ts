@@ -68,12 +68,14 @@ function merge(id: string): ComposeNode {
     return { id, type: "merge", position: { x: 0, y: 0 }, data: { input_count: 2 } }
 }
 
-function subtitles(id: string, mode: "mux" | "sidecar" | "burn"): ComposeNode {
+const VALID_SRT = "1\n00:00:01,000 --> 00:00:02,000\nHi\n"
+
+function subtitles(id: string): ComposeNode {
     return {
         id,
         type: "subtitles",
         position: { x: 0, y: 0 },
-        data: { file: null, content: "1\n00:00:01,000 --> 00:00:02,000\nHi\n", mode },
+        data: { file: new File([VALID_SRT], "test.srt"), mode: "burn" },
     }
 }
 
@@ -165,23 +167,12 @@ describe("collect_stack_segments", () => {
     })
 
     it("splits at a burn subtitles barrier", () => {
-        const nodes = [source("s"), subtitles("sub", "burn"), overlay("o"), output()]
+        const nodes = [source("s"), subtitles("sub"), overlay("o"), output()]
         const edges = [edge("e1", "s", "sub"), edge("e2", "sub", "o"), edge("e3", "o", "out")]
         const segments = collect_stack_segments(nodes, edges)
         expect(segments).toHaveLength(1)
         expect(segments[0].head_id).toBeNull()
         expect(segments[0].node_ids).toEqual(["o", "out"])
-    })
-
-    it("passes mux and sidecar subtitles through without splitting", () => {
-        for (const mode of ["mux", "sidecar"] as const) {
-            const nodes = [source("s"), subtitles("sub", mode), overlay("o"), output()]
-            const edges = [edge("e1", "s", "sub"), edge("e2", "sub", "o"), edge("e3", "o", "out")]
-            const segments = collect_stack_segments(nodes, edges)
-            expect(segments).toHaveLength(1)
-            expect(segments[0].head_id).toBe("s")
-            expect(segments[0].node_ids).toEqual(["s", "sub", "o", "out"])
-        }
     })
 
     it("flags fast path when every overlay window is closed against a solid head", () => {

@@ -5,6 +5,10 @@ function typed_file(mime: string): File {
     return new File(["x"], "drop.bin", { type: mime })
 }
 
+function named_file(name: string, mime = ""): File {
+    return new File(["x"], name, { type: mime })
+}
+
 describe("first_dropped_file", () => {
     it("returns files[0], null on empty or missing dataTransfer", () => {
         const accepted = typed_file("video/mp4")
@@ -29,8 +33,17 @@ describe("is_accepted", () => {
         ["audio/mpeg", "overlay", false],
         ["text/plain", "overlay", false],
         ["", "overlay", false],
-    ] as const)("accepts %s for %s: %s", (mime: string, kind: "source" | "overlay", want: boolean) => {
+    ] as const)("accepts %s for %s: %s", (mime: string, kind: "source" | "overlay" | "subtitles", want: boolean) => {
         expect(is_accepted(typed_file(mime), kind)).toBe(want)
+    })
+    it.each([
+        ["subs.srt", true],
+        ["CAPS.SRT", true],
+        ["notes.txt", false],
+        ["subs.ass", false],
+        ["noext", false],
+    ] as const)("accepts %s for subtitles: %s", (name: string, want: boolean) => {
+        expect(is_accepted(named_file(name), "subtitles")).toBe(want)
     })
 })
 
