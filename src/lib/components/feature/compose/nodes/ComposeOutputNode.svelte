@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Handle, Position } from "@xyflow/svelte"
-import { encode_hint_for_graph } from "$lib/media/compose-encode-hint"
 import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OutputNodeData } from "$lib/media/compose-types"
 import { compose_node_durations } from "$lib/media/compose-validation"
@@ -23,7 +22,6 @@ let title = $derived(compose_node_title("output", data.label))
 
 let durations = $derived(compose_node_durations(compose_state.nodes, compose_state.edges))
 let result_duration: number | null = $derived(id ? (durations.get(id) ?? null) : null)
-let encode_hint = $derived(encode_hint_for_graph(compose_state.nodes, data))
 
 function on_number_input(field: "width" | "height" | "fps", raw: string): void {
     const parsed = Number(raw)
@@ -189,13 +187,6 @@ function on_crf_input(raw: string): void {
             >
             {#if data.quality === "ultra"}
                 <span class="text-gray-500">Ultra default: 50 Mbps bitrate-only; optional CRF adds quantizer.</span>
-            {/if}
-            {#if encode_hint.text}
-                <small
-                    class="text-xs font-normal text-gray-500"
-                    data-testid="encode-hint"
-                    >{encode_hint.text}</small
-                >
             {/if}
         </label>
     </div>
