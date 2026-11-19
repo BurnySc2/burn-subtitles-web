@@ -16,9 +16,10 @@ export function blob_to_file(blob: Blob, name: string): File {
 
 export function single_input(node_id: string, incoming: Map<string, ComposeEdge[]>, memo: Map<string, Blob>): Blob {
     const edges = incoming.get(node_id) ?? []
+    const predecessor = edges.length === 1 ? edges[0].source : "none"
     const blob = edges.length === 1 ? (memo.get(edges[0].source) ?? null) : null
     if (!blob) {
-        throw new ClipError("FAILED", "Node input is missing.")
+        throw new ClipError("FAILED", `Node input is missing (node ${node_id}, predecessor ${predecessor}).`)
     }
     return blob
 }

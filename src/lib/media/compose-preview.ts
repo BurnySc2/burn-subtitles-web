@@ -1,6 +1,7 @@
 import { font_cache_key } from "./compose-font-library"
 import { blob_to_file, build_fused_dispatch, execute_fused_segment, single_input } from "./compose-fused"
 import { find_output_node, topo_sort_compose, upstream_of } from "./compose-graph"
+import { build_downstream_refcounts, build_fused_canonical, drain_consumed_predecessors } from "./compose-memory"
 import { peak_audio_probe, union_probe_lists } from "./compose-probe-union"
 import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import {
@@ -369,6 +370,9 @@ export async function get_node_preview_blob(
     const video_config = output_node ? resolve_output_video_config(output_node.data) : null
     let done = 0
     const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
+    const canonical_of = build_fused_canonical(fused_dispatch)
+    const remaining = build_downstream_refcounts(edges, relevant, canonical_of)
+    const retain = new Set([target_id])
     for (const node_id of order) {
         throw_if_aborted(signal)
         const memo_hit = preview_memo.get(node_id)
@@ -393,6 +397,12 @@ export async function get_node_preview_blob(
             for (const fused_id of fused.fused_ids) {
                 store(fused_id, blob)
             }
+            // WHY external-input drain: end_id's raw predecessors are internal fused links that canonicalize to self and would delete the fresh blob.
+            const fused_inputs = [...fused.fused_ids]
+                .flatMap((fused_id) => incoming.get(fused_id) ?? [])
+                .filter((edge) => canonical_of(edge.source) !== canonical_of(fused.end_id))
+            const fused_incoming = new Map(incoming).set(fused.end_id, fused_inputs)
+            drain_consumed_predecessors(fused.end_id, fused_incoming, blobs, remaining, canonical_of, retain)
             done += fused.span
             on_progress?.(done / total)
             continue
@@ -595,6 +605,7 @@ export async function get_node_preview_blob(
                 break
             }
         }
+        drain_consumed_predecessors(node_id, incoming, blobs, remaining, canonical_of, retain)
         done += 1
         on_progress?.(done / total)
     }
