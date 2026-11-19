@@ -160,6 +160,9 @@ export function upsert_probe(node_id: string, file: File, probe: ProbeResult | n
 }
 
 export function remove_compose_nodes(node_ids: string[]): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
     const ids = new Set(node_ids)
     if (ids.size === 0) {
         return

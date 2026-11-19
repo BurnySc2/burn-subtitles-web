@@ -10,6 +10,7 @@ let { node_id }: { node_id: string } = $props()
 let thumb_url = $state<string | null>(null)
 let probe = $state<ImageProbe | null>(null)
 let probing = $state(false)
+let running = $derived(compose_state.run_status === "running")
 let error = $state<string | null>(null)
 let token = { n: 0 }
 
@@ -32,12 +33,15 @@ function revoke_thumb(): void {
 }
 
 async function handle_file(file: File | null): Promise<void> {
+    if (running) {
+        return
+    }
     if (!file) {
         return
     }
     const target = file
     const selected = compose_state.nodes.find((candidate) => candidate.id === node_id)
-    if (!selected || selected.type !== "overlay") {
+    if (selected?.type !== "overlay") {
         return
     }
     await handle_accepted_file({
@@ -46,7 +50,7 @@ async function handle_file(file: File | null): Promise<void> {
         token,
         on_accept: async (mine) => {
             const current = compose_state.nodes.find((candidate) => candidate.id === node_id)
-            if (!current || current.type !== "overlay") {
+            if (current?.type !== "overlay") {
                 return
             }
             probing = true
@@ -83,6 +87,9 @@ async function handle_file(file: File | null): Promise<void> {
 }
 
 function handle_remove(): void {
+    if (running) {
+        return
+    }
     token.n += 1
     probing = false
     error = null
@@ -110,7 +117,7 @@ onDestroy(() => {
         {show_remove}
         {remove_aria}
         describedby="compose-overlay-status"
-        disabled={probing}
+        disabled={probing || running}
         on_file={handle_file}
         on_remove={handle_remove}
     />

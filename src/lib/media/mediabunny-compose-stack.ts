@@ -283,7 +283,7 @@ export async function render_compose_stack(options: RenderStackOptions): Promise
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
             }
             probe = await probe_media(head_file)
-            if (!probe || !probe.has_video || !probe.can_play) {
+            if (!probe?.has_video || !probe?.can_play) {
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
             }
             if (probe.duration === null || !Number.isFinite(probe.duration) || probe.duration <= 0) {

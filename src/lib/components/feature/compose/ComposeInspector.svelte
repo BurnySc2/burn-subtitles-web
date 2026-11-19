@@ -102,6 +102,7 @@ function handle_preview(preview: { url: string | null; blob: Blob | null; mime: 
 }
 
 function patch_trim(patch: Partial<TrimNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "trim") {
         Object.assign(node.data, patch)
@@ -109,6 +110,7 @@ function patch_trim(patch: Partial<TrimNodeData>): void {
 }
 
 function patch_transition(patch: Partial<TransitionNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "transition") {
         Object.assign(node.data, patch)
@@ -116,6 +118,7 @@ function patch_transition(patch: Partial<TransitionNodeData>): void {
 }
 
 function patch_merge(patch: Partial<MergeNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "merge") {
         Object.assign(node.data, patch)
@@ -141,6 +144,7 @@ let merge_edges = $derived.by(() => {
 })
 
 function move_merge_edge(index: number, direction: -1 | 1): void {
+    if (running) { return }
     if (!selected || selected.type !== "merge") {
         return
     }
@@ -157,6 +161,7 @@ function move_merge_edge(index: number, direction: -1 | 1): void {
 }
 
 function on_merge_count_input(raw: string): void {
+    if (running) { return }
     const parsed = Number(raw)
     if (raw.trim() !== "" && Number.isInteger(parsed)) {
         patch_merge({ input_count: Math.min(8, Math.max(2, parsed)) })
@@ -164,6 +169,7 @@ function on_merge_count_input(raw: string): void {
 }
 
 function patch_subtitles(patch: Partial<SubtitlesNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "subtitles") {
         Object.assign(node.data, patch)
@@ -175,8 +181,10 @@ function subtitle_field_message(field: string): string | null {
 }
 
 let subtitle_file_error = $state<string | null>(null)
+let running = $derived(compose_state.run_status === "running")
 
 function patch_output(patch: Partial<OutputNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "output") {
         Object.assign(node.data, patch)
@@ -184,6 +192,7 @@ function patch_output(patch: Partial<OutputNodeData>): void {
 }
 
 function patch_overlay(patch: Partial<OverlayNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "overlay") {
         Object.assign(node.data, patch)
@@ -191,6 +200,7 @@ function patch_overlay(patch: Partial<OverlayNodeData>): void {
 }
 
 function patch_color(patch: Partial<ColorNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "color") {
         Object.assign(node.data, patch)
@@ -207,6 +217,7 @@ function normalize_hex_input(raw: string): string {
 }
 
 function patch_rescale(patch: Partial<RescaleNodeData>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "rescale") {
         Object.assign(node.data, patch)
@@ -214,6 +225,7 @@ function patch_rescale(patch: Partial<RescaleNodeData>): void {
 }
 
 function patch_text_item(index: number, patch: Partial<TextItem>): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "text") {
         const item = node.data.items[index]
@@ -224,6 +236,7 @@ function patch_text_item(index: number, patch: Partial<TextItem>): void {
 }
 
 function add_text_item(): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (!node || node.type !== "text" || node.data.items.length >= MAX_TEXT_ITEMS) {
         return
@@ -232,6 +245,7 @@ function add_text_item(): void {
 }
 
 function remove_text_item(index: number): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "text") {
         node.data.items.splice(index, 1)
@@ -239,6 +253,7 @@ function remove_text_item(index: number): void {
 }
 
 function move_text_item(index: number, direction: -1 | 1): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (!node || node.type !== "text") {
         return
@@ -269,6 +284,7 @@ function on_text_max_width_input(index: number, raw: string): void {
 }
 
 function patch_label(label: string): void {
+    if (running) { return }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node) {
         node.data.label = label === "" ? null : label
@@ -332,6 +348,7 @@ function on_rescale_fps_input(raw: string): void {
 }
 
 function delete_selected_edge(): void {
+    if (running) { return }
     if (selected_edge_id === null) {
         return
     }
@@ -341,12 +358,14 @@ function delete_selected_edge(): void {
 }
 
 function delete_selected_node(): void {
+    if (running) { return }
     if (selected !== null) {
         remove_compose_nodes([selected.id])
     }
 }
 
 function delete_selected(): void {
+    if (running) { return }
     if (selected_edge_id !== null) {
         delete_selected_edge()
         return
@@ -355,6 +374,7 @@ function delete_selected(): void {
 }
 
 function on_inspector_keydown(event: KeyboardEvent): void {
+    if (running) { return }
     if (event.key !== "Backspace" && event.key !== "Delete") {
         return
     }
@@ -712,8 +732,9 @@ function probe_summary(node: ComposeNode): string {
                     remove_aria={selected.data.file
                         ? `Remove SRT file ${selected.data.file.name}`
                         : "Remove SRT file"}
-                    disabled={false}
+                    disabled={running}
                     on_file={(file) => {
+                        if (running) { return }
                         if (file) {
                             if (!is_accepted(file, "subtitles")) {
                                 subtitle_file_error = "Please select an .srt file."
@@ -724,6 +745,7 @@ function probe_summary(node: ComposeNode): string {
                         }
                     }}
                     on_remove={() => {
+                        if (running) { return }
                         subtitle_file_error = null
                         patch_subtitles({ file: null })
                     }}

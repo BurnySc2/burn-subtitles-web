@@ -120,9 +120,9 @@ let cta_reason = $derived(
                             <div class="mt-2 text-center">
                                 <p class="text-xs">
                                     {format_time_remaining(
-									temp_state.ffmpeg.processing_start_time,
-									temp_state.ffmpeg.progress,
-								)}
+                                        temp_state.ffmpeg.processing_start_time,
+                                        temp_state.ffmpeg.progress,
+                                    )}
                                 </p>
                             </div>
                         {/if}
@@ -134,8 +134,8 @@ let cta_reason = $derived(
             <button
                 onclick={render_video_with_subtitles}
                 disabled={temp_state.ffmpeg.is_processing ||
-				!temp_state.ffmpeg.video_file ||
-				!temp_state.ffmpeg.srt_file}
+                    !temp_state.ffmpeg.video_file ||
+                    !temp_state.ffmpeg.srt_file}
                 class="btn btn-primary btn-lg w-full"
                 aria-describedby={cta_reason ? "cta-helper" : undefined}
             >
