@@ -388,18 +388,13 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                             </span>
                             <span
                                 class="shrink-0 rounded px-1.5 py-0.5 text-xs {hot
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-green-100 text-green-800'}"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : "bg-green-100 text-green-800"}"
                             >
                                 {rate.toFixed(1)}
                                 cps
                                 {#if rate > 20}
-                                    <span
-                                        aria-label="reading speed warning: over 20 characters per second"
-                                        title="Over 20 characters per second — hard to read"
-                                    >
-                                        ⚠
-                                    </span>
+                                    <span title="Over 20 characters per second — hard to read"> ⚠ </span>
                                 {/if}
                             </span>
                             <span class="w-16 shrink-0 text-xs">
@@ -421,7 +416,9 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                 <button
                     class="btn btn-primary w-full"
                     disabled={included.size === 0}
-                    onclick={() => { step = 2 }}
+                    onclick={() => {
+                        step = 2
+                    }}
                 >
                     Continue with {included.size} selected →
                 </button>
@@ -431,7 +428,9 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
         <div class="mt-4">
             <button
                 class="btn btn-secondary btn-sm"
-                onclick={() => { step = 1 }}
+                onclick={() => {
+                    step = 1
+                }}
             >
                 ← Back to select
             </button>
@@ -485,8 +484,10 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                             role="tab"
                             aria-selected={tab === option.kind}
                             aria-controls="cue-preview-{cue.index}"
-                            class="btn btn-sm {tab === option.kind ? 'btn-primary' : 'btn-secondary'}"
-                            onclick={() => { selected_tab[cue.index] = option.kind }}
+                            class="btn btn-sm {tab === option.kind ? "btn-primary" : "btn-secondary"}"
+                            onclick={() => {
+                                selected_tab[cue.index] = option.kind
+                            }}
                         >
                             {option.label}
                         </button>
@@ -508,9 +509,7 @@ onDestroy(() => result_url && URL.revokeObjectURL(result_url))
                             placeholder="First part, rest becomes Part 2"
                             bind:value={custom_text[cue.index]}
                             oninput={() => derive_custom(cue)}
-                            aria-describedby={custom_error[cue.index]
-                                ? `custom-error-${cue.index}`
-                                : undefined}
+                            aria-describedby={custom_error[cue.index] ? `custom-error-${cue.index}` : undefined}
                         >
                         {#if custom_error[cue.index]}
                             <p

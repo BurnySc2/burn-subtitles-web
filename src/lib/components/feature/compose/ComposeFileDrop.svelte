@@ -32,6 +32,7 @@ let file_input = $state<HTMLInputElement | null>(null)
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions: inner button/input is the keyboard path; drop is enhancement only, so no role=button -->
+<!-- biome-ignore lint/a11y/noStaticElementInteractions: drop is enhancement only; inner button/input is the keyboard path -->
 <div
     class="drop-zone nodrag mt-2 w-full"
     class:drag-over={is_dragging}

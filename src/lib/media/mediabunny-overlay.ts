@@ -172,7 +172,7 @@ export async function render_overlay(options: RenderOverlayOptions): Promise<Ren
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
         }
         const probe = await probe_media(video)
-        if (!probe || !probe.has_video || !probe.can_play) {
+        if (!probe?.has_video || !probe?.can_play) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
         }
         if (probe.duration === null || !Number.isFinite(probe.duration) || probe.duration <= 0) {

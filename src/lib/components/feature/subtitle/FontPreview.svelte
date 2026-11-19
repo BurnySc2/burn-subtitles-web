@@ -33,8 +33,8 @@ let {
 
 <button
     onclick={() => {
- 		sample_text = "The quick brown fox jumps over the lazy dog"
-  	}}
+        sample_text = "The quick brown fox jumps over the lazy dog"
+    }}
     class="btn btn-primary btn-sm mt-2"
     disabled={sample_text === "The quick brown fox jumps over the lazy dog"}
 >

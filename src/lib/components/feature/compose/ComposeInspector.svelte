@@ -102,7 +102,9 @@ function handle_preview(preview: { url: string | null; blob: Blob | null; mime: 
 }
 
 function patch_trim(patch: Partial<TrimNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "trim") {
         Object.assign(node.data, patch)
@@ -110,7 +112,9 @@ function patch_trim(patch: Partial<TrimNodeData>): void {
 }
 
 function patch_transition(patch: Partial<TransitionNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "transition") {
         Object.assign(node.data, patch)
@@ -118,7 +122,9 @@ function patch_transition(patch: Partial<TransitionNodeData>): void {
 }
 
 function patch_merge(patch: Partial<MergeNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "merge") {
         Object.assign(node.data, patch)
@@ -134,7 +140,7 @@ function merge_handle_index(handle: string | null): number {
 }
 
 let merge_edges = $derived.by(() => {
-    if (!selected || selected.type !== "merge") {
+    if (selected?.type !== "merge") {
         return []
     }
     return compose_state.edges
@@ -144,8 +150,10 @@ let merge_edges = $derived.by(() => {
 })
 
 function move_merge_edge(index: number, direction: -1 | 1): void {
-    if (running) { return }
-    if (!selected || selected.type !== "merge") {
+    if (running) {
+        return
+    }
+    if (selected?.type !== "merge") {
         return
     }
     const ordered = merge_edges
@@ -161,7 +169,9 @@ function move_merge_edge(index: number, direction: -1 | 1): void {
 }
 
 function on_merge_count_input(raw: string): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const parsed = Number(raw)
     if (raw.trim() !== "" && Number.isInteger(parsed)) {
         patch_merge({ input_count: Math.min(8, Math.max(2, parsed)) })
@@ -169,7 +179,9 @@ function on_merge_count_input(raw: string): void {
 }
 
 function patch_subtitles(patch: Partial<SubtitlesNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "subtitles") {
         Object.assign(node.data, patch)
@@ -184,7 +196,9 @@ let subtitle_file_error = $state<string | null>(null)
 let running = $derived(compose_state.run_status === "running")
 
 function patch_output(patch: Partial<OutputNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "output") {
         Object.assign(node.data, patch)
@@ -192,7 +206,9 @@ function patch_output(patch: Partial<OutputNodeData>): void {
 }
 
 function patch_overlay(patch: Partial<OverlayNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "overlay") {
         Object.assign(node.data, patch)
@@ -200,7 +216,9 @@ function patch_overlay(patch: Partial<OverlayNodeData>): void {
 }
 
 function patch_color(patch: Partial<ColorNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "color") {
         Object.assign(node.data, patch)
@@ -217,7 +235,9 @@ function normalize_hex_input(raw: string): string {
 }
 
 function patch_rescale(patch: Partial<RescaleNodeData>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "rescale") {
         Object.assign(node.data, patch)
@@ -225,9 +245,11 @@ function patch_rescale(patch: Partial<RescaleNodeData>): void {
 }
 
 function patch_text_item(index: number, patch: Partial<TextItem>): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
-    if (node && node.type === "text") {
+    if (node?.type === "text") {
         const item = node.data.items[index]
         if (item) {
             Object.assign(item, patch)
@@ -236,16 +258,20 @@ function patch_text_item(index: number, patch: Partial<TextItem>): void {
 }
 
 function add_text_item(): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
-    if (!node || node.type !== "text" || node.data.items.length >= MAX_TEXT_ITEMS) {
+    if (node?.type !== "text" || node.data.items.length >= MAX_TEXT_ITEMS) {
         return
     }
     node.data.items.push(create_default_text_item())
 }
 
 function remove_text_item(index: number): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node && node.type === "text") {
         node.data.items.splice(index, 1)
@@ -253,9 +279,11 @@ function remove_text_item(index: number): void {
 }
 
 function move_text_item(index: number, direction: -1 | 1): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
-    if (!node || node.type !== "text") {
+    if (node?.type !== "text") {
         return
     }
     const other = index + direction
@@ -284,7 +312,9 @@ function on_text_max_width_input(index: number, raw: string): void {
 }
 
 function patch_label(label: string): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     const node = compose_state.nodes.find((candidate) => candidate.id === compose_state.selected_id)
     if (node) {
         node.data.label = label === "" ? null : label
@@ -348,7 +378,9 @@ function on_rescale_fps_input(raw: string): void {
 }
 
 function delete_selected_edge(): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     if (selected_edge_id === null) {
         return
     }
@@ -358,14 +390,18 @@ function delete_selected_edge(): void {
 }
 
 function delete_selected_node(): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     if (selected !== null) {
         remove_compose_nodes([selected.id])
     }
 }
 
 function delete_selected(): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     if (selected_edge_id !== null) {
         delete_selected_edge()
         return
@@ -374,7 +410,9 @@ function delete_selected(): void {
 }
 
 function on_inspector_keydown(event: KeyboardEvent): void {
-    if (running) { return }
+    if (running) {
+        return
+    }
     if (event.key !== "Backspace" && event.key !== "Delete") {
         return
     }
@@ -729,12 +767,12 @@ function probe_summary(node: ComposeNode): string {
                     choose_aria={selected.data.file ? "Replace SRT file" : "Choose SRT file"}
                     file_name={selected.data.file?.name ?? null}
                     show_remove={selected.data.file !== null}
-                    remove_aria={selected.data.file
-                        ? `Remove SRT file ${selected.data.file.name}`
-                        : "Remove SRT file"}
+                    remove_aria={selected.data.file ? `Remove SRT file ${selected.data.file.name}` : "Remove SRT file"}
                     disabled={running}
                     on_file={(file) => {
-                        if (running) { return }
+                        if (running) {
+                            return
+                        }
                         if (file) {
                             if (!is_accepted(file, "subtitles")) {
                                 subtitle_file_error = "Please select an .srt file."
@@ -745,7 +783,9 @@ function probe_summary(node: ComposeNode): string {
                         }
                     }}
                     on_remove={() => {
-                        if (running) { return }
+                        if (running) {
+                            return
+                        }
                         subtitle_file_error = null
                         patch_subtitles({ file: null })
                     }}
@@ -781,7 +821,8 @@ function probe_summary(node: ComposeNode): string {
                         <option value={fam}></option>
                     {/each}
                 </datalist>
-                {#if subtitle_font_family.trim() && !is_font_available_reactive(subtitle_font_family, $font_registry_version)}
+                {#if subtitle_font_family.trim() &&
+                    !is_font_available_reactive(subtitle_font_family, $font_registry_version)}
                     <p class="text-xs font-normal text-amber-700">
                         ⚠ “{subtitle_font_family.trim()}” isn’t loaded — canvas will fall back.
                     </p>
@@ -893,7 +934,8 @@ function probe_summary(node: ComposeNode): string {
                         value={selected.data.horizontal_margin ?? SUBTITLE_BURN_DEFAULTS.horizontal_margin}
                         oninput={(e) =>
                             on_number_input(e.currentTarget.value, (value) =>
-                                patch_subtitles({ horizontal_margin: value }))}
+                                patch_subtitles({ horizontal_margin: value }),
+                            )}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                     >
                     {#if subtitle_field_message("horizontal_margin")}
@@ -912,7 +954,8 @@ function probe_summary(node: ComposeNode): string {
                         value={selected.data.vertical_offset ?? SUBTITLE_BURN_DEFAULTS.vertical_offset}
                         oninput={(e) =>
                             on_number_input(e.currentTarget.value, (value) =>
-                                patch_subtitles({ vertical_offset: value }))}
+                                patch_subtitles({ vertical_offset: value }),
+                            )}
                         class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                     >
                     {#if subtitle_field_message("vertical_offset")}
@@ -927,7 +970,9 @@ function probe_summary(node: ComposeNode): string {
                 <select
                     value={selected.data.vertical_anchor ?? SUBTITLE_BURN_DEFAULTS.vertical_anchor}
                     onchange={(e) =>
-                        patch_subtitles({ vertical_anchor: e.currentTarget.value as SubtitlesNodeData["vertical_anchor"] })}
+                        patch_subtitles({
+                            vertical_anchor: e.currentTarget.value as SubtitlesNodeData["vertical_anchor"],
+                        })}
                     class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                 >
                     <option value="top">top</option>
@@ -1217,7 +1262,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.size_start}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { size_start: value }))}
+                                        patch_text_item(i, { size_start: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>
@@ -1230,7 +1276,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.size_end}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { size_end: value }))}
+                                        patch_text_item(i, { size_end: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>
@@ -1264,7 +1311,8 @@ function probe_summary(node: ComposeNode): string {
                             value={item.opacity}
                             oninput={(e) =>
                                 on_number_input(e.currentTarget.value, (value) =>
-                                    patch_text_item(i, { opacity: value }))}
+                                    patch_text_item(i, { opacity: value }),
+                                )}
                             class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                         >
                     </label>
@@ -1296,7 +1344,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.offset_x}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { offset_x: value }))}
+                                        patch_text_item(i, { offset_x: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>
@@ -1308,7 +1357,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.offset_y}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { offset_y: value }))}
+                                        patch_text_item(i, { offset_y: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>
@@ -1348,7 +1398,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.show_start}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { show_start: value }))}
+                                        patch_text_item(i, { show_start: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>
@@ -1373,7 +1424,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.fade_in}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { fade_in: value }))}
+                                        patch_text_item(i, { fade_in: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>
@@ -1386,7 +1438,8 @@ function probe_summary(node: ComposeNode): string {
                                 value={item.fade_out}
                                 oninput={(e) =>
                                     on_number_input(e.currentTarget.value, (value) =>
-                                        patch_text_item(i, { fade_out: value }))}
+                                        patch_text_item(i, { fade_out: value }),
+                                    )}
                                 class="w-full rounded border border-gray-300 px-3 py-2 font-normal"
                             >
                         </label>

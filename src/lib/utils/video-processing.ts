@@ -60,7 +60,7 @@ export async function load_ffmpeg() {
             lower.includes("using fontsdir")
         ) {
             // surface font/ass warnings to UI via error_message; dedup to avoid spamming
-            if (!temp_state.ffmpeg.error_message || !temp_state.ffmpeg.error_message.includes(msg)) {
+            if (!temp_state.ffmpeg.error_message?.includes(msg)) {
                 // only surface if it looks like a warning about missing font
                 if (
                     lower.includes("no font") ||

@@ -166,7 +166,7 @@ export async function render_subtitles_burn(
         }
         const probe_file = video instanceof File ? video : new File([video], "burn-input.mp4", { type: video.type })
         const probe = await probe_media(probe_file)
-        if (!probe || !probe.has_video || !probe.can_play) {
+        if (!probe?.has_video || !probe?.can_play) {
             throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
         }
         if (probe.duration === null || !Number.isFinite(probe.duration) || probe.duration <= 0) {
