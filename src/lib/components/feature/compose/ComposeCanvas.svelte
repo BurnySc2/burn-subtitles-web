@@ -273,8 +273,13 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 .compose-canvas :global(.svelte-flow__handle.connectingto:not(.valid)) {
     box-shadow: 0 0 0 3px rgb(248 113 113 / 0.8);
 }
-.compose-canvas :global(.svelte-flow__node.node-active),
-.compose-canvas :global(.node-active) {
+.compose-canvas :global(.svelte-flow__node.selected),
+.compose-canvas :global(.svelte-flow__node-output.selectable.selected) {
+    border-radius: 12px;
     box-shadow: 0 0 0 3px rgb(59 130 246 / 0.9);
+}
+.compose-canvas :global(.node-active) {
+    border-radius: 10px;
+    box-shadow: 0 0 0 3px rgb(34 197 94 / 0.9);
 }
 </style>
