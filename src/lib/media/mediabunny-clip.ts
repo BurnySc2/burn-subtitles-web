@@ -222,6 +222,7 @@ function probe_cache_key(file: File): string {
     return `${file.name}:${file.size}:${file.lastModified}:${file.type}`
 }
 
+/** Resolved node probes survive; safe to clear anytime idle. */
 export function clear_probe_cache(): void {
     probe_cache.clear()
 }

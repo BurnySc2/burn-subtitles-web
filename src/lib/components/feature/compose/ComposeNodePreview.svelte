@@ -2,6 +2,7 @@
 import { onDestroy, untrack } from "svelte"
 import { get_node_preview_blob } from "$lib/media/compose-preview"
 import { compose_state } from "$lib/media/compose-state.svelte"
+import { ClipError } from "$lib/media/mediabunny-clip"
 
 let {
     node_id,
@@ -9,7 +10,7 @@ let {
     hide_output = false,
 }: {
     node_id: string | null
-    on_preview?: (preview: { url: string | null; blob: Blob | null }) => void
+    on_preview?: (preview: { url: string | null; blob: Blob | null; mime: string | null }) => void
     hide_output?: boolean
 } = $props()
 
@@ -32,7 +33,7 @@ function cleanup(): void {
 }
 
 function notify(): void {
-    on_preview?.({ url, blob })
+    on_preview?.({ url, blob, mime: blob?.type ?? null })
 }
 
 function cancel_preview(): void {
@@ -87,7 +88,7 @@ async function request_preview(): Promise<void> {
         if (caught instanceof DOMException && caught.name === "AbortError") {
             return
         }
-        if (caught instanceof Error && caught.name === "ClipError" && caught.message === "Cancelled.") {
+        if (caught instanceof ClipError && caught.code === "CANCELLED") {
             return
         }
         error = caught instanceof Error ? caught.message : "Preview failed."

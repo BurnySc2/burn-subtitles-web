@@ -62,6 +62,7 @@ export function flow_center_position(): { x: number; y: number } {
 }
 
 const preview_urls = new Map<string, string>()
+const preview_files = new Map<string, File>()
 
 export function clear_preview_url(node_id: string): void {
     const url = preview_urls.get(node_id)
@@ -69,14 +70,47 @@ export function clear_preview_url(node_id: string): void {
         URL.revokeObjectURL(url)
         preview_urls.delete(node_id)
     }
+    preview_files.delete(node_id)
+}
+
+export function get_source_preview_url(node_id: string, file: File): string {
+    const cached = preview_urls.get(node_id)
+    if (cached !== undefined) {
+        const stored = preview_files.get(node_id)
+        const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
+        const node_file = node && node.type === "source" ? node.data.file : undefined
+        if (stored === file && stored === node_file) {
+            return cached
+        }
+        // WHY freeze-during-run: render/preview may still read the live object URL; revoking mid-render breaks playback.
+        if (compose_state.run_status === "running") {
+            return cached
+        }
+        URL.revokeObjectURL(cached)
+        preview_urls.delete(node_id)
+        preview_files.delete(node_id)
+    }
+    const url = URL.createObjectURL(file)
+    preview_urls.set(node_id, url)
+    preview_files.set(node_id, file)
+    return url
+}
+
+export function release_source_preview_url(node_id: string): void {
+    clear_preview_url(node_id)
 }
 
 export function set_source_file(node_id: string, file: File, url: string): void {
     const previous = preview_urls.get(node_id)
-    if (previous && previous !== url) {
-        URL.revokeObjectURL(previous)
+    // WHY freeze-during-run: render/preview may still read the live object URL; keep serving it until idle.
+    const frozen = compose_state.run_status === "running" && previous !== undefined
+    if (!frozen) {
+        if (previous && previous !== url) {
+            URL.revokeObjectURL(previous)
+        }
+        preview_urls.set(node_id, url)
+        preview_files.set(node_id, file)
     }
-    preview_urls.set(node_id, url)
     const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (node && node.type === "source") {
         node.data.file = file
@@ -100,10 +134,15 @@ export function set_source_probe(node_id: string, file: File, probe: ProbeResult
 
 export function upsert_probe(node_id: string, file: File, probe: ProbeResult | null, url: string): void {
     const previous = preview_urls.get(node_id)
-    if (previous && previous !== url) {
-        URL.revokeObjectURL(previous)
+    // WHY freeze-during-run: render/preview may still read the live object URL; keep serving it until idle.
+    const frozen = compose_state.run_status === "running" && previous !== undefined
+    if (!frozen) {
+        if (previous && previous !== url) {
+            URL.revokeObjectURL(previous)
+        }
+        preview_urls.set(node_id, url)
+        preview_files.set(node_id, file)
     }
-    preview_urls.set(node_id, url)
     const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (node && node.type === "source") {
         node.data.file = file
@@ -129,6 +168,7 @@ export function remove_compose_nodes(node_ids: string[]): void {
             URL.revokeObjectURL(url)
             preview_urls.delete(id)
         }
+        preview_files.delete(id)
     }
     compose_state.nodes = compose_state.nodes.filter((node) => !ids.has(node.id))
     const removed_edge_ids = new Set(
@@ -253,6 +293,7 @@ export function revoke_all(): void {
         URL.revokeObjectURL(url)
     }
     preview_urls.clear()
+    preview_files.clear()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
     }

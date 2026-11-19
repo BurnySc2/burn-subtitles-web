@@ -6,6 +6,12 @@ import {
     single_input,
 } from "./compose-fused"
 import { type ComposeOutputNode, find_output_node, topo_sort_compose } from "./compose-graph"
+import {
+    build_downstream_refcounts,
+    build_fused_canonical,
+    drain_consumed_predecessors,
+    take_final,
+} from "./compose-memory"
 import { peak_audio_probe, union_probe_lists } from "./compose-probe-union"
 import { normalize_subtitle_style, SubtitleError, srt_to_vtt } from "./compose-subtitles"
 import {
@@ -232,6 +238,10 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     const total = Math.max(1, order.length)
     let done = 0
     const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
+    const live = new Set(order)
+    const canonical_of = build_fused_canonical(fused_dispatch)
+    const remaining = build_downstream_refcounts(edges, live, canonical_of)
+    const retain = new Set(output_node ? [output_node.id] : [])
     for (const node_id of order) {
         throw_if_aborted(signal)
         const node = by_id.get(node_id)
@@ -255,6 +265,12 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                 memo.set(fused_id, blob)
                 probe_memo.set(fused_id, [...fused_union])
             }
+            // WHY external-input drain: end_id's raw predecessors are internal fused links that canonicalize to self and would delete the fresh blob.
+            const fused_inputs = [...fused.fused_ids]
+                .flatMap((fused_id) => incoming.get(fused_id) ?? [])
+                .filter((edge) => canonical_of(edge.source) !== canonical_of(fused.end_id))
+            const fused_incoming = new Map(incoming).set(fused.end_id, fused_inputs)
+            drain_consumed_predecessors(fused.end_id, fused_incoming, memo, remaining, canonical_of, retain)
             done += fused.span
             on_progress?.(done / total)
             continue
@@ -480,10 +496,11 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
                 break
             }
         }
+        drain_consumed_predecessors(node_id, incoming, memo, remaining, canonical_of, retain)
         done += 1
         on_progress?.(done / total)
     }
-    const final_blob = output_node ? (memo.get(output_node.id) ?? null) : null
+    const final_blob = output_node ? take_final(memo, output_node.id) : null
     if (!final_blob) {
         throw new ClipError("FAILED", "Composition produced no output.")
     }

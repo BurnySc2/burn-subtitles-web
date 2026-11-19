@@ -99,6 +99,7 @@ let file_input = $state<HTMLInputElement | null>(null)
                 onclick={on_remove}
                 aria-label={remove_aria}
                 title={file_name ?? undefined}
+                {disabled}
                 class="btn btn-sm nodrag bg-red-600 text-white hover:bg-red-700 active:bg-red-800"
             >
                 Remove
