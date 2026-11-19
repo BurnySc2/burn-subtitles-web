@@ -1,7 +1,14 @@
 <script lang="ts">
+import { onDestroy } from "svelte"
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
 import { handle_accepted_file } from "$lib/media/compose-file-handler"
-import { clear_preview_url, compose_state, set_source_file, set_source_probe } from "$lib/media/compose-state.svelte"
+import {
+    compose_state,
+    get_source_preview_url,
+    release_source_preview_url,
+    set_source_file,
+    set_source_probe,
+} from "$lib/media/compose-state.svelte"
 import { ClipError, probe_media } from "$lib/media/mediabunny-clip"
 
 let { node_id }: { node_id: string } = $props()
@@ -9,6 +16,13 @@ let { node_id }: { node_id: string } = $props()
 let probing = $state(false)
 let error = $state<string | null>(null)
 let token = { n: 0 }
+
+function release_preview(): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
+    release_source_preview_url(node_id)
+}
 
 let node = $derived(compose_state.nodes.find((candidate) => candidate.id === node_id) ?? null)
 let file_name = $derived(node && node.type === "source" ? (node.data.file?.name ?? null) : null)
@@ -33,8 +47,8 @@ async function handle_file(file: File | null): Promise<void> {
         on_accept: async (mine) => {
             probing = true
             error = null
-            const url = URL.createObjectURL(accepted)
-            set_source_file(node_id, accepted, url)
+            release_preview()
+            set_source_file(node_id, accepted, get_source_preview_url(node_id, accepted))
             try {
                 const probe = await probe_media(accepted)
                 if (mine !== token.n) {
@@ -45,7 +59,7 @@ async function handle_file(file: File | null): Promise<void> {
                 if (mine !== token.n) {
                     return
                 }
-                clear_preview_url(node_id)
+                release_preview()
                 const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
                 if (target && target.type === "source") {
                     target.data.file = null
@@ -66,7 +80,7 @@ async function handle_file(file: File | null): Promise<void> {
         },
         on_reject: (message) => {
             token.n += 1
-            clear_preview_url(node_id)
+            release_preview()
             const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
             if (target && target.type === "source") {
                 target.data.file = null
@@ -82,13 +96,18 @@ function handle_remove(): void {
     token.n += 1
     probing = false
     error = null
-    clear_preview_url(node_id)
+    release_preview()
     const target = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (target && target.type === "source") {
         target.data.file = null
         target.data.probe = null
     }
 }
+
+onDestroy(() => {
+    token.n += 1
+    release_preview()
+})
 </script>
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">

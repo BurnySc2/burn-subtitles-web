@@ -35,6 +35,38 @@ interface PreviewMemoEntry {
 
 const preview_memo = new Map<string, PreviewMemoEntry>()
 
+export const PREVIEW_MEMO_MAX_ENTRIES = 2
+export const PREVIEW_MEMO_MAX_BYTES = 256 * 1024 * 1024
+
+function trim_preview_memo(): void {
+    while (preview_memo.size > PREVIEW_MEMO_MAX_ENTRIES) {
+        const oldest = preview_memo.keys().next()
+        if (oldest.done) {
+            return
+        }
+        preview_memo.delete(oldest.value)
+    }
+    let total = 0
+    for (const entry of preview_memo.values()) {
+        total += entry.blob.size
+    }
+    while (total > PREVIEW_MEMO_MAX_BYTES && preview_memo.size > 0) {
+        let largest_key: string | null = null
+        let largest_size = -1
+        for (const [key, entry] of preview_memo) {
+            if (entry.blob.size > largest_size) {
+                largest_size = entry.blob.size
+                largest_key = key
+            }
+        }
+        if (largest_key === null) {
+            return
+        }
+        total -= largest_size
+        preview_memo.delete(largest_key)
+    }
+}
+
 function file_stub_key(file: File | null): string {
     if (!file) {
         return "null"
@@ -363,7 +395,9 @@ export async function get_node_preview_blob(
     }
     const store = (node_id: string, blob: Blob): void => {
         blobs.set(node_id, blob)
+        preview_memo.delete(node_id)
         preview_memo.set(node_id, { upstream: subgraph_fingerprint(node_id, nodes, edges), blob })
+        trim_preview_memo()
     }
     const output_node = find_output_node(nodes)
     const total = Math.max(1, order.length)

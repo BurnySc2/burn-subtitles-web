@@ -16,6 +16,7 @@ import { compose_filename } from "$lib/media/compose-filename"
 import { clear_font_registry } from "$lib/media/compose-font-library"
 import { restore_saved_url_fonts } from "$lib/media/compose-font-restore"
 import { get_font_url_auto_restore, load_font_url_index } from "$lib/media/compose-font-url-index"
+import { clear_node_preview_cache } from "$lib/media/compose-preview"
 import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
 import {
     type ComposeNode,
@@ -24,7 +25,7 @@ import {
     SUBTITLE_BURN_DEFAULTS,
 } from "$lib/media/compose-types"
 import { validate_compose } from "$lib/media/compose-validation"
-import { ClipError } from "$lib/media/mediabunny-clip"
+import { ClipError, clear_probe_cache } from "$lib/media/mediabunny-clip"
 import { TRANSITION_AUDIO_MODE_DEFAULT } from "$lib/media/transition-utils"
 
 let aborter: AbortController | null = null
@@ -184,6 +185,14 @@ async function handle_render(): Promise<void> {
         }
         compose_state.run_elapsed_ms = Math.round(performance.now() - started_at)
         compose_state.run_status = "done"
+        clear_node_preview_cache()
+        if (browser) {
+            if (typeof requestIdleCallback !== "undefined") {
+                requestIdleCallback(() => clear_probe_cache(), { timeout: 2000 })
+            } else {
+                setTimeout(() => clear_probe_cache(), 2000)
+            }
+        }
     } catch (error) {
         if (error instanceof ClipError && error.code === "CANCELLED") {
             compose_state.run_status = "idle"
@@ -204,26 +213,48 @@ function handle_cancel(): void {
 let preview_node_id = $state<string | null>(null)
 let preview_node_type = $state<string | null>(null)
 let preview_url = $state<string | null>(null)
-let preview_blob = $state<Blob | null>(null)
+let preview_mime = $state<string | null>(null)
+let preview_run_token = 0
 
-function handle_node_preview(preview: {
+async function handle_node_preview(preview: {
     node_id: string | null
     node_type: string | null
     url: string | null
-    blob: Blob | null
-}): void {
+    mime: string | null
+}): Promise<void> {
+    const mine = ++preview_run_token
+    if (preview_url) {
+        URL.revokeObjectURL(preview_url)
+        preview_url = null
+    }
     preview_node_id = preview.node_id
     preview_node_type = preview.node_type
-    preview_url = preview.url
-    preview_blob = preview.blob
+    preview_mime = preview.mime
+    if (!preview.url) {
+        preview_url = null
+        return
+    }
+    try {
+        const response = await fetch(preview.url)
+        const blob = await response.blob()
+        if (mine !== preview_run_token) {
+            return
+        }
+        preview_url = URL.createObjectURL(blob)
+    } catch {
+        if (mine !== preview_run_token) {
+            return
+        }
+        preview_url = null
+    }
 }
 
 let preview_name = $derived.by(() => {
-    const ext = preview_blob?.type.split("/")[1]?.split(";")[0] ?? "mp4"
+    const ext = preview_mime?.split("/")[1]?.split(";")[0] ?? "mp4"
     return compose_filename(`${preview_node_type ?? "node"}-preview`, ext || "mp4")
 })
 
-let preview_is_audio = $derived((preview_blob?.type ?? "").startsWith("audio/"))
+let preview_is_audio = $derived((preview_mime ?? "").startsWith("audio/"))
 
 let download_name = $derived.by(() => {
     if (!compose_state.result) {
@@ -255,6 +286,10 @@ onMount(() => {
 onDestroy(() => {
     aborter?.abort()
     clear_font_registry()
+    if (preview_url) {
+        URL.revokeObjectURL(preview_url)
+        preview_url = null
+    }
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
         compose_state.result = null
@@ -283,7 +318,7 @@ onDestroy(() => {
             <ComposeInspector on_preview={handle_node_preview} />
         </div>
     </div>
-    {#if preview_url && preview_blob}
+    {#if preview_url}
         <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
             <h2 class="text-lg font-semibold">Node preview · {preview_node_type ?? "node"}</h2>
             {#if preview_is_audio}

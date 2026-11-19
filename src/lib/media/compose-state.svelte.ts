@@ -62,12 +62,50 @@ export function flow_center_position(): { x: number; y: number } {
 }
 
 const preview_urls = new Map<string, string>()
+const preview_files = new Map<string, File>()
 
 export function clear_preview_url(node_id: string): void {
     const url = preview_urls.get(node_id)
     if (url !== undefined) {
         URL.revokeObjectURL(url)
         preview_urls.delete(node_id)
+    }
+    preview_files.delete(node_id)
+}
+
+export function get_source_preview_url(node_id: string, file: File): string {
+    const cached = preview_urls.get(node_id)
+    if (cached !== undefined) {
+        const stored = preview_files.get(node_id)
+        const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
+        const node_file = node && node.type === "source" ? node.data.file : undefined
+        if (stored === file && stored === node_file) {
+            return cached
+        }
+        URL.revokeObjectURL(cached)
+        preview_urls.delete(node_id)
+        preview_files.delete(node_id)
+    }
+    const url = URL.createObjectURL(file)
+    preview_urls.set(node_id, url)
+    preview_files.set(node_id, file)
+    return url
+}
+
+export function release_source_preview_url(node_id: string): void {
+    clear_preview_url(node_id)
+}
+
+export function release_idle_source_previews(active_ids: Set<string>): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
+    for (const [id, url] of preview_urls) {
+        if (!active_ids.has(id)) {
+            URL.revokeObjectURL(url)
+            preview_urls.delete(id)
+            preview_files.delete(id)
+        }
     }
 }
 
@@ -77,6 +115,7 @@ export function set_source_file(node_id: string, file: File, url: string): void 
         URL.revokeObjectURL(previous)
     }
     preview_urls.set(node_id, url)
+    preview_files.set(node_id, file)
     const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (node && node.type === "source") {
         node.data.file = file
@@ -104,6 +143,7 @@ export function upsert_probe(node_id: string, file: File, probe: ProbeResult | n
         URL.revokeObjectURL(previous)
     }
     preview_urls.set(node_id, url)
+    preview_files.set(node_id, file)
     const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (node && node.type === "source") {
         node.data.file = file
@@ -129,6 +169,7 @@ export function remove_compose_nodes(node_ids: string[]): void {
             URL.revokeObjectURL(url)
             preview_urls.delete(id)
         }
+        preview_files.delete(id)
     }
     compose_state.nodes = compose_state.nodes.filter((node) => !ids.has(node.id))
     const removed_edge_ids = new Set(
@@ -253,6 +294,7 @@ export function revoke_all(): void {
         URL.revokeObjectURL(url)
     }
     preview_urls.clear()
+    preview_files.clear()
     if (compose_state.result) {
         URL.revokeObjectURL(compose_state.result.url)
     }
