@@ -14,6 +14,7 @@ let can_render = $derived(!running && compose_state.nodes.length > 0)
 let pct = $derived(Math.round(compose_state.run_progress * 100))
 let total = $derived(compose_state.nodes.length)
 let done = $derived(Math.min(total, Math.floor(compose_state.run_progress * total)))
+let active_count = $derived(compose_state.active_ids.length)
 </script>
 
 <div class="flex w-full flex-col gap-2 rounded-lg bg-gray-100 p-4">
@@ -30,7 +31,11 @@ let done = $derived(Math.min(total, Math.floor(compose_state.run_progress * tota
                     aria-hidden="true"
                 ></div>
                 Rendering… {pct}% ({done}/{total}
-                nodes)
+                nodes
+                {#if active_count > 0}
+                    , {active_count} active
+                {/if}
+                )
             {:else}
                 Render
             {/if}

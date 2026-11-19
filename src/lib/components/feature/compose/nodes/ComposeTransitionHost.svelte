@@ -3,7 +3,7 @@ import { compose_state } from "$lib/media/compose-state.svelte"
 import type { TransitionNodeData } from "$lib/media/compose-types"
 import ComposeTransitionNode from "./ComposeTransitionNode.svelte"
 
-let { id, data }: { id: string; data: TransitionNodeData } = $props()
+let { id, data }: { id: string; data: TransitionNodeData & { active?: boolean } } = $props()
 
 function update_data(patch: Partial<TransitionNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === id)
@@ -13,8 +13,10 @@ function update_data(patch: Partial<TransitionNodeData>): void {
 }
 </script>
 
-<ComposeTransitionNode
-    {id}
-    {data}
-    {update_data}
-/>
+<div class:node-active={data.active === true}>
+    <ComposeTransitionNode
+        {id}
+        {data}
+        {update_data}
+    />
+</div>

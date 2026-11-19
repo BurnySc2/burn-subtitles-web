@@ -25,6 +25,7 @@ import { resolve_output_video_config } from "./transition-utils"
 export interface NodePreviewOptions {
     signal?: AbortSignal
     on_progress?: (progress: number) => void
+    on_active_change?: (ids: string[]) => void
 }
 
 interface PreviewMemoEntry {
@@ -308,7 +309,15 @@ export async function get_node_preview_blob(
     edges: ComposeEdge[],
     options: NodePreviewOptions = {},
 ): Promise<Blob | null> {
-    const { signal, on_progress } = options
+    const { signal, on_progress, on_active_change } = options
+    const emit_active = (ids: string[]): void => {
+        if (signal?.aborted) {
+            return
+        }
+        try {
+            on_active_change?.(ids)
+        } catch {}
+    }
     throw_if_aborted(signal)
     const by_id = new Map(nodes.map((node) => [node.id, node]))
     const target = by_id.get(target_id)
@@ -369,234 +378,253 @@ export async function get_node_preview_blob(
     const video_config = output_node ? resolve_output_video_config(output_node.data) : null
     let done = 0
     const fused_dispatch = build_fused_dispatch(collect_stack_segments(nodes, edges), by_id, output_node?.id ?? null)
-    for (const node_id of order) {
-        throw_if_aborted(signal)
-        const memo_hit = preview_memo.get(node_id)
-        if (memo_hit && memo_hit.upstream === subgraph_fingerprint(node_id, nodes, edges)) {
-            blobs.set(node_id, memo_hit.blob)
+    try {
+        for (const node_id of order) {
+            throw_if_aborted(signal)
+            const memo_hit = preview_memo.get(node_id)
+            if (memo_hit && memo_hit.upstream === subgraph_fingerprint(node_id, nodes, edges)) {
+                emit_active([node_id])
+                blobs.set(node_id, memo_hit.blob)
+                done += 1
+                on_progress?.(done / total)
+                continue
+            }
+            const node = by_id.get(node_id)
+            if (!node) {
+                continue
+            }
+            const fused = fused_dispatch.get(node_id) ?? null
+            const fused_active = fused !== null && relevant.has(fused.end_id)
+            if (fused_active && fused.fused_ids.has(node_id) && node_id !== fused.end_id) {
+                continue
+            }
+            if (fused_active && fused !== null && node_id === fused.end_id) {
+                emit_active([...fused.fused_ids])
+                const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
+                const blob = await execute_fused_segment(fused, by_id, incoming, blobs, output_node, span_slice, signal)
+                for (const fused_id of fused.fused_ids) {
+                    store(fused_id, blob)
+                }
+                done += fused.span
+                on_progress?.(done / total)
+                continue
+            }
+            emit_active([node_id])
+            const slice = (progress: number) => on_progress?.((done + progress) / total)
+            switch (node.type) {
+                case "source": {
+                    if (!node.data.file) {
+                        throw new ClipError("FAILED", "Source file is missing.")
+                    }
+                    store(node.id, node.data.file)
+                    break
+                }
+                case "trim": {
+                    const input = single_input(node.id, incoming, blobs)
+                    const resolved = resolve_trim_range(node.data, trim_upstream_duration(node.id, by_id, incoming))
+                    if (!resolved.ok) {
+                        trim_range_error(resolved.reason)
+                    }
+                    const result = await extract_clip({
+                        file: blob_to_file(input, "trim-input.mp4"),
+                        start: resolved.start,
+                        end: resolved.end,
+                        output_kind: "mp4",
+                        on_progress: slice,
+                        signal,
+                    })
+                    store(node.id, result.blob)
+                    break
+                }
+                case "transition": {
+                    const { blob_a, blob_b } = transition_inputs(node.id, incoming, blobs)
+                    const { list_a, list_b } = transition_probe_lists(node.id, incoming, probe_memo)
+                    const base_a = peak_probe_for_render(list_a)
+                    const base_b = peak_probe_for_render(list_b)
+                    const pred_a = pred_by_handle(node.id, "a", incoming)
+                    const pred_b = pred_by_handle(node.id, "b", incoming)
+                    const dur_a = pred_a
+                        ? node_output_duration(
+                              pred_a,
+                              by_id,
+                              incoming,
+                              new Map<string, number | null>(),
+                              new Set<string>(),
+                          )
+                        : null
+                    const dur_b = pred_b
+                        ? node_output_duration(
+                              pred_b,
+                              by_id,
+                              incoming,
+                              new Map<string, number | null>(),
+                              new Set<string>(),
+                          )
+                        : null
+                    const probe_a = base_a && dur_a !== null ? { ...base_a, duration: dur_a } : null
+                    const probe_b = base_b && dur_b !== null ? { ...base_b, duration: dur_b } : null
+                    const result = await render_transition({
+                        file_a: blob_to_file(blob_a, "transition-a.mp4"),
+                        file_b: blob_to_file(blob_b, "transition-b.mp4"),
+                        probe_a,
+                        probe_b,
+                        duration: node.data.duration,
+                        start_a: node.data.start,
+                        width: output_node?.data.width ?? 1920,
+                        height: output_node?.data.height ?? 1080,
+                        fps: output_node?.data.fps ?? 30,
+                        quality: "medium",
+                        video_bitrate: video_config?.bitrate ?? null,
+                        audio_quality: output_node?.data.audio_quality ?? "source-max",
+                        easing: node.data.easing,
+                        audio_mode: node.data.audio_mode,
+                        on_progress: slice,
+                        signal,
+                    })
+                    store(node.id, result.blob)
+                    break
+                }
+                case "subtitles": {
+                    const input = single_input(node.id, incoming, blobs)
+                    const srt_content = node.data.file ? await node.data.file.text() : null
+                    if (srt_content === null) {
+                        throw new ClipError("FAILED", "Subtitle file is required.")
+                    }
+                    if (srt_content.trim() === "") {
+                        throw new ClipError("FAILED", "Subtitle file is empty.")
+                    }
+                    try {
+                        srt_to_vtt(srt_content)
+                    } catch (error) {
+                        if (error instanceof SubtitleError) {
+                            throw new ClipError("FAILED", error.message)
+                        }
+                        throw error
+                    }
+                    const style = normalize_subtitle_style(node.data)
+                    store(
+                        node.id,
+                        await render_subtitles_burn(
+                            blob_to_file(input, "burn-input.mp4"),
+                            {
+                                srt_content,
+                                ...style,
+                                width: output_node?.data.width ?? 1920,
+                                height: output_node?.data.height ?? 1080,
+                                fps: output_node?.data.fps ?? 30,
+                                quality: "medium",
+                                video_bitrate: video_config?.bitrate ?? null,
+                                audio_quality: output_node?.data.audio_quality ?? "source-max",
+                                on_progress: slice,
+                            },
+                            signal,
+                        ),
+                    )
+                    break
+                }
+                case "merge": {
+                    const merged = merge_inputs(node.id, incoming, blobs)
+                    const result = await render_merge({
+                        files: merged.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
+                        width: output_node?.data.width ?? 1920,
+                        height: output_node?.data.height ?? 1080,
+                        fps: output_node?.data.fps ?? 30,
+                        quality: "medium",
+                        video_bitrate: video_config?.bitrate ?? null,
+                        audio_quality: output_node?.data.audio_quality ?? "source-max",
+                        audio_probe: peak_audio_probe(probe_memo.get(node.id) ?? []),
+                        on_progress: slice,
+                        signal,
+                    })
+                    store(node.id, result.blob)
+                    break
+                }
+                case "overlay": {
+                    const input = single_input(node.id, incoming, blobs)
+                    if (!node.data.image) {
+                        throw new ClipError("FAILED", "Overlay image is missing.")
+                    }
+                    const result = await render_overlay({
+                        video: blob_to_file(input, "overlay-bg.mp4"),
+                        image: blob_to_file(node.data.image, "overlay.png"),
+                        position: node.data.position,
+                        scale: node.data.scale,
+                        opacity: node.data.opacity,
+                        offset_x: node.data.offset_x,
+                        offset_y: node.data.offset_y,
+                        show_start: node.data.show_start,
+                        show_end: node.data.show_end,
+                        width: output_node?.data.width ?? 1920,
+                        height: output_node?.data.height ?? 1080,
+                        fps: output_node?.data.fps ?? 30,
+                        quality: "medium",
+                        video_bitrate: video_config?.bitrate ?? null,
+                        audio_quality: output_node?.data.audio_quality ?? "source-max",
+                        on_progress: slice,
+                        signal,
+                    })
+                    store(node.id, result.blob)
+                    break
+                }
+                case "text": {
+                    const input = single_input(node.id, incoming, blobs)
+                    const result = await render_text_overlay({
+                        video: blob_to_file(input, "text-bg.mp4"),
+                        items: node.data.items,
+                        width: output_node?.data.width ?? 1920,
+                        height: output_node?.data.height ?? 1080,
+                        fps: output_node?.data.fps ?? 30,
+                        quality: "medium",
+                        video_bitrate: video_config?.bitrate ?? null,
+                        audio_quality: output_node?.data.audio_quality ?? "source-max",
+                        on_progress: slice,
+                        signal,
+                    })
+                    store(node.id, result.blob)
+                    break
+                }
+                case "color": {
+                    const result = await render_solid_color({
+                        color: node.data.color,
+                        duration: node.data.duration,
+                        width: output_node?.data.width ?? 1920,
+                        height: output_node?.data.height ?? 1080,
+                        fps: output_node?.data.fps ?? 30,
+                        quality: "medium",
+                        video_bitrate: video_config?.bitrate ?? null,
+                        on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
+                        signal,
+                    })
+                    store(node.id, result)
+                    break
+                }
+                case "rescale": {
+                    const input = single_input(node.id, incoming, blobs)
+                    const result = await render_rescale(input, {
+                        width: node.data.width,
+                        height: node.data.height,
+                        fps: node.data.fps,
+                        fit: node.data.fit,
+                        quality: "medium",
+                        video_bitrate: video_config?.bitrate ?? null,
+                        audio_quality: output_node?.data.audio_quality ?? "source-max",
+                        on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
+                        signal,
+                    })
+                    store(node.id, result)
+                    break
+                }
+                case "output": {
+                    const input = single_input(node.id, incoming, blobs)
+                    store(node.id, await ensure_mp4_blob(input, signal))
+                    break
+                }
+            }
             done += 1
             on_progress?.(done / total)
-            continue
         }
-        const node = by_id.get(node_id)
-        if (!node) {
-            continue
-        }
-        const fused = fused_dispatch.get(node_id) ?? null
-        const fused_active = fused !== null && relevant.has(fused.end_id)
-        if (fused_active && fused.fused_ids.has(node_id) && node_id !== fused.end_id) {
-            continue
-        }
-        if (fused_active && fused !== null && node_id === fused.end_id) {
-            const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
-            const blob = await execute_fused_segment(fused, by_id, incoming, blobs, output_node, span_slice, signal)
-            for (const fused_id of fused.fused_ids) {
-                store(fused_id, blob)
-            }
-            done += fused.span
-            on_progress?.(done / total)
-            continue
-        }
-        const slice = (progress: number) => on_progress?.((done + progress) / total)
-        switch (node.type) {
-            case "source": {
-                if (!node.data.file) {
-                    throw new ClipError("FAILED", "Source file is missing.")
-                }
-                store(node.id, node.data.file)
-                break
-            }
-            case "trim": {
-                const input = single_input(node.id, incoming, blobs)
-                const resolved = resolve_trim_range(node.data, trim_upstream_duration(node.id, by_id, incoming))
-                if (!resolved.ok) {
-                    trim_range_error(resolved.reason)
-                }
-                const result = await extract_clip({
-                    file: blob_to_file(input, "trim-input.mp4"),
-                    start: resolved.start,
-                    end: resolved.end,
-                    output_kind: "mp4",
-                    on_progress: slice,
-                    signal,
-                })
-                store(node.id, result.blob)
-                break
-            }
-            case "transition": {
-                const { blob_a, blob_b } = transition_inputs(node.id, incoming, blobs)
-                const { list_a, list_b } = transition_probe_lists(node.id, incoming, probe_memo)
-                const base_a = peak_probe_for_render(list_a)
-                const base_b = peak_probe_for_render(list_b)
-                const pred_a = pred_by_handle(node.id, "a", incoming)
-                const pred_b = pred_by_handle(node.id, "b", incoming)
-                const dur_a = pred_a
-                    ? node_output_duration(pred_a, by_id, incoming, new Map<string, number | null>(), new Set<string>())
-                    : null
-                const dur_b = pred_b
-                    ? node_output_duration(pred_b, by_id, incoming, new Map<string, number | null>(), new Set<string>())
-                    : null
-                const probe_a = base_a && dur_a !== null ? { ...base_a, duration: dur_a } : null
-                const probe_b = base_b && dur_b !== null ? { ...base_b, duration: dur_b } : null
-                const result = await render_transition({
-                    file_a: blob_to_file(blob_a, "transition-a.mp4"),
-                    file_b: blob_to_file(blob_b, "transition-b.mp4"),
-                    probe_a,
-                    probe_b,
-                    duration: node.data.duration,
-                    start_a: node.data.start,
-                    width: output_node?.data.width ?? 1920,
-                    height: output_node?.data.height ?? 1080,
-                    fps: output_node?.data.fps ?? 30,
-                    quality: "medium",
-                    video_bitrate: video_config?.bitrate ?? null,
-                    audio_quality: output_node?.data.audio_quality ?? "source-max",
-                    easing: node.data.easing,
-                    audio_mode: node.data.audio_mode,
-                    on_progress: slice,
-                    signal,
-                })
-                store(node.id, result.blob)
-                break
-            }
-            case "subtitles": {
-                const input = single_input(node.id, incoming, blobs)
-                const srt_content = node.data.file ? await node.data.file.text() : null
-                if (srt_content === null) {
-                    throw new ClipError("FAILED", "Subtitle file is required.")
-                }
-                if (srt_content.trim() === "") {
-                    throw new ClipError("FAILED", "Subtitle file is empty.")
-                }
-                try {
-                    srt_to_vtt(srt_content)
-                } catch (error) {
-                    if (error instanceof SubtitleError) {
-                        throw new ClipError("FAILED", error.message)
-                    }
-                    throw error
-                }
-                const style = normalize_subtitle_style(node.data)
-                store(
-                    node.id,
-                    await render_subtitles_burn(
-                        blob_to_file(input, "burn-input.mp4"),
-                        {
-                            srt_content,
-                            ...style,
-                            width: output_node?.data.width ?? 1920,
-                            height: output_node?.data.height ?? 1080,
-                            fps: output_node?.data.fps ?? 30,
-                            quality: "medium",
-                            video_bitrate: video_config?.bitrate ?? null,
-                            audio_quality: output_node?.data.audio_quality ?? "source-max",
-                            on_progress: slice,
-                        },
-                        signal,
-                    ),
-                )
-                break
-            }
-            case "merge": {
-                const merged = merge_inputs(node.id, incoming, blobs)
-                const result = await render_merge({
-                    files: merged.map((blob, index) => blob_to_file(blob, `merge-in${index}.mp4`)),
-                    width: output_node?.data.width ?? 1920,
-                    height: output_node?.data.height ?? 1080,
-                    fps: output_node?.data.fps ?? 30,
-                    quality: "medium",
-                    video_bitrate: video_config?.bitrate ?? null,
-                    audio_quality: output_node?.data.audio_quality ?? "source-max",
-                    audio_probe: peak_audio_probe(probe_memo.get(node.id) ?? []),
-                    on_progress: slice,
-                    signal,
-                })
-                store(node.id, result.blob)
-                break
-            }
-            case "overlay": {
-                const input = single_input(node.id, incoming, blobs)
-                if (!node.data.image) {
-                    throw new ClipError("FAILED", "Overlay image is missing.")
-                }
-                const result = await render_overlay({
-                    video: blob_to_file(input, "overlay-bg.mp4"),
-                    image: blob_to_file(node.data.image, "overlay.png"),
-                    position: node.data.position,
-                    scale: node.data.scale,
-                    opacity: node.data.opacity,
-                    offset_x: node.data.offset_x,
-                    offset_y: node.data.offset_y,
-                    show_start: node.data.show_start,
-                    show_end: node.data.show_end,
-                    width: output_node?.data.width ?? 1920,
-                    height: output_node?.data.height ?? 1080,
-                    fps: output_node?.data.fps ?? 30,
-                    quality: "medium",
-                    video_bitrate: video_config?.bitrate ?? null,
-                    audio_quality: output_node?.data.audio_quality ?? "source-max",
-                    on_progress: slice,
-                    signal,
-                })
-                store(node.id, result.blob)
-                break
-            }
-            case "text": {
-                const input = single_input(node.id, incoming, blobs)
-                const result = await render_text_overlay({
-                    video: blob_to_file(input, "text-bg.mp4"),
-                    items: node.data.items,
-                    width: output_node?.data.width ?? 1920,
-                    height: output_node?.data.height ?? 1080,
-                    fps: output_node?.data.fps ?? 30,
-                    quality: "medium",
-                    video_bitrate: video_config?.bitrate ?? null,
-                    audio_quality: output_node?.data.audio_quality ?? "source-max",
-                    on_progress: slice,
-                    signal,
-                })
-                store(node.id, result.blob)
-                break
-            }
-            case "color": {
-                const result = await render_solid_color({
-                    color: node.data.color,
-                    duration: node.data.duration,
-                    width: output_node?.data.width ?? 1920,
-                    height: output_node?.data.height ?? 1080,
-                    fps: output_node?.data.fps ?? 30,
-                    quality: "medium",
-                    video_bitrate: video_config?.bitrate ?? null,
-                    on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
-                    signal,
-                })
-                store(node.id, result)
-                break
-            }
-            case "rescale": {
-                const input = single_input(node.id, incoming, blobs)
-                const result = await render_rescale(input, {
-                    width: node.data.width,
-                    height: node.data.height,
-                    fps: node.data.fps,
-                    fit: node.data.fit,
-                    quality: "medium",
-                    video_bitrate: video_config?.bitrate ?? null,
-                    audio_quality: output_node?.data.audio_quality ?? "source-max",
-                    on_progress: (done, total) => slice(total <= 0 ? 1 : done / total),
-                    signal,
-                })
-                store(node.id, result)
-                break
-            }
-            case "output": {
-                const input = single_input(node.id, incoming, blobs)
-                store(node.id, await ensure_mp4_blob(input, signal))
-                break
-            }
-        }
-        done += 1
-        on_progress?.(done / total)
+    } finally {
+        emit_active([])
     }
     return blobs.get(target_id) ?? null
 }

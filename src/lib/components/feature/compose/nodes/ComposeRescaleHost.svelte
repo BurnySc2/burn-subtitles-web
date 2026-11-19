@@ -3,7 +3,7 @@ import { compose_state } from "$lib/media/compose-state.svelte"
 import type { RescaleNodeData } from "$lib/media/compose-types"
 import ComposeRescaleNode from "./ComposeRescaleNode.svelte"
 
-let { id, data }: { id: string; data: RescaleNodeData } = $props()
+let { id, data }: { id: string; data: RescaleNodeData & { active?: boolean } } = $props()
 
 function update_data(patch: Partial<RescaleNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === id)
@@ -13,8 +13,10 @@ function update_data(patch: Partial<RescaleNodeData>): void {
 }
 </script>
 
-<ComposeRescaleNode
-    {id}
-    {data}
-    {update_data}
-/>
+<div class:node-active={data.active === true}>
+    <ComposeRescaleNode
+        {id}
+        {data}
+        {update_data}
+    />
+</div>
