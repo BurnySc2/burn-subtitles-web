@@ -29,6 +29,7 @@ let file_name = $derived(node && node.type === "source" ? (node.data.file?.name 
 let choose_label = $derived(file_name ? "Replace file" : "Choose file")
 let choose_aria = $derived(file_name ? "Replace source media" : "Choose source media")
 let show_remove = $derived(file_name !== null)
+let running = $derived(compose_state.run_status === "running")
 let remove_aria = $derived(file_name ? `Remove source file ${file_name}` : "Remove source file")
 
 let status_class = $derived(
@@ -36,6 +37,9 @@ let status_class = $derived(
 )
 
 async function handle_file(file: File | null): Promise<void> {
+    if (compose_state.run_status === "running") {
+        return
+    }
     if (!file) {
         return
     }
@@ -93,6 +97,9 @@ async function handle_file(file: File | null): Promise<void> {
 }
 
 function handle_remove(): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
     token.n += 1
     probing = false
     error = null
@@ -120,7 +127,7 @@ onDestroy(() => {
         {show_remove}
         {remove_aria}
         describedby="compose-source-status"
-        disabled={probing}
+        disabled={probing || running}
         on_file={handle_file}
         on_remove={handle_remove}
     />

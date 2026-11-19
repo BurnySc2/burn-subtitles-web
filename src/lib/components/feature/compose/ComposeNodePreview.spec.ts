@@ -30,7 +30,7 @@ describe("ComposeNodePreview", () => {
         expect(screen.container.textContent).toMatch(/Press Preview/)
         expect(on_preview.mock.calls.filter(([preview]) => preview.url !== null)).toHaveLength(0)
         for (const [preview] of on_preview.mock.calls) {
-            expect(preview).toEqual({ url: null, mime: null })
+            expect(preview).toEqual({ url: null, blob: null, mime: null })
         }
         await screen.unmount()
     })

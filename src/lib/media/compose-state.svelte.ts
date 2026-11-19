@@ -82,6 +82,10 @@ export function get_source_preview_url(node_id: string, file: File): string {
         if (stored === file && stored === node_file) {
             return cached
         }
+        // WHY freeze-during-run: render/preview may still read the live object URL; revoking mid-render breaks playback.
+        if (compose_state.run_status === "running") {
+            return cached
+        }
         URL.revokeObjectURL(cached)
         preview_urls.delete(node_id)
         preview_files.delete(node_id)
@@ -96,26 +100,17 @@ export function release_source_preview_url(node_id: string): void {
     clear_preview_url(node_id)
 }
 
-export function release_idle_source_previews(active_ids: Set<string>): void {
-    if (compose_state.run_status === "running") {
-        return
-    }
-    for (const [id, url] of preview_urls) {
-        if (!active_ids.has(id)) {
-            URL.revokeObjectURL(url)
-            preview_urls.delete(id)
-            preview_files.delete(id)
-        }
-    }
-}
-
 export function set_source_file(node_id: string, file: File, url: string): void {
     const previous = preview_urls.get(node_id)
-    if (previous && previous !== url) {
-        URL.revokeObjectURL(previous)
+    // WHY freeze-during-run: render/preview may still read the live object URL; keep serving it until idle.
+    const frozen = compose_state.run_status === "running" && previous !== undefined
+    if (!frozen) {
+        if (previous && previous !== url) {
+            URL.revokeObjectURL(previous)
+        }
+        preview_urls.set(node_id, url)
+        preview_files.set(node_id, file)
     }
-    preview_urls.set(node_id, url)
-    preview_files.set(node_id, file)
     const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (node && node.type === "source") {
         node.data.file = file
@@ -139,11 +134,15 @@ export function set_source_probe(node_id: string, file: File, probe: ProbeResult
 
 export function upsert_probe(node_id: string, file: File, probe: ProbeResult | null, url: string): void {
     const previous = preview_urls.get(node_id)
-    if (previous && previous !== url) {
-        URL.revokeObjectURL(previous)
+    // WHY freeze-during-run: render/preview may still read the live object URL; keep serving it until idle.
+    const frozen = compose_state.run_status === "running" && previous !== undefined
+    if (!frozen) {
+        if (previous && previous !== url) {
+            URL.revokeObjectURL(previous)
+        }
+        preview_urls.set(node_id, url)
+        preview_files.set(node_id, file)
     }
-    preview_urls.set(node_id, url)
-    preview_files.set(node_id, file)
     const node = compose_state.nodes.find((candidate) => candidate.id === node_id)
     if (node && node.type === "source") {
         node.data.file = file

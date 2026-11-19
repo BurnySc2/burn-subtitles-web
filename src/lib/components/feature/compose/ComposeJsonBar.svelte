@@ -1,13 +1,7 @@
 <script lang="ts">
 import { first_dropped_file } from "$lib/media/compose-drop"
 import { compose_filename } from "$lib/media/compose-filename"
-import {
-    compose_state,
-    parse_compose_json,
-    release_idle_source_previews,
-    revoke_all,
-    serialize_compose,
-} from "$lib/media/compose-state.svelte"
+import { compose_state, parse_compose_json, revoke_all, serialize_compose } from "$lib/media/compose-state.svelte"
 
 let import_error: string | null = $state(null)
 let file_input: HTMLInputElement | null = $state(null)
@@ -48,7 +42,6 @@ async function handle_import(file: File | null): Promise<void> {
         revoke_all()
         compose_state.nodes = parsed.nodes
         compose_state.edges = parsed.edges
-        release_idle_source_previews(new Set(compose_state.nodes.map((node) => node.id)))
         compose_state.selected_id = null
         compose_state.selected_edge_id = null
         import_error = null

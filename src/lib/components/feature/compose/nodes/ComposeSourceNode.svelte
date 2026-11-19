@@ -39,6 +39,7 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("source", data.label))
+let running = $derived(compose_state.run_status === "running")
 let has_file = $derived(data.file !== null)
 let choose_label = $derived(has_file ? "Replace file" : "Choose file")
 let choose_aria = $derived(has_file ? "Replace source file" : "Choose source file")
@@ -67,6 +68,9 @@ let meta_line = $derived.by(() => {
 })
 
 async function handle_file(file: File | null): Promise<void> {
+    if (compose_state.run_status === "running") {
+        return
+    }
     if (!file || !id) {
         return
     }
@@ -117,6 +121,9 @@ async function handle_file(file: File | null): Promise<void> {
 }
 
 function handle_remove(): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
     token.n += 1
     probing = false
     error = null
@@ -208,7 +215,7 @@ onDestroy(() => {
         file_name={data.file ? data.file.name : null}
         show_remove={data.file !== null}
         remove_aria={data.file ? `Remove source file ${data.file.name}` : "Remove source file"}
-        disabled={probing}
+        disabled={probing || running}
         on_file={handle_file}
         on_remove={handle_remove}
     />

@@ -10,7 +10,7 @@ let {
     hide_output = false,
 }: {
     node_id: string | null
-    on_preview?: (preview: { url: string | null; mime: string | null }) => void
+    on_preview?: (preview: { url: string | null; blob: Blob | null; mime: string | null }) => void
     hide_output?: boolean
 } = $props()
 
@@ -33,7 +33,7 @@ function cleanup(): void {
 }
 
 function notify(): void {
-    on_preview?.({ url, mime: blob?.type ?? null })
+    on_preview?.({ url, blob, mime: blob?.type ?? null })
 }
 
 function cancel_preview(): void {

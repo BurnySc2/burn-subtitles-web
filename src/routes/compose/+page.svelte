@@ -214,15 +214,14 @@ let preview_node_id = $state<string | null>(null)
 let preview_node_type = $state<string | null>(null)
 let preview_url = $state<string | null>(null)
 let preview_mime = $state<string | null>(null)
-let preview_run_token = 0
 
-async function handle_node_preview(preview: {
+function handle_node_preview(preview: {
     node_id: string | null
     node_type: string | null
     url: string | null
+    blob: Blob | null
     mime: string | null
-}): Promise<void> {
-    const mine = ++preview_run_token
+}): void {
     if (preview_url) {
         URL.revokeObjectURL(preview_url)
         preview_url = null
@@ -230,23 +229,11 @@ async function handle_node_preview(preview: {
     preview_node_id = preview.node_id
     preview_node_type = preview.node_type
     preview_mime = preview.mime
-    if (!preview.url) {
+    if (!preview.blob) {
         preview_url = null
         return
     }
-    try {
-        const response = await fetch(preview.url)
-        const blob = await response.blob()
-        if (mine !== preview_run_token) {
-            return
-        }
-        preview_url = URL.createObjectURL(blob)
-    } catch {
-        if (mine !== preview_run_token) {
-            return
-        }
-        preview_url = null
-    }
+    preview_url = URL.createObjectURL(preview.blob)
 }
 
 let preview_name = $derived.by(() => {

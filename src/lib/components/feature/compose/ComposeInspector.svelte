@@ -46,6 +46,7 @@ let {
         node_id: string | null
         node_type: string | null
         url: string | null
+        blob: Blob | null
         mime: string | null
     }) => void
 } = $props()
@@ -96,7 +97,7 @@ let subtitle_font_family = $derived.by(() => {
     return typeof family === "string" ? family : ""
 })
 
-function handle_preview(preview: { url: string | null; mime: string | null }): void {
+function handle_preview(preview: { url: string | null; blob: Blob | null; mime: string | null }): void {
     on_preview?.({ node_id: selected?.id ?? null, node_type: selected?.type ?? null, ...preview })
 }
 
