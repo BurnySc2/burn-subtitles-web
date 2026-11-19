@@ -243,6 +243,10 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 </div>
 
 <style>
+.compose-canvas {
+    --compose-selected: rgb(59 130 246 / 0.9);
+    --compose-active: rgb(34 197 94 / 0.9);
+}
 .compose-canvas :global(.svelte-flow__node.svelte-flow__node-output) {
     width: auto;
     padding: 0;
@@ -276,10 +280,10 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 .compose-canvas :global(.svelte-flow__node.selected),
 .compose-canvas :global(.svelte-flow__node-output.selectable.selected) {
     border-radius: 12px;
-    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.9);
+    box-shadow: 0 0 0 3px var(--compose-selected);
 }
 .compose-canvas :global(.node-active) {
     border-radius: 10px;
-    box-shadow: 0 0 0 3px rgb(34 197 94 / 0.9);
+    box-shadow: 0 0 0 3px var(--compose-active);
 }
 </style>
