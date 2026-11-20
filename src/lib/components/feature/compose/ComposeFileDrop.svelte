@@ -34,7 +34,7 @@ let file_input = $state<HTMLInputElement | null>(null)
 <!-- svelte-ignore a11y_no_static_element_interactions: inner button/input is the keyboard path; drop is enhancement only, so no role=button -->
 <!-- biome-ignore lint/a11y/noStaticElementInteractions: drop is enhancement only; inner button/input is the keyboard path -->
 <div
-    class="drop-zone nodrag mt-2 w-full"
+    class="drop-zone nodrag w-full"
     class:drag-over={is_dragging}
     ondragover={(e) => {
         if (disabled) {
@@ -84,7 +84,7 @@ let file_input = $state<HTMLInputElement | null>(null)
             }
         }}
     >
-    <div class="mt-2 flex gap-2 nodrag">
+    <div class="flex gap-2 nodrag">
         <button
             type="button"
             onclick={() => file_input?.click()}

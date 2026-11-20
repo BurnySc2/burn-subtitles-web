@@ -271,7 +271,7 @@ input[type="number"]::placeholder {
     border: 2px dashed var(--color-border);
     border-radius: var(--radius-card);
     background-color: var(--color-surface);
-    padding: 1rem;
+    padding: 0.5rem;
     text-align: center;
     transition-property: border-color, background-color;
     transition-duration: 150ms;
