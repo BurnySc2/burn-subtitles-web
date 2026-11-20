@@ -73,12 +73,12 @@ onMount(() => {
     }
 })
 
-function to_flow_node(node: ComposeNode): Node {
+function to_flow_node(node: ComposeNode, active_ids: Set<string>): Node {
     return {
         id: node.id,
         type: node.type,
         position: { x: node.position.x, y: node.position.y },
-        data: { ...node.data },
+        data: { ...node.data, active: active_ids.has(node.id) },
         deletable: true,
         selected: node.id === compose_state.selected_id,
     }
@@ -96,7 +96,10 @@ function to_flow_edge(edge: ComposeEdge): Edge {
     }
 }
 
-let flow_nodes = $derived(compose_state.nodes.map(to_flow_node))
+let flow_nodes = $derived.by(() => {
+    const active_ids = new Set(compose_state.active_ids)
+    return compose_state.nodes.map((node) => to_flow_node(node, active_ids))
+})
 let flow_edges = $derived(compose_state.edges.map(to_flow_edge))
 
 function handle_connect(connection: Connection): void {
@@ -240,6 +243,10 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 </div>
 
 <style>
+.compose-canvas {
+    --compose-selected: rgb(59 130 246 / 0.9);
+    --compose-active: rgb(34 197 94 / 0.9);
+}
 .compose-canvas :global(.svelte-flow__node.svelte-flow__node-output) {
     width: auto;
     padding: 0;
@@ -269,5 +276,14 @@ function handle_move(_event: unknown, viewport: { x: number; y: number; zoom: nu
 }
 .compose-canvas :global(.svelte-flow__handle.connectingto:not(.valid)) {
     box-shadow: 0 0 0 3px rgb(248 113 113 / 0.8);
+}
+.compose-canvas :global(.svelte-flow__node.selected),
+.compose-canvas :global(.svelte-flow__node-output.selectable.selected) {
+    border-radius: 12px;
+    box-shadow: 0 0 0 3px var(--compose-selected);
+}
+.compose-canvas :global(.node-active) {
+    border-radius: 10px;
+    box-shadow: 0 0 0 3px var(--compose-active);
 }
 </style>

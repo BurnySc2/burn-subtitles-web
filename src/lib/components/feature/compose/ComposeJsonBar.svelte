@@ -56,32 +56,33 @@ async function handle_import(file: File | null): Promise<void> {
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions: buttons and input are the keyboard path; drop is enhancement only, so no role=button -->
+<!-- biome-ignore lint/a11y/noStaticElementInteractions: drop is enhancement only; buttons and input are the keyboard path -->
 <div
     class="drop-zone nodrag flex flex-wrap items-center gap-2"
     class:drag-over={is_dragging}
     ondragover={(e) => {
-            if (running) {
-                return
-            }
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = true
-        }}
+        if (running) {
+            return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        is_dragging = true
+    }}
     ondragleave={(e) => {
-            if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                return
-            }
-            is_dragging = false
-        }}
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            return
+        }
+        is_dragging = false
+    }}
     ondrop={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            is_dragging = false
-            if (running) {
-                return
-            }
-            void handle_import(first_dropped_file(e))
-        }}
+        e.preventDefault()
+        e.stopPropagation()
+        is_dragging = false
+        if (running) {
+            return
+        }
+        void handle_import(first_dropped_file(e))
+    }}
 >
     <button
         type="button"

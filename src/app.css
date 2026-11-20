@@ -102,19 +102,6 @@ input[type="number"]::placeholder {
     gap: 0.75rem;
 }
 
-/* Range input in input-row - should grow */
-.input-row input[type="range"] {
-    flex-grow: 1;
-    flex-shrink: 1;
-}
-
-/* Number input in input-row - should shrink */
-.input-row input[type="number"] {
-    flex-grow: 0;
-    flex-shrink: 1;
-    min-width: 0;
-}
-
 /* ============================================
    Button Styles
    ============================================ */
@@ -284,7 +271,7 @@ input[type="number"]::placeholder {
     border: 2px dashed var(--color-border);
     border-radius: var(--radius-card);
     background-color: var(--color-surface);
-    padding: 1rem;
+    padding: 0.5rem;
     text-align: center;
     transition-property: border-color, background-color;
     transition-duration: 150ms;
@@ -324,6 +311,13 @@ textarea {
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     transition-property: color, background-color, border-color;
     transition-duration: 150ms;
+}
+
+/* Range input - requires custom CSS for webkit */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
 }
 
 input[type="range"]:focus,
@@ -402,11 +396,18 @@ input[type="radio"]:checked {
     border-color: var(--color-primary);
 }
 
-/* Range input - requires custom CSS for webkit */
-input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent;
+/* WHY overrides after base range rules: no-descending-specificity */
+/* Range input in input-row - should grow */
+.input-row input[type="range"] {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+/* Number input in input-row - should shrink */
+.input-row input[type="number"] {
+    flex-grow: 0;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 input[type="range"]::-webkit-slider-thumb {

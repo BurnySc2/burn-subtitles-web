@@ -38,6 +38,7 @@ export interface ExecuteComposeGraphOptions {
     nodes: ComposeNode[]
     edges: ComposeEdge[]
     on_progress?: (progress: number) => void
+    on_active_change?: (ids: string[]) => void
     signal?: AbortSignal
 }
 
@@ -221,7 +222,30 @@ async function ensure_mp4_blob(blob: Blob, signal?: AbortSignal): Promise<Blob> 
     }
 }
 
-export async function execute_compose_graph(options: ExecuteComposeGraphOptions): Promise<ComposeRunResult> {
+export function execute_compose_graph(options: ExecuteComposeGraphOptions): Promise<ComposeRunResult> {
+    const { signal, on_active_change } = options
+    const emit_active = (ids: string[]): void => {
+        if (signal?.aborted) {
+            return
+        }
+        try {
+            on_active_change?.(ids)
+        } catch {
+            void 0
+        }
+    }
+    const task = execute_compose_graph_inner(options, emit_active)
+    task.then(
+        () => emit_active([]),
+        () => emit_active([]),
+    )
+    return task
+}
+
+async function execute_compose_graph_inner(
+    options: ExecuteComposeGraphOptions,
+    emit_active: (ids: string[]) => void,
+): Promise<ComposeRunResult> {
     const { nodes, edges, on_progress, signal } = options
     throw_if_aborted(signal)
     const issues = validate_compose(nodes, edges)
@@ -244,6 +268,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
     const retain = new Set(output_node ? [output_node.id] : [])
     for (const node_id of order) {
         throw_if_aborted(signal)
+        emit_active([node_id])
         const node = by_id.get(node_id)
         if (!node) {
             continue
@@ -253,6 +278,7 @@ export async function execute_compose_graph(options: ExecuteComposeGraphOptions)
             continue
         }
         if (fused && node_id === fused.end_id) {
+            emit_active([...fused.fused_ids])
             const span_slice = (progress: number) => on_progress?.((done + progress * fused.span) / total)
             const blob = await execute_fused_segment(fused, by_id, incoming, memo, output_node, span_slice, signal)
             // WHY fused-output-probes: attribute the segment's external input probes to every fused id so downstream peaking still sees source probes.

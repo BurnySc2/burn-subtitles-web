@@ -50,7 +50,6 @@ This project burns subtitles with FFmpeg and supports 16 bundled fonts in `stati
 
 To try out fonts locally, you can save the fonts to `~/.fonts/` and they will be seen by linux and listed in DaVinci Resolve.
 
-
 ## Developing
 
 Once you've created a project and installed dependencies with `npm install`, start a development server:

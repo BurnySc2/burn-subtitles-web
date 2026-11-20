@@ -41,16 +41,14 @@ describe("save_font_url_entry", () => {
         expect(loaded.entries[0]?.origin_url).toBe("https://example.com/b.woff2")
     })
 
-    it.each([
-        "not-a-url",
-        "",
-        "ftp://example.com/font.woff2",
-        "data:font/woff2;base64,AAA",
-    ])("ignores invalid url %s", (origin_url: string) => {
-        save_font_url_entry({ family: "Bad Font", origin_url })
+    it.each(["not-a-url", "", "ftp://example.com/font.woff2", "data:font/woff2;base64,AAA"])(
+        "ignores invalid url %s",
+        (origin_url: string) => {
+            save_font_url_entry({ family: "Bad Font", origin_url })
 
-        expect(load_font_url_index().entries).toHaveLength(0)
-    })
+            expect(load_font_url_index().entries).toHaveLength(0)
+        },
+    )
 
     it("evicts the oldest entry when saving a 21st entry", () => {
         for (let index = 0; index < 21; index += 1) {
@@ -113,14 +111,12 @@ describe("font url auto restore", () => {
 })
 
 describe("load_font_url_index", () => {
-    it.each([
-        "{oops",
-        "null",
-        "[1,2]",
-        '"just a string"',
-    ])("falls back to a safe default for corrupt json %s", (raw: string) => {
-        localStorage.setItem(STORAGE_KEY, raw)
+    it.each(["{oops", "null", "[1,2]", '"just a string"'])(
+        "falls back to a safe default for corrupt json %s",
+        (raw: string) => {
+            localStorage.setItem(STORAGE_KEY, raw)
 
-        expect(load_font_url_index()).toEqual({ entries: [], auto_restore_enabled: true })
-    })
+            expect(load_font_url_index()).toEqual({ entries: [], auto_restore_enabled: true })
+        },
+    )
 })

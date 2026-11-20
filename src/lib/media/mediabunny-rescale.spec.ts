@@ -40,33 +40,31 @@ describe("render_rescale guards", () => {
         ).rejects.toMatchObject({ code: "CANCELLED" })
     })
 
-    it(
-        "rescales a 64x36 solid source to 32x18 with fps null, preserving dims and duration",
-        { timeout: 60_000 },
-        async () => {
-            const source = await render_solid_color({
-                color: "#123456",
-                duration: 1,
-                width: 64,
-                height: 36,
-                fps: 10,
-                quality: "low",
-            })
-            const output = await render_rescale(source, {
-                width: 32,
-                height: 18,
-                fps: null,
-                fit: "contain",
-                quality: "low",
-            })
-            expect(output.size).toBeGreaterThan(0)
-            const probe = await probe_media(new File([output], "rescaled.mp4", { type: output.type }))
-            expect(probe.display_width).toBe(32)
-            expect(probe.display_height).toBe(18)
-            expect(probe.duration).not.toBeNull()
-            expect(Math.abs((probe.duration ?? 0) - 1)).toBeLessThan(0.25)
-        },
-    )
+    it("rescales a 64x36 solid source to 32x18 with fps null, preserving dims and duration", {
+        timeout: 60_000,
+    }, async () => {
+        const source = await render_solid_color({
+            color: "#123456",
+            duration: 1,
+            width: 64,
+            height: 36,
+            fps: 10,
+            quality: "low",
+        })
+        const output = await render_rescale(source, {
+            width: 32,
+            height: 18,
+            fps: null,
+            fit: "contain",
+            quality: "low",
+        })
+        expect(output.size).toBeGreaterThan(0)
+        const probe = await probe_media(new File([output], "rescaled.mp4", { type: output.type }))
+        expect(probe.display_width).toBe(32)
+        expect(probe.display_height).toBe(18)
+        expect(probe.duration).not.toBeNull()
+        expect(Math.abs((probe.duration ?? 0) - 1)).toBeLessThan(0.25)
+    })
 
     it("passes silence through: a silent solid source rescales to audio-free output", { timeout: 60_000 }, async () => {
         const source = await render_solid_color({

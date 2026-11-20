@@ -216,7 +216,7 @@ export async function render_transition(options: RenderTransitionOptions): Promi
             options.probe_b ?? probe_media(file_b),
         ])
         for (const probe of [resolved_a, resolved_b]) {
-            if (!probe || !probe.has_video || !probe.can_play) {
+            if (!probe?.has_video || !probe?.can_play) {
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
             }
         }

@@ -3,7 +3,7 @@ import { compose_state } from "$lib/media/compose-state.svelte"
 import type { TrimNodeData } from "$lib/media/compose-types"
 import ComposeTrimNode from "./ComposeTrimNode.svelte"
 
-let { id, data }: { id: string; data: TrimNodeData } = $props()
+let { id, data }: { id: string; data: TrimNodeData & { active?: boolean } } = $props()
 
 function update_data(patch: Partial<TrimNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === id)
@@ -13,8 +13,10 @@ function update_data(patch: Partial<TrimNodeData>): void {
 }
 </script>
 
-<ComposeTrimNode
-    {id}
-    {data}
-    {update_data}
-/>
+<div class:node-active={data.active === true}>
+    <ComposeTrimNode
+        {id}
+        {data}
+        {update_data}
+    />
+</div>

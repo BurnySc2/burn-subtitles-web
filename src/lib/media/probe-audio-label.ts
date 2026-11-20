@@ -10,7 +10,7 @@ export function format_kbps(bps: number | null | undefined): string | null {
 }
 
 export function format_audio_label(probe: AudioProbe | null | undefined): string | null {
-    if (!probe || !probe.has_audio) {
+    if (!probe?.has_audio) {
         return null
     }
     const codec = typeof probe.audio_codec === "string" && probe.audio_codec.trim() !== "" ? probe.audio_codec : null

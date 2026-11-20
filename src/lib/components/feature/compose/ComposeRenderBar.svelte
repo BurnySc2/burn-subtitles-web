@@ -29,8 +29,7 @@ let done = $derived(Math.min(total, Math.floor(compose_state.run_progress * tota
                     class="h-5 w-5 animate-spin rounded-full border-2 border-t-transparent"
                     aria-hidden="true"
                 ></div>
-                Rendering… {pct}% ({done}/{total}
-                nodes)
+                Rendering… {pct}% ({done}/{total} nodes)
             {:else}
                 Render
             {/if}

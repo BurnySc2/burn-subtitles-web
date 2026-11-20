@@ -23,6 +23,7 @@ export interface ComposeState {
     edges: ComposeEdge[]
     selected_id: string | null
     selected_edge_id: string | null
+    active_ids: string[]
     run_status: ComposeRunStatus
     run_progress: number
     run_error: string | null
@@ -36,6 +37,7 @@ function initial_state(): ComposeState {
         edges: [],
         selected_id: null,
         selected_edge_id: null,
+        active_ids: [],
         run_status: "idle",
         run_progress: 0,
         run_error: null,
@@ -158,6 +160,9 @@ export function upsert_probe(node_id: string, file: File, probe: ProbeResult | n
 }
 
 export function remove_compose_nodes(node_ids: string[]): void {
+    if (compose_state.run_status === "running") {
+        return
+    }
     const ids = new Set(node_ids)
     if (ids.size === 0) {
         return
@@ -302,11 +307,20 @@ export function revoke_all(): void {
     compose_state.edges = fresh.edges
     compose_state.selected_id = fresh.selected_id
     compose_state.selected_edge_id = fresh.selected_edge_id
+    compose_state.active_ids = fresh.active_ids
     compose_state.run_status = fresh.run_status
     compose_state.run_progress = fresh.run_progress
     compose_state.run_error = fresh.run_error
     compose_state.run_elapsed_ms = fresh.run_elapsed_ms
     compose_state.result = fresh.result
+}
+
+export function set_active_ids(ids: string[]): void {
+    compose_state.active_ids = [...ids]
+}
+
+export function clear_active(): void {
+    compose_state.active_ids = []
 }
 
 export interface ComposeFileStub {

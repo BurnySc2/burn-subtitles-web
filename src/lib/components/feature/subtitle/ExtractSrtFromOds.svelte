@@ -71,6 +71,10 @@ const handle_file_change = async (event: Event) => {
 
 let is_dragging = $state(false)
 
+const drop_zone_state_class = $derived(
+    is_dragging ? "border-primary bg-primary/10" : "border-gray-400 hover:border-primary",
+)
+
 function handle_drag_over(event: DragEvent) {
     event.preventDefault()
     is_dragging = true
@@ -119,17 +123,26 @@ async function download_srt() {
         >
         <label
             for="ods-file-input"
-            class="ods-drop-zone flex flex-col items-center justify-center w-64 h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors {is_dragging ? 'border-primary bg-primary/10' : 'border-gray-400 hover:border-primary'}"
+            class="ods-drop-zone flex flex-col items-center justify-center w-64 h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors {drop_zone_state_class}"
             ondragover={handle_drag_over}
             ondragleave={handle_drag_leave}
             ondrop={handle_drop}
         >
-            {#if temp_state.extract_srt.file}
-                <span class="text-sm text-gray-600 truncate max-w-full px-2">{temp_state.extract_srt.file.name}</span>
-                <span class="text-xs text-gray-400 mt-1">Click or drop to replace</span>
-            {:else}
-                <span class="text-gray-500">Click or drag & drop .ods file</span>
-            {/if}
+            <span
+                class="text-sm text-gray-600 truncate max-w-full px-2"
+                class:hidden={temp_state.extract_srt.file === null}
+                >{temp_state.extract_srt.file?.name}</span
+            >
+            <span
+                class="text-xs text-gray-400 mt-1"
+                class:hidden={temp_state.extract_srt.file === null}
+                >Click or drop to replace</span
+            >
+            <span
+                class="text-gray-500"
+                class:hidden={temp_state.extract_srt.file !== null}
+                >Click or drag & drop .ods file</span
+            >
         </label>
         <p class="text-xs text-gray-500">Upload an .ods file (click or drag and drop a .ods file)</p>
     </div>
@@ -193,7 +206,7 @@ async function download_srt() {
         <button
             onclick={download_srt}
             class="btn btn-primary mx-8"
-            disabled={ods_data===null}
+            disabled={ods_data === null}
         >
             Download SRT
         </button>

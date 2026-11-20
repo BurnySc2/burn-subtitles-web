@@ -65,10 +65,10 @@ function copy_ffmpeg_command() {
 </div>
 
 {#await ass_content_promise}
-<!-- File content is being generated -->
+    <!-- File content is being generated -->
 {:then ass_content}
     {#if ass_content === null}
-    <!-- Unable to generate file content, no srt loaded? -->
+        <!-- Unable to generate file content, no srt loaded? -->
     {:else}
         <div class="flex flex-wrap justify-center gap-3">
             <button

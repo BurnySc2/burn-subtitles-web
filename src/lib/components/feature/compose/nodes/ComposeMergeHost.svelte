@@ -3,7 +3,7 @@ import { compose_state } from "$lib/media/compose-state.svelte"
 import type { MergeNodeData } from "$lib/media/compose-types"
 import ComposeMergeNode from "./ComposeMergeNode.svelte"
 
-let { id, data }: { id: string; data: MergeNodeData } = $props()
+let { id, data }: { id: string; data: MergeNodeData & { active?: boolean } } = $props()
 
 function update_data(patch: Partial<MergeNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === id)
@@ -13,8 +13,10 @@ function update_data(patch: Partial<MergeNodeData>): void {
 }
 </script>
 
-<ComposeMergeNode
-    {id}
-    {data}
-    {update_data}
-/>
+<div class:node-active={data.active === true}>
+    <ComposeMergeNode
+        {id}
+        {data}
+        {update_data}
+    />
+</div>

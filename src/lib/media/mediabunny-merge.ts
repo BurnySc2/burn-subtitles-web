@@ -110,7 +110,7 @@ export async function render_merge(options: RenderMergeOptions): Promise<RenderM
         }
         const probes = await Promise.all(files.map((file) => probe_media(file)))
         for (const probe of probes) {
-            if (!probe || !probe.has_video || !probe.can_play) {
+            if (!probe?.has_video || !probe?.can_play) {
                 throw new ClipError("UNSUPPORTED", UNSUPPORTED_MESSAGE)
             }
             if (probe.duration === null || !Number.isFinite(probe.duration) || probe.duration <= 0) {

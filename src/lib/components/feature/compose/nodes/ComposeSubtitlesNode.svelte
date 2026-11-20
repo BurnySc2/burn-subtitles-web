@@ -2,6 +2,7 @@
 import { Handle, Position } from "@xyflow/svelte"
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
 import { is_accepted } from "$lib/media/compose-drop"
+import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, SUBTITLE_BURN_DEFAULTS, type SubtitlesNodeData } from "$lib/media/compose-types"
 
 let {
@@ -19,6 +20,7 @@ let label_draft = $state("")
 let error = $state<string | null>(null)
 
 let title = $derived(compose_node_title("subtitles", data.label))
+let running = $derived(compose_state.run_status === "running")
 
 let family = $derived(
     typeof data.font_family === "string" && data.font_family.trim() !== ""
@@ -38,6 +40,9 @@ let show_remove = $derived(data.file !== null)
 let remove_aria = $derived(data.file ? `Remove subtitles file ${data.file.name}` : "Remove subtitles file")
 
 function handle_file(file: File | null): void {
+    if (running) {
+        return
+    }
     if (!file) {
         return
     }
@@ -51,6 +56,9 @@ function handle_file(file: File | null): void {
 }
 
 function handle_remove(): void {
+    if (running) {
+        return
+    }
     error = null
     update_data({ file: null })
 }
@@ -126,7 +134,7 @@ function handle_remove(): void {
         {file_name}
         {show_remove}
         {remove_aria}
-        disabled={false}
+        disabled={running}
         on_file={handle_file}
         on_remove={handle_remove}
     />

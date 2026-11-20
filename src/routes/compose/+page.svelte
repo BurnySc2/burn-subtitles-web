@@ -17,7 +17,7 @@ import { clear_font_registry } from "$lib/media/compose-font-library"
 import { restore_saved_url_fonts } from "$lib/media/compose-font-restore"
 import { get_font_url_auto_restore, load_font_url_index } from "$lib/media/compose-font-url-index"
 import { clear_node_preview_cache } from "$lib/media/compose-preview"
-import { compose_state, flow_center_position } from "$lib/media/compose-state.svelte"
+import { clear_active, compose_state, flow_center_position, set_active_ids } from "$lib/media/compose-state.svelte"
 import {
     type ComposeNode,
     type ComposeNodeKind,
@@ -161,6 +161,7 @@ async function handle_render(): Promise<void> {
     compose_state.run_progress = 0
     compose_state.run_error = null
     compose_state.run_elapsed_ms = null
+    clear_active()
     const started_at = performance.now()
     aborter = new AbortController()
     try {
@@ -169,6 +170,12 @@ async function handle_render(): Promise<void> {
             edges: compose_state.edges,
             on_progress: (progress) => {
                 compose_state.run_progress = progress
+            },
+            on_active_change: (ids) => {
+                if (aborter?.signal.aborted) {
+                    return
+                }
+                set_active_ids(ids)
             },
             signal: aborter.signal,
         })
@@ -202,6 +209,7 @@ async function handle_render(): Promise<void> {
         }
         compose_state.run_elapsed_ms = null
     } finally {
+        clear_active()
         aborter = null
     }
 }

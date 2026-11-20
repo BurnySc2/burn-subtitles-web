@@ -50,13 +50,11 @@ let effective_weight = $derived(
                     class="flex-1"
                     aria-describedby="preview-timestamp-hint"
                     aria-busy={temp_state.ffmpeg.is_rendering_preview}
-                    disabled={temp_state.ffmpeg.is_processing ||
-							temp_state.ffmpeg.is_rendering_preview}
+                    disabled={temp_state.ffmpeg.is_processing || temp_state.ffmpeg.is_rendering_preview}
                 >
                 <button
                     onclick={render_ass_frame_preview}
-                    disabled={temp_state.ffmpeg.is_processing ||
-							temp_state.ffmpeg.is_rendering_preview}
+                    disabled={temp_state.ffmpeg.is_processing || temp_state.ffmpeg.is_rendering_preview}
                     class="btn btn-primary btn-md"
                 >
                     {#if temp_state.ffmpeg.is_rendering_preview}

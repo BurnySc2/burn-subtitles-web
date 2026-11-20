@@ -2,6 +2,7 @@
 import { Handle, Position } from "@xyflow/svelte"
 import ComposeFileDrop from "$lib/components/feature/compose/ComposeFileDrop.svelte"
 import { handle_accepted_file } from "$lib/media/compose-file-handler"
+import { compose_state } from "$lib/media/compose-state.svelte"
 import { compose_node_title, type OverlayNodeData } from "$lib/media/compose-types"
 import type { ImageProbe } from "$lib/media/mediabunny-overlay"
 
@@ -24,6 +25,7 @@ let editing_label = $state(false)
 let label_draft = $state("")
 
 let title = $derived(compose_node_title("overlay", data.label))
+let running = $derived(compose_state.run_status === "running")
 let has_image = $derived(data.image !== null)
 let choose_label = $derived(has_image ? "Replace image" : "Choose image")
 let choose_aria = $derived(has_image ? "Replace overlay image" : "Choose overlay image")
@@ -35,6 +37,9 @@ let show_remove = $derived(data.image !== null)
 let remove_aria = $derived(data.image ? `Remove overlay image ${data.image.name}` : "Remove overlay image")
 
 async function handle_file(file: File | null): Promise<void> {
+    if (running) {
+        return
+    }
     if (!file || !id) {
         return
     }
@@ -81,6 +86,9 @@ async function handle_file(file: File | null): Promise<void> {
 }
 
 function handle_remove(): void {
+    if (running) {
+        return
+    }
     token.n += 1
     probing = false
     error = null
@@ -178,7 +186,7 @@ function handle_remove(): void {
         {show_remove}
         {remove_aria}
         describedby={id ? `${id}-status` : undefined}
-        disabled={probing}
+        disabled={probing || running}
         on_file={handle_file}
         on_remove={handle_remove}
     />

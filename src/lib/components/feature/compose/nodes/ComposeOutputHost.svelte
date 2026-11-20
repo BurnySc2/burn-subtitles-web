@@ -3,7 +3,7 @@ import { compose_state } from "$lib/media/compose-state.svelte"
 import type { OutputNodeData } from "$lib/media/compose-types"
 import ComposeOutputNode from "./ComposeOutputNode.svelte"
 
-let { id, data }: { id: string; data: OutputNodeData } = $props()
+let { id, data }: { id: string; data: OutputNodeData & { active?: boolean } } = $props()
 
 function update_data(patch: Partial<OutputNodeData>): void {
     const node = compose_state.nodes.find((candidate) => candidate.id === id)
@@ -13,8 +13,10 @@ function update_data(patch: Partial<OutputNodeData>): void {
 }
 </script>
 
-<ComposeOutputNode
-    {id}
-    {data}
-    {update_data}
-/>
+<div class:node-active={data.active === true}>
+    <ComposeOutputNode
+        {id}
+        {data}
+        {update_data}
+    />
+</div>
